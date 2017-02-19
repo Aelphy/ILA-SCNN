@@ -22,7 +22,7 @@
 //TODO: How do I use REGISTER_OP with parameter T?
 //  .Attr("T: {float, double, int32, complex64, complex128}")
 REGISTER_OP("SparseTensorSparseKernelDenseConv3D")
-  .Attr("T: {int32}")
+  .Attr("T: {float}")
   .Input("in_indices: int64")
   .Input("in_values: T")
   .Input("in_shape: int64")
@@ -124,9 +124,9 @@ class SparseTensorSparseKernelDenseConv3D : public OpKernel {
 #define REGISTER_CPU(type)                                   \
   REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConv3D").Device(DEVICE_CPU), SparseTensorSparseKernelDenseConv3D<CPUDevice, type>);
 
-//REGISTER_CPU(float);
+REGISTER_CPU(float);
 //REGISTER_CPU(double);
-REGISTER_CPU(int32);
+//REGISTER_CPU(int32);
 //REGISTER_CPU(complex64);
 //REGISTER_CPU(complex128);
 

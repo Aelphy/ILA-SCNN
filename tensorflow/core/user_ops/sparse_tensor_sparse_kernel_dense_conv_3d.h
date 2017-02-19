@@ -56,7 +56,7 @@ namespace tensorflow {
         assert(update_ids.size() >= f_ind.dimension(1) - 1);
         update_ids[0] = f_ind(j,0); //output channel is filter number
         for(int64 k = 2; k < f_ind.dimension(1); k++){ //TODO: ugly coding style... prototype
-          update_ids[k - 1] = iids[k - 1] + f_ind(j,k) - filter_offset[k];  //depth, width and height
+          update_ids[k - 1] = iids[k - 1] - f_ind(j,k) + filter_offset[k];  //depth, width and height
           if(update_ids[k - 1] < 0 || update_ids[k - 1] >= in_sh(k-1)){ //check boundaries
             is_in_bound = false;
             break;
