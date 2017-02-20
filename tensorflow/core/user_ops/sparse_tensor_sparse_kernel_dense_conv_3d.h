@@ -33,31 +33,39 @@ namespace tensorflow {
                         const std::vector<int32>& stride_,
                         std::map<std::vector<int64>, T>& output_map) {
 
+    const int id_in_batch = 0, id_in_depth = 1, id_in_height = 2, id_in_width = 3, id_in_in_channels = 4;
+    const int id_f_depth = 0, id_f_height = 1, id_f_width = 2, id_f_out_channels = 3, id_f_in_channels = 4;
+
     //preparation: find center of filter
-    std::vector<int64> filter_offset(f_ind.dimension(1));
+    std::vector<int64> filter_offset(f_ind.dimension(1), 0);
+
+    //input: [batch, depth, height, width, in_channels] 
+    //filter: [depth, height, width, output_channels, in_channels] 
     for(int64 i = 0; i < filter_offset.size(); ++i){
       filter_offset[i] = (f_sh(i) - 1) / 2; //TODO: precompute filter indices with offset? 
     }
 
+    //TODO: use batch in parallel? (needs more ram than a parallelization of conv)
     for(int64 i = 0; i < in_ind.dimension(0); ++i){ //TODO: parallelize filtering
       if(!index_is_unaffected_by_stride(in_ind, stride_, i)) continue; // go through all indices of input and check if valid (not affected by stride)
 
       //a) prepare filter to update output based on current value
       std::map<std::vector<int64>, T> filter_update;
       std::vector<int64> iids(in_ind.dimension(1));
-      for(int64 j = 0; j < in_ind.dimension(1); j++){
+      for(int64 j = 0; j < in_ind.dimension(1); ++j){
         iids[j] = in_ind(i,j);
       }
       auto &input_value = in_vals(i);
-      for(int64 j = 0; j < f_ind.dimension(0); j++){
-        if(f_ind(j, 1) != in_ind(i,0)) continue; //filter channel != input channel
+      for(int64 j = 0; j < f_ind.dimension(0); ++j){
+        if(f_ind(j, id_f_in_channels) != in_ind(i,id_in_in_channels)) continue; //filter channel != input channel
         bool is_in_bound = true;
         std::vector<int64> update_ids(in_ind.dimension(1), 0);
         assert(update_ids.size() >= f_ind.dimension(1) - 1);
-        update_ids[0] = f_ind(j,0); //output channel is filter number
-        for(int64 k = 2; k < f_ind.dimension(1); k++){ //TODO: ugly coding style... prototype
-          update_ids[k - 1] = iids[k - 1] - f_ind(j,k) + filter_offset[k];  //depth, width and height
-          if(update_ids[k - 1] < 0 || update_ids[k - 1] >= in_sh(k-1)){ //check boundaries
+        update_ids[id_in_batch] = in_ind(i,id_in_batch); //output channel is filter number
+        update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
+        for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
+          update_ids[l] = iids[l] - f_ind(j,k) + filter_offset[k];  //depth, width and height
+          if(update_ids[l] < 0 || update_ids[l] >= in_sh(l)){ //check boundaries
             is_in_bound = false;
             break;
           }

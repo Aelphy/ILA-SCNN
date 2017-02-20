@@ -114,13 +114,13 @@ class SparseTensorDenseConv3D : public OpKernel {
     OP_REQUIRES_OK(context, context->input("in_values", &in_values));
     OP_REQUIRES_OK(context, context->input("in_shape", &in_shape));
     OP_REQUIRES_OK(context, context->input("dense_filter", &dense_filter));
-    auto in_ind = in_indices->matrix<int64>(); //channels, depth, height, width, optionally others TODO: other cases?
+    auto in_ind = in_indices->matrix<int64>(); //[batch, depth, height, width, in_channels] //channels, depth, height, width, optionally others TODO: other cases?
     auto in_vals = in_values->flat<T>();
     auto in_sh = in_shape->flat<int64>();
     std::map<std::vector<int64>, T> output_map; //stores the values for the output tensor
     Tensor *filter_indices = NULL, *filter_values = NULL, *filter_shape = NULL;
     dense_to_sparse(dense_filter, filter_indices, filter_values, filter_shape);
-    auto f_ind = filter_indices->matrix<int64>(); //filters, channels, kernel_depth, kernel_height, kernel_width TODO: other cases?
+    auto f_ind = filter_indices->matrix<int64>(); //[depth, height, width, output_channels, in_channels] //filters, channels, kernel_depth, kernel_height, kernel_width TODO: other cases?
     auto f_vals = filter_values->flat<T>();
     auto f_sh = filter_shape->flat<int64>();
     sparseCuboidConv3D(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, output_map);

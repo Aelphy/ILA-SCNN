@@ -67,6 +67,7 @@ def id1D_to_idkD(inid, shape):
   return rt
 
 def createRandomSparseTensor(non_zero_percentage, shape):
+  random.seed(a=None)
   total_size = 1
   dim = 0
   for s in shape:
@@ -81,7 +82,8 @@ def createRandomSparseTensor(non_zero_percentage, shape):
     idx += 1
   tensor_ind = np.array(ids, dtype=np.int64)
 
-  vals = random.sample(range(0, 255), num_elems)
+  vals = [1] * num_elems
+  #vals = random.sample(range(1, 255), num_elems)
   tensor_vals = np.array(vals, dtype=np.float32)
   return [tensor_ind, tensor_vals, shape]
 
@@ -96,30 +98,26 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     else:
       strides = [1, stride, stride, stride, 1]
 
-    [t1ind, t1val, t1sh] = createRandomSparseTensor(0.3, tensor_in_sizes)
+    [t1ind, t1val, t1sh] = createRandomSparseTensor(0.2, tensor_in_sizes)
     s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
     #d1 = tf.sparse_tensor_to_dense(s1)
     d1 = sparse_to_dense(t1ind, t1val, t1sh)
     
-    [t2ind, t2val, t2sh] = createRandomSparseTensor(0.9, filter_in_sizes)
+    [t2ind, t2val, t2sh] = createRandomSparseTensor(0.4, filter_in_sizes)
     s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
     #d2 = tf.sparse_tensor_to_dense(s2)
     d2 = sparse_to_dense(t2ind, t2val, t2sh)
   
-    [i1, v1, s] = dense_to_sparse(d1, t1sh)
 
-    print("t1ind: ", t1ind)
-    print("t1val ", t1val)
-    print("t1sh: ", t1sh)
-    print("tt1ind: ", i1)
-    print("tt1val ", v1)
-    print("tt1sh: ", s)
-    print("d1: ", d1)
-    print("t2ind: ", t2ind)
-    print("t2val ", t2val)
-    print("t2sh: ", t2sh)
-    print("d2: ", d2)
-    print("strides: ", strides)
+    #print("t1ind: \n", t1ind)
+    #print("t1val \n", t1val)
+    #print("t1sh: \n", t1sh)
+    print("input: \n", d1)
+    #print("t2ind: \n", t2ind)
+    #print("t2val \n", t2val)
+    #print("t2sh: \n", t2sh)
+    print("filter: \n", d2)
+    print("strides: \n", strides)
 
     # Initializes the input tensor with array containing incrementing
     # numbers from 1.
@@ -131,12 +129,12 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     #  sv1 = sess.run(scconv)
       sv2 = sess.run(scskconv)
     value2 = sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
-    print("actual v2 sparse = ", sv2)
-    print("actual v2 = ", value2)
-    print("expected = ", expected)
+    print("actual v2 sparse: \n", sv2)
+    print("actual v2: \n", value2)
+    print("expected: \n", expected)
     self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5) 
     '''
-    print("actual = ", value1)
+    print("actual 1: \n", value1)
     expected = value.flatten() #TODO remove
     self.assertArrayNear(expected.flatten(), value1.flatten(), 1e-5)
     '''
@@ -144,19 +142,22 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
   def testConv3D1x1x1Filter(self):
     # These are equivalent to the Conv2D1x1 case.
+    '''    
     self._VerifyValues(
-        tensor_in_sizes=[1, 2, 3, 1, 3],
-        filter_in_sizes=[1, 1, 1, 3, 3],
-        stride=1)
-'''    self._VerifyValues(
-        tensor_in_sizes=[1, 2, 1, 3, 3],
-        filter_in_sizes=[1, 1, 1, 3, 3],
-        stride=1)
+      tensor_in_sizes=[1, 1, 3, 3, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[1, 3, 3, 1, 1], #[depth, height, width, output_channels, in_channels] 
+      stride=1)
+    
     self._VerifyValues(
-        tensor_in_sizes=[1, 1, 2, 3, 3],
+        tensor_in_sizes=[1, 2, 3, 1, 1],
+        filter_in_sizes=[1, 2, 3, 1, 1],
+        stride=1)
+    '''
+    self._VerifyValues(
+        tensor_in_sizes=[1, 1, 1, 3, 3],
         filter_in_sizes=[1, 1, 1, 3, 3],
         stride=1)
-'''
+    
   # Expected values computed using scipy's correlate function.
 '''  def testConv3D2x2x2Filter(self):
     # expected_shape = [1, 3, 1, 2, 5]
