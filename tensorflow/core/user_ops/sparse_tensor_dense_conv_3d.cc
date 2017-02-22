@@ -123,7 +123,8 @@ class SparseTensorDenseConv3D : public OpKernel {
     auto f_ind = filter_indices->matrix<int64>(); //[depth, height, width, output_channels, in_channels] //filters, channels, kernel_depth, kernel_height, kernel_width TODO: other cases?
     auto f_vals = filter_values->flat<T>();
     auto f_sh = filter_shape->flat<int64>();
-    sparseCuboidConv3D(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, output_map);
+    std::vector<int64> out_shape;
+    sparseCuboidConv3D(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, output_map, out_shape);
 
 
     // Create an output tensor
@@ -148,11 +149,7 @@ class SparseTensorDenseConv3D : public OpKernel {
         out_vals(idx) = it->second;
     }
     for(int64 idx = 0; idx < in_ind.dimension(1); ++idx){
-        if(idx == 0){
-          out_sh(idx) = f_sh(idx); //output number of channels == number of filters
-        } else {
-          out_sh(idx) = in_sh(idx);
-        }
+        out_sh(idx) = out_shape[idx];
     }
     delete filter_indices, filter_values, filter_shape;
   }
