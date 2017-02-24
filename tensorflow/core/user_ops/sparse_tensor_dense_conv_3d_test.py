@@ -147,17 +147,19 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       tensor_in_sizes=[1, 16, 23, 25, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[5, 3, 7, 1, 2], #[depth, height, width, in_channels, out_channels] 
       stride=2)
-    '''
+    
+
     self._VerifyValues(
-        tensor_in_sizes=[1, 2, 3, 1, 1],
-        filter_in_sizes=[1, 2, 3, 1, 1],
+        tensor_in_sizes=[1, 13, 22, 12, 2],
+        filter_in_sizes=[3, 5, 7, 2, 2],
         stride=1)
     
+     
     self._VerifyValues(
-        tensor_in_sizes=[1, 1, 1, 3, 3],
-        filter_in_sizes=[1, 1, 1, 3, 3],
-        stride=1)
-    '''
+        tensor_in_sizes=[1, 12, 34, 13, 3],
+        filter_in_sizes=[7, 5, 3, 3, 4],
+        stride=3)
+    
   # Expected values computed using scipy's correlate function.
 '''  def testConv3D2x2x2Filter(self):
     # expected_shape = [1, 3, 1, 2, 5]

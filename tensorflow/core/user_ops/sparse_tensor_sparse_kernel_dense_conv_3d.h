@@ -59,8 +59,8 @@ namespace tensorflow {
         update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
         for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
           int64 out_plain_id = (int64)(in_ind(i,l) - f_ind(j,k) + filter_offset[k]);
-          if(in_sh(l) > 1){
-            if(!(((out_plain_id ) % stride_[l]) == str_padding_offset[l])){
+          if(in_sh(l) > 1 && stride_[l] > 1){
+            if(((out_plain_id ) % stride_[l]) != str_padding_offset[l]){
               is_valid = false;
               break;          
             }
