@@ -20,7 +20,7 @@ namespace tensorflow {
                         std::vector<int64>& out_shape) {
 
     const int id_in_batch = 0, id_in_depth = 1, id_in_height = 2, id_in_width = 3, id_in_in_channels = 4;
-    const int id_f_depth = 0, id_f_height = 1, id_f_width = 2, id_f_out_channels = 3, id_f_in_channels = 4;
+    const int id_f_depth = 0, id_f_height = 1, id_f_width = 2, id_f_in_channels = 3, id_f_out_channels = 4;
 
     //preparation: find center of filter
     std::vector<int64> filter_offset(f_ind.dimension(1), 0);
