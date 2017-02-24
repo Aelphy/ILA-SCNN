@@ -25,22 +25,25 @@ namespace tensorflow {
     //preparation: find center of filter
     std::vector<int64> filter_offset(f_ind.dimension(1), 0);
     out_shape.assign(in_ind.dimension(1), 0);
-    std::vector<int32> eff_stride(stride_.size(),1);
-    
 
     //input: [batch, depth, height, width, in_channels] 
-    //filter: [depth, height, width, output_channels, in_channels] 
+    //filter: [depth, height, width, output_channels, in_channels]
     for(int64 i = 0; i < filter_offset.size(); ++i){
-      if(in_sh(i) > 1){
-        eff_stride[i] = stride_[i];
-      }
       filter_offset[i] = (f_sh(i) - 1) / 2; //TODO: precompute filter indices with offset?
       if(i >= id_in_depth && i <= id_in_width){
-        out_shape[i] = ceil(float(in_sh(i)) / float(eff_stride[i]));
+        out_shape[i] = ceil(float(in_sh(i)) / float(stride_[i]));
       } else if(i == id_in_in_channels){
         out_shape[i] = f_sh(id_f_out_channels);
       } else {
         out_shape[i] = in_sh(i);
+      }
+    }
+
+    //use same pattern for stride as tensorflows dense convolution
+    std::vector<int> str_padding_offset(in_ind.dimension(1), 0);
+    for(int64 i = 0; i < str_padding_offset.size(); ++i){
+      if(int(in_sh(i)) % stride_[i] == 0){
+        str_padding_offset[i] = 1;
       }
     }
 
@@ -56,12 +59,16 @@ namespace tensorflow {
         update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
         for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
           int64 out_plain_id = (int64)(in_ind(i,l) - f_ind(j,k) + filter_offset[k]);
-          if(eff_stride[l] > 1 && !((out_plain_id) % eff_stride[l]) == 0){
-            is_valid = false;
-            break;          
+          if(in_sh(l) > 1){
+            if(!(((out_plain_id ) % stride_[l]) == str_padding_offset[l])){
+              is_valid = false;
+              break;          
+            }
+            update_ids[l] = float(out_plain_id) / stride_[l]; //depth, width and height
+          } else {
+            update_ids[l] = out_plain_id; //depth, width and height
           }
-          update_ids[l] = ceil(float(out_plain_id) / eff_stride[l]);  //depth, width and height
-          if(update_ids[l] < 0 || update_ids[l] >= out_shape[l]){ //check boundaries
+          if(update_ids[l] < 0 || update_ids[l] >= out_shape[l]){    //check boundaries
             is_valid = false;
             break;
           }

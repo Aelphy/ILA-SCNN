@@ -144,9 +144,8 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     # These are equivalent to the Conv2D1x1 case.
         
     self._VerifyValues(
-      tensor_in_sizes=[1
-, 45, 45, 45, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[5, 5, 5, 1, 1], #[depth, height, width, output_channels, in_channels] 
+      tensor_in_sizes=[1, 12, 15, 7, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[5, 3, 5, 1, 1], #[depth, height, width, output_channels, in_channels] 
       stride=2)
     '''
     self._VerifyValues(
