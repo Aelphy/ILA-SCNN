@@ -21,7 +21,7 @@
 
 //TODO: How do I use REGISTER_OP with parameter T?
 //  .Attr("T: {float, double, int32, complex64, complex128}")
-REGISTER_OP("SparseTensorSparseKernelDenseConv3D")
+REGISTER_OP("SparseTensorSparseKernelDenseConvKD")
   .Attr("T: {float}")
   .Input("in_indices: int64")
   .Input("in_values: T")
@@ -32,7 +32,8 @@ REGISTER_OP("SparseTensorSparseKernelDenseConv3D")
   .Output("sparse_indices: int64")
   .Output("sparse_values: T")
   .Output("sparse_shape: int64")
-  .Attr("strides: list(int) >= 5");
+  .Attr("strides: list(int)")
+  .Attr("filter_dim: int = 3");
 //  .Output("debug_output: string")
 
 
@@ -46,10 +47,11 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 using namespace tensorflow;
 
 template <typename Device, typename T>
-class SparseTensorSparseKernelDenseConv3D : public OpKernel {
+class SparseTensorSparseKernelDenseConvKD : public OpKernel {
  public:
-  explicit SparseTensorSparseKernelDenseConv3D(OpKernelConstruction* context) : OpKernel(context) {
+  explicit SparseTensorSparseKernelDenseConvKD(OpKernelConstruction* context) : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("strides", &stride_));
+    OP_REQUIRES_OK(context, context->GetAttr("filter_dim", &filter_dim));
     OP_REQUIRES(context, stride_.size() == 5,
                 errors::InvalidArgument("Sliding window strides field must "
                                         "specify 5 dimensions"));
@@ -75,7 +77,7 @@ class SparseTensorSparseKernelDenseConv3D : public OpKernel {
     std::map<std::vector<int64>, T> output_map; //stores the values for the output tensor
     std::vector<int64> out_shape;
 
-    sparseCuboidConv3D(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, output_map, out_shape);
+    sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, filter_dim, output_map, out_shape);
 
     // Create an output tensor
     Tensor *sparse_values = NULL, *sparse_indices = NULL, *sparse_shape = NULL;
@@ -116,10 +118,11 @@ class SparseTensorSparseKernelDenseConv3D : public OpKernel {
 
  private:
   std::vector<int32> stride_;
+  int32 filter_dim;
 };
 
 #define REGISTER_CPU(type)                                   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConv3D").Device(DEVICE_CPU), SparseTensorSparseKernelDenseConv3D<CPUDevice, type>);
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKD").Device(DEVICE_CPU), SparseTensorSparseKernelDenseConvKD<CPUDevice, type>);
 
 REGISTER_CPU(float);
 //REGISTER_CPU(double);

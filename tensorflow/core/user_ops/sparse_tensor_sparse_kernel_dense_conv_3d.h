@@ -9,18 +9,19 @@
 
 namespace tensorflow {
   template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename T> void
-  sparseCuboidConv3D(   const IndexT& in_ind, 
+  sparseCuboidConvKD(   const IndexT& in_ind, 
                         const ValueT& in_vals, 
                         const ShapeT& in_sh, 
                         const FIndexT& f_ind, 
                         const FValueT& f_vals, 
                         const FShapeT& f_sh,
                         const std::vector<int32>& stride_,
+                        const int64 dim,
                         std::map<std::vector<int64>, T>& output_map,
                         std::vector<int64>& out_shape) {
 
-    const int id_in_batch = 0, id_in_depth = 1, id_in_height = 2, id_in_width = 3, id_in_in_channels = 4;
-    const int id_f_depth = 0, id_f_height = 1, id_f_width = 2, id_f_in_channels = 3, id_f_out_channels = 4;
+    const int id_in_batch = 0, id_in_depth = 1, id_in_width = id_in_depth + dim - 1, id_in_in_channels = id_in_depth + dim;
+    const int id_f_depth = 0, id_f_width = id_f_depth + dim - 1, id_f_in_channels = id_f_depth + dim, id_f_out_channels = id_f_depth + dim + 1;
 
     //preparation: find center of filter
     std::vector<int64> filter_offset(f_ind.dimension(1), 0);

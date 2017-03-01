@@ -124,7 +124,7 @@ class SparseTensorDenseConv3D : public OpKernel {
     auto f_vals = filter_values->flat<T>();
     auto f_sh = filter_shape->flat<int64>();
     std::vector<int64> out_shape;
-    sparseCuboidConv3D(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, output_map, out_shape);
+    sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, 3, output_map, out_shape);
 
 
     // Create an output tensor

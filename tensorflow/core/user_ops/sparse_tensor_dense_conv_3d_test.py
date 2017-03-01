@@ -14,6 +14,7 @@ from tensorflow.python.platform import test
 import tensorflow as tf
 import random
 import numpy as np
+import time
 
 def dense_to_sparse(dense, shape):
   ind = []
@@ -75,7 +76,11 @@ def createRandomSparseTensor(non_zero_percentage, shape):
     total_size *= s
     dim += 1
   num_elems = int(non_zero_percentage * float(total_size))
-  ra_ids = random.sample(range(0, total_size - 1), num_elems)
+  ra_ids = []
+  if non_zero_percentage < 1:
+    ra_ids = random.sample(range(0, total_size - 1), num_elems)
+  else:
+    ra_ids = range(num_elems)
   idx = 0
   ids = [1] * num_elems
   for s in ra_ids:
@@ -90,7 +95,7 @@ def createRandomSparseTensor(non_zero_percentage, shape):
 
 class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
-  def _VerifyValues(self, tensor_in_sizes, filter_in_sizes, stride):
+  def _VerifyValues(self, tensor_in_sizes, filter_in_sizes, stride, dim = 3):
     sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
     if isinstance(stride, collections.Iterable):
@@ -100,38 +105,46 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
     no_strides = [1, 1, 1, 1, 1]
 
-    [t1ind, t1val, t1sh] = createRandomSparseTensor(0.2, tensor_in_sizes)
+    [t1ind, t1val, t1sh] = createRandomSparseTensor(0.33, tensor_in_sizes)
     s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
     #d1 = tf.sparse_tensor_to_dense(s1)
     d1 = sparse_to_dense(t1ind, t1val, t1sh)
     
-    [t2ind, t2val, t2sh] = createRandomSparseTensor(0.4, filter_in_sizes)
+    [t2ind, t2val, t2sh] = createRandomSparseTensor(1, filter_in_sizes)
     s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
     #d2 = tf.sparse_tensor_to_dense(s2)
     d2 = sparse_to_dense(t2ind, t2val, t2sh)
   
 
-    print("input: \n", d1)
-    print("filter: \n", d2)
-    print("strides: \n", strides)
+    # print("input: \n", d1)
+    # print("filter: \n", d2)
+    # print("strides: \n", strides)
 
     # Initializes the input tensor with array containing incrementing
     # numbers from 1.
-    with self.test_session(use_gpu=True) as sess:
+    with self.test_session(use_gpu=False) as sess:
       scconv = sc_module.sparse_tensor_dense_conv3d(t1ind, t1val, t1sh, d2, strides);
-      scskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv3d(t1ind, t1val, t1sh, t2ind, t2val, t2sh, strides);
+      scskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(t1ind, t1val, t1sh, t2ind, t2val, t2sh, strides, dim);
       conv = nn_ops.conv3d(d1, d2, strides, padding="SAME")
       f_conv = nn_ops.conv3d(d1, d2, no_strides, padding="SAME")
+      t1 = time.time()
       expected = sess.run(conv)
+      t2 = time.time()
       nstr_expected = sess.run(f_conv)
-    #  sv1 = sess.run(scconv)
+      t3 = time.time()
       sv2 = sess.run(scskconv)
+      t4 = time.time()
+
+      print("time dense: ", t2 - t1)
+      print("time sparse: ", t4 - t3)
+
+
     value2 = sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
-    print("actual v2 sparse: \n", sv2)
-    print("actual v2: \n", value2)
-    print("expected: \n", expected)
-    print("expected.shape: \n", expected.shape)
-    print("no stride expected: \n", nstr_expected)
+    # print("actual v2 sparse: \n", sv2)
+    # print("actual v2: \n", value2)
+    # print("expected: \n", expected)
+    # print("expected.shape: \n", expected.shape)
+    # print("no stride expected: \n", nstr_expected)
     self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5) 
     '''
     print("actual 1: \n", value1)
@@ -144,9 +157,9 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     # These are equivalent to the Conv2D1x1 case.
         
     self._VerifyValues(
-      tensor_in_sizes=[1, 16, 23, 25, 1], #[batch, depth, height, width, in_channels]
+      tensor_in_sizes=[1, 22, 22, 22, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[5, 3, 7, 1, 2], #[depth, height, width, in_channels, out_channels] 
-      stride=2)
+      stride=1)
     
 
     self._VerifyValues(
