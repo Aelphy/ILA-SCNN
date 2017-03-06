@@ -24,8 +24,8 @@ namespace tensorflow {
     const int id_f_depth = 0, id_f_width = id_f_depth + dim - 1, id_f_in_channels = id_f_depth + dim, id_f_out_channels = id_f_depth + dim + 1;
 
     //preparation: find center of filter
-    std::vector<int64> filter_offset(f_ind.dimension(1), 0);
-    out_shape.assign(in_ind.dimension(1), 0);
+    std::vector<int64> filter_offset(f_ind.dimension(0), 0);
+    out_shape.assign(in_ind.dimension(0), 0);
 
     //input: [batch, depth, height, width, in_channels] 
     //filter: [depth, height, width, output_channels, in_channels]

@@ -7,9 +7,10 @@ tf_custom_op_library(
     srcs =  [
               "sparse_tensor_dense_conv_3d.cc",
               "sparse_tensor_sparse_kernel_dense_conv_3d.h",
-              "merge_sort.h",
               "sparse_tensor_sparse_kernel_dense_conv_3d.cc"
             ],
+
+
 )
 
 tf_py_test(
@@ -18,3 +19,5 @@ tf_py_test(
     srcs = ["sparse_tensor_dense_conv_3d_test.py"],
     additional_deps = ["//tensorflow:tensorflow_py"],
 )
+
+
