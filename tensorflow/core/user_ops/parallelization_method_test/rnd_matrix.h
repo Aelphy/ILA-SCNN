@@ -28,7 +28,7 @@ public:
       for(auto i = 0; i < reduced_size; ++i){
         auto rdn_idx = rand() % (int) reduced_size; //TODO: unique picks
         a_indices[i] = getHighDimIndexVec<IndexT, KeyType>(rdn_idx, a_shape);
-        a_values[i] = ValueT(rand() % (int) m_max_rnd_val); //TODO: unique picks
+        a_values[i] = ValueT(rand() % (int) m_max_rnd_val + 1); //TODO: unique picks
       }
   }
 protected:

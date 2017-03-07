@@ -36,6 +36,11 @@ public:
         return m_cmap.find(hash_key);
     }
 
+    ValueT
+    getValue(const IndexT& a_key_1D) const {
+        return m_cmap.find(a_key_1D);
+    }
+
     ConcurrentMap m_cmap;
 protected:
     inline KeyType

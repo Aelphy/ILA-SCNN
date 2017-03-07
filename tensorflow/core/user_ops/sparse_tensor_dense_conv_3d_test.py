@@ -105,7 +105,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
     no_strides = [1, 1, 1, 1, 1]
 
-    [t1ind, t1val, t1sh] = createRandomSparseTensor(0.33, tensor_in_sizes)
+    [t1ind, t1val, t1sh] = createRandomSparseTensor(0.01, tensor_in_sizes)
     s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
     #d1 = tf.sparse_tensor_to_dense(s1)
     d1 = sparse_to_dense(t1ind, t1val, t1sh)
@@ -157,11 +157,11 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     # These are equivalent to the Conv2D1x1 case.
         
     self._VerifyValues(
-      tensor_in_sizes=[1, 50, 50, 50, 1], #[batch, depth, height, width, in_channels]
+      tensor_in_sizes=[1, 100, 100, 100, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[5, 3, 7, 1, 2], #[depth, height, width, in_channels, out_channels] 
       stride=1)
     
-
+'''
     self._VerifyValues(
         tensor_in_sizes=[1, 13, 22, 12, 2],
         filter_in_sizes=[3, 5, 7, 2, 2],
@@ -172,7 +172,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
         tensor_in_sizes=[1, 12, 34, 13, 3],
         filter_in_sizes=[7, 5, 3, 3, 4],
         stride=3)
-    
+   ''' 
   # Expected values computed using scipy's correlate function.
 '''  def testConv3D2x2x2Filter(self):
     # expected_shape = [1, 3, 1, 2, 5]
