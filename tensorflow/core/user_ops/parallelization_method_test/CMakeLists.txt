@@ -4,7 +4,7 @@ add_definitions(-std=gnu++0x)
 add_definitions(-DBUILD_WITHOUT_LEICA)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-long-long -fopenmp")
 
-project(stuff)
+project(performance_evaluation_methods)
 
 set( PROJECT_LINK_LIBS libcityhash.so )
 find_package(Boost COMPONENTS system thread REQUIRED)
