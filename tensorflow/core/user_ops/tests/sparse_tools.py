@@ -55,7 +55,8 @@ def id1D_to_idkD(inid, shape):
   rt =  np.array(idkd, dtype=np.int64)
   return rt
 
-def createRandomSparseTensor(non_zero_percentage, shape):
+def createRandomSparseTensor(non_zero_percentage, shape, min_range = 1, max_range = 10):
+  full_range = max_range - min_range
   random.seed(a=None)
   total_size = 1
   dim = 0
@@ -75,7 +76,7 @@ def createRandomSparseTensor(non_zero_percentage, shape):
     idx += 1
   tensor_ind = np.array(ids, dtype=np.int64)
 
-  vals = [random.randint(1,14) for e in range(num_elems)]
+  vals = [random.randint(1, 100 * full_range) / 100 + min_range for e in range(num_elems)]
   tensor_vals = np.array(vals, dtype=np.float32)
   return [tensor_ind, tensor_vals, shape]
 
