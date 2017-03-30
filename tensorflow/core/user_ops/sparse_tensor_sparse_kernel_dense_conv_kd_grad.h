@@ -8,59 +8,38 @@
 #include "tensorflow/core/framework/op_kernel.h"
 
 namespace tensorflow {
-  template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename T> void
-  sparseCuboidConvKD(   const IndexT& in_ind, 
+  template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GradT, typename T> void
+  sparseCuboidConvKDFilterGrad(   const IndexT& in_ind, 
                         const ValueT& in_vals, 
                         const ShapeT& in_sh, 
                         const FIndexT& f_ind, 
                         const FValueT& f_vals, 
                         const FShapeT& f_sh,
+                        const GradT& grads,
                         const std::vector<int32>& stride_,
                         const int64 dim,
-                        std::map<std::vector<int64>, T>& output_map,
-                        std::vector<int64>& out_shape,
-                        const std::string padding="SAME") {
-    int padding_type = 1;
-    if(padding == "SAME") padding_type = 0;
+                        std::map<std::vector<int64>, T>& output_map) {
 
     const int id_in_batch = 0, id_in_depth = 1, id_in_width = id_in_depth + dim - 1, id_in_in_channels = id_in_depth + dim;
     const int id_f_depth = 0, id_f_width = id_f_depth + dim - 1, id_f_in_channels = id_f_depth + dim, id_f_out_channels = id_f_depth + dim + 1;
 
     //preparation: find center of filter
-    std::vector<int64> filter_offset(f_sh.dimension(0), 0);
-    out_shape.assign(in_sh.dimension(0), 0);
+    std::vector<int64> filter_offset(f_ind.dimension(0), 0);
 
     //input: [batch, depth, height, width, in_channels] 
     //filter: [depth, height, width, output_channels, in_channels]
     for(int64 i = 0; i < filter_offset.size(); ++i){
-      if(i >= id_in_depth && i <= id_in_width){
-        filter_offset[i] = (f_sh(i-1) - 1) / 2; //TODO: precompute filter indices with offset?
-        if(padding_type == 0){ //SAME: zero padding
-          out_shape[i] = ceil(float(in_sh(i)) / float(stride_[i]));
-        } else { //VALID: no padding
-          out_shape[i] = ceil(float(in_sh(i) - f_sh(i-1) + 1) / float(stride_[i]));
-          if(out_shape[i] < 1) out_shape[i] = 1;
-        }
-      } else if(i == id_in_in_channels){
-        out_shape[i] = f_sh(id_f_out_channels);
-      } else {
-        out_shape[i] = in_sh(i);
-      }
+      filter_offset[i] = floor(f_sh(i) / 2.); //TODO: precompute filter indices with offset?
     }
 
     //use same pattern for stride as tensorflows dense convolution
     std::vector<int> str_padding_offset(in_ind.dimension(1), 0);
     for(int64 i = 0; i < str_padding_offset.size(); ++i){
-      if(padding_type == 0){ //SAME: zero padding
-        if(int(in_sh(i)) % stride_[i] == 0){
-          str_padding_offset[i] = 1;
-        }
-      } else { //VALID: no padding
-        str_padding_offset[i] = 0;
+      if(int(in_sh(i)) % stride_[i] == 0){
+        str_padding_offset[i] = 1;
       }
     }
 
-    //TODO: use batch in parallel? (needs more ram than a parallelization of conv)
     for(int64 i = 0; i < in_ind.dimension(0); ++i){ //TODO: parallelize filtering
       //a) prepare filter to update output based on current value
       std::map<std::vector<int64>, T> filter_update;
@@ -71,10 +50,7 @@ namespace tensorflow {
         update_ids[id_in_batch] = in_ind(i,id_in_batch); //output channel is filter number
         update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
         for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
-          int64 out_plain_id = (int64)(in_ind(i,l) - f_ind(j,k) + filter_offset[l]);
-          if(padding_type == 1){ //valid padding
-            out_plain_id = out_plain_id - filter_offset[l];
-          }
+          int64 out_plain_id = (int64)(in_ind(i,l) - f_ind(j,k) + filter_offset[k]);
           if(in_sh(l) > 1 && stride_[l] > 1){
             if(((out_plain_id ) % stride_[l]) != str_padding_offset[l]){
               is_valid = false;
@@ -84,14 +60,16 @@ namespace tensorflow {
           } else {
             update_ids[l] = out_plain_id; //depth, width and height
           }
-          if(update_ids[l] < 0 || update_ids[l] >= out_shape[l]){    //check boundaries
+          if(update_ids[l] < 0 || update_ids[l] >= in_sh(l)){    //check boundaries
             is_valid = false;
             break;
           }
         }
         if(is_valid){
-          T update_val = in_vals(i) * f_vals(j); //input value times filter weight at index
-          filter_update.insert(std::make_pair(update_ids, update_val));
+          std::vector<int64> filter_id(f_ind.dimension(1));
+          for(size_t k = 0; k < filter_id.size(); ++k) filter_id[k] = f_ind(j,k);
+          T update_val = in_vals(i) * grads(i); //input value times grads for back prop
+          filter_update.insert(std::make_pair(filter_id, update_val));
         }
       }
       

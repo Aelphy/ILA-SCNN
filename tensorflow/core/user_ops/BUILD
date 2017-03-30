@@ -7,14 +7,25 @@ tf_custom_op_library(
     srcs =  [
               "sparse_tensor_dense_conv_3d.cc",
               "sparse_tensor_sparse_kernel_dense_conv_3d.h",
+              "sparse_tensor_sparse_kernel_dense_conv_kd_grad.h",
               "sparse_tensor_sparse_kernel_dense_conv_3d.cc",
+              "sparse_tensor_sparse_kernel_dense_conv_kd_grad.cc",
               "sparse_tensor_dense_relu_op.cc",
               "sparse_tensor_dense_relu_op_functor.h",
               "sparse_tensor_dense_relu_op_gpu.cu.cc",
-              "sparse_tensor_dense_relu_op.h"
+              "sparse_tensor_dense_relu_op.h",
+
             ],
 
 
+)
+
+py_library(
+    name = "sparse_nn_ops",
+    srcs = [
+              "sparse_ops.py"
+           ],
+    srcs_version = "PY2AND3",
 )
 
 tf_py_test(
