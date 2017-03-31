@@ -18,73 +18,11 @@ namespace tensorflow {
                         const GradT& grads,
                         const std::vector<int32>& stride_,
                         const int64 dim,
-                        std::map<std::vector<int64>, T>& output_map) {
-
-    const int id_in_batch = 0, id_in_depth = 1, id_in_width = id_in_depth + dim - 1, id_in_in_channels = id_in_depth + dim;
-    const int id_f_depth = 0, id_f_width = id_f_depth + dim - 1, id_f_in_channels = id_f_depth + dim, id_f_out_channels = id_f_depth + dim + 1;
-
-    //preparation: find center of filter
-    std::vector<int64> filter_offset(f_ind.dimension(0), 0);
-
-    //input: [batch, depth, height, width, in_channels] 
-    //filter: [depth, height, width, output_channels, in_channels]
-    for(int64 i = 0; i < filter_offset.size(); ++i){
-      filter_offset[i] = floor(f_sh(i) / 2.); //TODO: precompute filter indices with offset?
-    }
-
-    //use same pattern for stride as tensorflows dense convolution
-    std::vector<int> str_padding_offset(in_ind.dimension(1), 0);
-    for(int64 i = 0; i < str_padding_offset.size(); ++i){
-      if(int(in_sh(i)) % stride_[i] == 0){
-        str_padding_offset[i] = 1;
-      }
-    }
-
-    for(int64 i = 0; i < in_ind.dimension(0); ++i){ //TODO: parallelize filtering
-      //a) prepare filter to update output based on current value
-      std::map<std::vector<int64>, T> filter_update;
-      for(int64 j = 0; j < f_ind.dimension(0); ++j){
-        if(f_ind(j, id_f_in_channels) != in_ind(i,id_in_in_channels)) continue; //filter channel != input channel
-        bool is_valid = true;
-        std::vector<int64> update_ids(in_ind.dimension(1), 0);
-        update_ids[id_in_batch] = in_ind(i,id_in_batch); //output channel is filter number
-        update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
-        for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
-          int64 out_plain_id = (int64)(in_ind(i,l) - f_ind(j,k) + filter_offset[k]);
-          if(in_sh(l) > 1 && stride_[l] > 1){
-            if(((out_plain_id ) % stride_[l]) != str_padding_offset[l]){
-              is_valid = false;
-              break;          
-            }
-            update_ids[l] = float(out_plain_id) / stride_[l]; //depth, width and height
-          } else {
-            update_ids[l] = out_plain_id; //depth, width and height
-          }
-          if(update_ids[l] < 0 || update_ids[l] >= in_sh(l)){    //check boundaries
-            is_valid = false;
-            break;
-          }
-        }
-        if(is_valid){
-          std::vector<int64> filter_id(f_ind.dimension(1));
-          for(size_t k = 0; k < filter_id.size(); ++k) filter_id[k] = f_ind(j,k);
-          T update_val = in_vals(i) * grads(i); //input value times grads for back prop
-          filter_update.insert(std::make_pair(filter_id, update_val));
-        }
-      }
-      
-
-      //b) check if output exists (search required) and create or update output based on filter_update
-        //TODO: concept: tree search to find upper and lower filter bound; binary search in between?
-      for(auto it = filter_update.begin(); it != filter_update.end(); ++it){
-        auto res_it = output_map.find(it->first);
-        if(res_it == output_map.end()){
-          output_map.insert(*it);
-        } else {
-          res_it->second += it->second;
-        }
-      }
-    }
-  }
+                        std::map<std::vector<int64>, T>& output_map) 
+{
+  
+  
+  
+  
 }
 
