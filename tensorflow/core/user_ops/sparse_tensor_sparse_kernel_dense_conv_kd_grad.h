@@ -8,6 +8,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "sparse_tensor_sparse_kernel_dense_conv_kd.h"
 
+
 namespace tensorflow {
   template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GIndexT, typename GradT, typename T> void
   sparseCuboidConvKDFilterGrad(   const IndexT& in_ind, 
@@ -24,49 +25,63 @@ namespace tensorflow {
                         const int64 dim,
                         std::vector<T>& back_props) 
   {
-    //zero-truncated back propagation (only backpropergate errors to features or filter weights, which exist (unequal zero)):
+    //sparse back propagation (only backpropergate errors to features or filter weights, which exist (unequal zero)):
     typedef std::vector<int64> KeyT;
+    typedef std::vector<KeyT> GIndexKeyT;
 
     // 1. reverse strides and effects of VALID padding to make grad (output layer) and in_vals (input layer) comparable
-    KeyT filter_offset(f_sh.dimension(0),0);
+    KeyT filter_offset(f_sh.dimension(0), 0);
     for(size_t i = 1; i < dim + 1; ++i){
       filter_offset[i] = (f_sh(i - 1) - 1) / 2;
     }
-    auto adapted_grads_ind = grads_ind; //const index
-    for(size_t i = 0; i < adapted_grads_ind.dimension(0); ++i){
+    GIndexKeyT adapted_grads_ind(grads_ind.dimension(0), KeyT(grads_ind.dimension(1), 0));
+    for(size_t i = 0; i < adapted_grads_ind.size(); ++i){
+      for(size_t j = 0; j < grads_ind.dimension(1); ++j){
+        adapted_grads_ind[i][j] = grads_ind(i,j);
+      }
       //input: [batch, depth, height, width, in_channels] 
       //filter: [depth, height, width, output_channels, in_channels]
       for(size_t j = 1; j < dim + 1; ++j){
-        adapted_grads_ind(i,j) = adapted_grads_ind(i,j) * stride_[j]; //reverse stride on indices
+        adapted_grads_ind[i][j] = adapted_grads_ind[i][j] * stride_[j]; //reverse stride on indices
         if(padding == "VALID"){
-          adapted_grads_ind(i,j) += filter_offset[j]; //reverse VALID padding on indices
+          adapted_grads_ind[i][j] += filter_offset[j]; //reverse VALID padding on indices
         }
       }
+      //bring gradient indices from input format [batch, depth, height, width, in_channels] to filter format [depth, height, width, output_channels, in_channels]
+      for(size_t j = 1; j < dim + 1; ++j){
+        adapted_grads_ind[i][j-1] = adapted_grads_ind[i][j];
+      }
+
+      adapted_grads_ind[i][dim] = adapted_grads_ind[i][dim + 1]; //output_channels = in_channels
     }
     
 
     // 2. set up convolution for backprop of filter weights: in_vals * grads
-    ConvKDHelper<IndexT, GIndexT, ValueT, ShapeT, KeyT, T> conv_function(  &in_ind, 
-                                                                  &in_vals, 
-                                                                  &in_sh, 
-                                                                  &adapted_grads_ind, 
-                                                                  &grads, 
-                                                                  &grads_sh, 
-                                                                  &stride_, 
-                                                                  "SAME", 
-                                                                  dim);
-    // 3. convolve grads and input values corresponding to filter index
     KeyT grad_offset(f_sh.dimension(0),0);
     for(size_t i = 1; i < dim + 1; ++i){
-      grad_offset[i] = (grads_sh(i - 1) - 1) / 2;
+      grad_offset[i - 1] = (grads_sh(i) - 1) / 2;
     }
+
+    std::vector<int32> no_stride(stride_.size(), 1);
+    ConvKDHelper<IndexT, GIndexKeyT, ValueT, KeyT, T> conv_function(  &in_ind, 
+                                                                  &in_vals, 
+                                                                  &adapted_grads_ind, 
+                                                                  &grads, 
+                                                                  &no_stride, 
+                                                                  "SAME",
+                                                                  grad_offset,
+                                                                  dim);
+
+    // 3. convolve grads and input values corresponding to filter index
+
+    
     back_props.resize(f_ind.dimension(0));
     for(size_t i = 0; i < f_ind.dimension(0); ++i){
       KeyT id(f_ind.dimension(1), 0);
-      for(size_t j = 0; j < id.size(); ++j){
-        id[j] = f_ind(i,j) - filter_offset[j] + grad_offset[j];
+      for(size_t j = 1; j < dim + 1; ++j){
+        id[j] = f_ind(i,j-1) + grad_offset[j - 1] - filter_offset[j];
       }
-      back_props[i] = conv_function.evaluate_at(id);
+      back_props[i] = conv_function.evaluate_at(id); //normal convolution (no voting sheme) for large matrices with VALID padding + zeros
     }
   }
 }

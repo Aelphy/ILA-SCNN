@@ -73,8 +73,7 @@ class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
     auto f_ind = filter_indices->matrix<int64>(); //filters, channels, kernel_depth, kernel_height, kernel_width TODO: other cases?
     auto f_vals = filter_values->flat<T>();
     auto f_sh = filter_shape->flat<int64>();
-    Tensor gradients_ind = *gradients_indices; //non const working copy of gradient indices
-    auto grad_ind = gradients_ind.matrix<int64>();
+    auto grad_ind = gradients_indices->matrix<int64>();
     auto grads = gradients->flat<T>();
     auto grad_sh = gradients_shape->flat<int64>();
 
@@ -82,9 +81,8 @@ class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
 
     std::vector<T> backprops; //stores the values for the output tensor
     std::vector<int64> out_shape;
-
     sparseCuboidConvKDFilterGrad(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, grad_ind, grads, grad_sh, stride_, padding, filter_dim, backprops);
-
+    
     Tensor *sparse_values = NULL;
     TensorShape out_val_shape = {(int64) f_vals.size()};
     OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &sparse_values));
@@ -92,11 +90,10 @@ class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
 
     assert(backprops.size() == out_vals.size());
 
-    size_t idx = 0;
-    for(auto it = backprops.begin(); it != backprops.end(); ++it, ++idx){
-      out_vals(idx) = *it;
-      //TODO: assert input indice == out_vals first
+    for(size_t idx = 0; idx < backprops.size(); ++idx){
+      out_vals(idx) = backprops[idx];
     }
+
   }
 
  private:

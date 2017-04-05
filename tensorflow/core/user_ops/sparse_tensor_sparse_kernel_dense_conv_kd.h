@@ -112,20 +112,19 @@ namespace tensorflow {
   }
 
   //normal convolution in sparse data
-  template <typename IndexT, typename FIndexT, typename ValueT, typename ShapeT, typename KeyT, typename DataT>
+  template <typename IndexT, typename FIndexT, typename ValueT, typename KeyT, typename DataT>
   class ConvKDHelper {
   public:
     ConvKDHelper( const IndexT* data_index, 
                   const ValueT* data_value, 
-                  const ShapeT* data_shape, 
                   const FIndexT* filter_index, 
                   const ValueT* filter_weights, 
-                  const ShapeT* filter_shape, 
                   const std::vector<int32>* stride,
                   std::string padding_type,
+                  std::vector<int64> filter_offset,
                   int dimension = 3)
-      : m_data_index(data_index), m_data_value(data_value), m_data_shape(data_shape), m_filter_index(filter_index), 
-        m_filter_weights(filter_weights), m_filter_shape(filter_shape), m_stride(stride), m_dimension(dimension)
+      : m_data_index(data_index), m_data_value(data_value), m_filter_index(filter_index), 
+        m_filter_weights(filter_weights),m_stride(stride), m_filter_offset(filter_offset), m_dimension(dimension)
     {
       m_padding_type = 0; //SAME: zero padding
       if(padding_type == "VALID") m_padding_type = 1;
@@ -137,10 +136,6 @@ namespace tensorflow {
         m_map.insert(std::make_pair(id, (*data_value)(i)));
       }
 
-      m_filter_offset.assign(data_shape->dimension(0), 0);
-      for(int i = 1; i < m_dimension + 1; ++i){
-        m_filter_offset[i] = ((*filter_shape)(i-1) - 1) / 2;
-      }
     }
 
     inline DataT
@@ -148,15 +143,16 @@ namespace tensorflow {
       //input: [batch, depth, height, width, in_channels] 
       //filter: [depth, height, width, output_channels, in_channels]
       DataT conv_value = 0;
-      for(size_t i = 0; i < m_filter_index->dimension(0); ++i){
-        if(a_id[m_dimension + 1] != (*m_filter_index)(i, m_dimension + 1)) continue; //different channels
+      for(size_t i = 0; i < m_filter_index->size(); ++i){
         KeyT key_look_up = a_id;
         for(size_t j = 1; j < m_dimension + 1; ++j){
-          key_look_up[j] = a_id[j] - m_filter_offset[j] + (*m_filter_index)(i,j - 1);
+          key_look_up[j] = a_id[j] - m_filter_offset[j - 1] + (*m_filter_index)[i][j - 1];
         }
         auto it = m_map.find(key_look_up);
         if(it != m_map.end()){
-          conv_value += it->second;
+          auto data_val = it->second;
+          auto weights = (*m_filter_weights)(i);
+          conv_value += data_val * weights;
         }
       }
       return conv_value;
@@ -165,10 +161,8 @@ namespace tensorflow {
   protected:
     const IndexT* m_data_index;
     const ValueT* m_data_value;
-    const ShapeT* m_data_shape;
     const FIndexT* m_filter_index;
     const ValueT* m_filter_weights;
-    const ShapeT* m_filter_shape;
     const std::vector<int32>* m_stride;
     int m_padding_type;
     int m_dimension;

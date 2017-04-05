@@ -75,7 +75,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
   def testConv3D1x1x1Filter(self):
     # These are equivalent to the Conv2D1x1 case.
-        
+    '''        
     self._VerifyValues(
       tensor_in_sizes=[1, 7, 8, 9, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
@@ -83,7 +83,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       rho_data=1,
       rho_filter=1,
       padding='VALID')
-    
+    ''' 
 
   def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, dim = 3):
     if isinstance(stride, collections.Iterable):
@@ -92,11 +92,11 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       strides = [1, stride, stride, stride, 1]
 
 
-    [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(0.2, tensor_in_sizes)
+    [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(1, tensor_in_sizes)
     s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
     d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
     
-    [t2ind, t2val, t2sh] = sp.createRandomSparseTensor(0.4, filter_in_sizes)
+    [t2ind, t2val, t2sh] = sp.createRandomSparseTensor(1, filter_in_sizes)
     s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
     d2 = sp.sparse_to_dense(t2ind, t2val, t2sh)
     in_shape = tensor_in_sizes
@@ -109,35 +109,45 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
                                d2, strides,
                                padding="SAME")
       out_backprop_shape = conv_out.get_shape().as_list()
-      [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(0.3, out_backprop_shape, 1, 2)
-      d3 = constant_op.constant(sp.sparse_to_dense(t3ind, t3val, t3sh))
+      [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(1, out_backprop_shape, 1, 9)
+      d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
+      d3 = constant_op.constant(d3_)
       out_backprop_val = d3
+      t1 = time.time()
       output = nn_ops.conv3d_backprop_filter_v2(in_val, filter_shape,
                                                 out_backprop_val, strides,
                                                 padding="SAME")
-      output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, out_backprop_val, strides)
+      t2 = time.time()
+      output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, "SAME")
+      t3 = time.time()
 
+      output_dense = output.eval()
+      output_sparse = output2.eval()
 
       #print output.get_shape().as_list()
       #err = gradient_checker.compute_gradient_error(
       #    [in_val, out_backprop_val], [in_shape, out_backprop_shape],
       #    output, filter_shape)
-      print("input: ", d1)
-      print("filter: ", d2)
-      print("grad: ", d3.eval())
-      print("output: ", output.eval())
-      print("output2: ", output2.eval())
-    #print("conv3d_backprop_filter gradient err = %g " % err)
-    #err_tolerance = 1e-3
-    #self.assertLess(err, err_tolerance)
+      #print("input: ", d1)
+      #print("filter: ", d2)
+      #print("filter indices: ", t2ind)
+      #print("grad: ", d3.eval())
+      #print("output: ", output_dense)
 
-  def testInputGradientValidPaddingStrideOne(self):
-    '''
+      value2 = sp.sparse_to_dense(t2ind, output_sparse, t2sh)
+      #print("output2: ", value2)
+      #print("time dense: ", t2 - t1)
+      #print("time sparse: ", t3 - t2)
+
+
+    self.assertArrayNear(output_dense.flatten(), value2.flatten(), 1e-5) 
+
+  def testInputGradientValidPaddingStrideOne(self):   
     self.ConstructAndTestGradient(
-      tensor_in_sizes=[1, 1, 3, 3, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[1, 3, 1, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      tensor_in_sizes=[1, 20, 22, 11, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 5, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
       stride=1)
-    '''
+    
 
 
 if __name__ == "__main__":
