@@ -85,7 +85,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       padding='VALID')
     ''' 
 
-  def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, dim = 3):
+  def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, padding = "SAME", dim = 3):
     if isinstance(stride, collections.Iterable):
       strides = [1] + list(stride) + [1]
     else:
@@ -105,9 +105,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     # Make a convolution op with the current settings, just to easily get
     # the shape of the output.
     with self.test_session(use_gpu=False):
-      conv_out = nn_ops.conv3d(d1,
-                               d2, strides,
-                               padding="SAME")
+      conv_out = nn_ops.conv3d(d1, d2, strides, padding)
       out_backprop_shape = conv_out.get_shape().as_list()
       [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(1, out_backprop_shape, 1, 9)
       d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
@@ -115,10 +113,9 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       out_backprop_val = d3
       t1 = time.time()
       output = nn_ops.conv3d_backprop_filter_v2(in_val, filter_shape,
-                                                out_backprop_val, strides,
-                                                padding="SAME")
+                                                out_backprop_val, strides, padding)
       t2 = time.time()
-      output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, "SAME")
+      output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
       t3 = time.time()
 
       output_dense = output.eval()
@@ -144,9 +141,10 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
   def testInputGradientValidPaddingStrideOne(self):   
     self.ConstructAndTestGradient(
-      tensor_in_sizes=[1, 20, 22, 11, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 5, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
-      stride=1)
+      tensor_in_sizes=[1, 14, 15, 13, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 5, 7, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      stride=2,
+      padding="VALID")
     
 
 

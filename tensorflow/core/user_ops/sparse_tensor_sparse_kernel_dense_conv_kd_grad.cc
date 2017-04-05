@@ -93,7 +93,6 @@ class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
     for(size_t idx = 0; idx < backprops.size(); ++idx){
       out_vals(idx) = backprops[idx];
     }
-
   }
 
  private:
