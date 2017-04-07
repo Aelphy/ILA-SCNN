@@ -17,6 +17,8 @@ import numpy as np
 import time
 import sparse_tools as sp
 
+tf.logging.set_verbosity(tf.logging.INFO)
+
 sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
 class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
@@ -74,8 +76,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
 
   def testConv3D1x1x1Filter(self):
-    # These are equivalent to the Conv2D1x1 case.
-    '''        
+    # These are equivalent to the Conv2D1x1 case.        
     self._VerifyValues(
       tensor_in_sizes=[1, 7, 8, 9, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
@@ -83,9 +84,25 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       rho_data=1,
       rho_filter=1,
       padding='VALID')
-    ''' 
+    
+    self._VerifyValues(
+      tensor_in_sizes=[1, 4, 5, 4, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      stride=1,
+      rho_data=1,
+      rho_filter=1,
+      padding='SAME')
+    
+    self._VerifyValues(
+      tensor_in_sizes=[1, 5, 4, 7, 2], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 3, 3, 2, 2], #[depth, height, width, in_channels, out_channels] 
+      stride=1,
+      rho_data=1,
+      rho_filter=1,
+      padding='VALID')
+    
 
-  def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, padding = "SAME", dim = 3):
+  def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, padding = "SAME", test_type = "FILTER", dim = 3):
     if isinstance(stride, collections.Iterable):
       strides = [1] + list(stride) + [1]
     else:
@@ -111,42 +128,57 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
       d3 = constant_op.constant(d3_)
       out_backprop_val = d3
-      t1 = time.time()
-      output = nn_ops.conv3d_backprop_filter_v2(in_val, filter_shape,
-                                                out_backprop_val, strides, padding)
-      t2 = time.time()
-      output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
-      t3 = time.time()
 
-      output_dense = output.eval()
-      output_sparse = output2.eval()
+      if test_type == "FILTER":
+        t1 = time.time()
+        output = nn_ops.conv3d_backprop_filter_v2(in_val, filter_shape,
+                                                  out_backprop_val, strides, padding)
+        t2 = time.time()
+        output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
+        t3 = time.time()
 
-      #print output.get_shape().as_list()
-      #err = gradient_checker.compute_gradient_error(
-      #    [in_val, out_backprop_val], [in_shape, out_backprop_shape],
-      #    output, filter_shape)
-      #print("input: ", d1)
-      #print("filter: ", d2)
-      #print("filter indices: ", t2ind)
-      #print("grad: ", d3.eval())
-      #print("output: ", output_dense)
+        output_dense = output.eval()
+        output_sparse = output2.eval()
+        value2 = sp.sparse_to_dense(t2ind, output_sparse, t2sh)
+      else: # test_type == "INPUT"
+        t1 = time.time()        
+        output = nn_ops.conv3d_backprop_input_v2(d1, d2, out_backprop_val, strides, padding)
+        t2 = time.time()
+        output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
+        t3 = time.time()
 
-      value2 = sp.sparse_to_dense(t2ind, output_sparse, t2sh)
-      #print("output2: ", value2)
-      #print("time dense: ", t2 - t1)
-      #print("time sparse: ", t3 - t2)
+        output_dense = output.eval()
+        output_sparse = output2.eval()
+        value2 = sp.sparse_to_dense(t1ind, output_sparse, t1sh)
+       
+      #print("input: \n", d1)
+      #print("filter: \n", d2)
+      #print("grads: \n", d3_)
+      #print("output dense: \n", output_dense)
+      #print("output sparse: \n", value2)
+
+      print("time dense: ", t2 - t1)
+      print("time sparse: ", t3 - t2)
 
 
     self.assertArrayNear(output_dense.flatten(), value2.flatten(), 1e-5) 
 
-  def testInputGradientValidPaddingStrideOne(self):   
-    self.ConstructAndTestGradient(
-      tensor_in_sizes=[1, 14, 15, 13, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 5, 7, 1, 1], #[depth, height, width, in_channels, out_channels] 
-      stride=2,
-      padding="VALID")
+  def testGradientValidPaddingStrideOne(self):  
     
-
+    self.ConstructAndTestGradient(
+      tensor_in_sizes=[1, 13, 11, 12, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 4, 5, 1, 2], #[depth, height, width, in_channels, out_channels] 
+      stride=1,
+      padding="VALID",
+      test_type = "FILTER")
+    
+    self.ConstructAndTestGradient(
+      tensor_in_sizes=[2, 14, 13, 12, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 3, 3, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      stride=1,
+      padding="SAME",
+      test_type = "FILTER")
+    
 
 if __name__ == "__main__":
   test.main()

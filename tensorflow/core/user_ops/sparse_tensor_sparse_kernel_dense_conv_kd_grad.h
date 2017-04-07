@@ -7,7 +7,7 @@
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "sparse_tensor_sparse_kernel_dense_conv_kd.h"
-
+#include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
   template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GIndexT, typename GradT, typename T> void
@@ -39,7 +39,7 @@ namespace tensorflow {
     std::vector<int> str_padding_offset(in_ind.dimension(1), 0);
     for(int64 i = 0; i < str_padding_offset.size(); ++i){
       if(int(in_sh(i)) % stride_[i] == 1){
-        str_padding_offset[i] = 1;
+        str_padding_offset[i] = 0;
       }
     }
 
@@ -59,19 +59,13 @@ namespace tensorflow {
           adapted_grads_ind[i][j] += str_padding_offset[j]; //reverse SAME padding rules from tensorflow
         }
       }
-      //bring gradient indices from input format [batch, depth, height, width, in_channels] to filter format [depth, height, width, output_channels, in_channels]
-      for(size_t j = 1; j < dim + 1; ++j){
-        adapted_grads_ind[i][j-1] = adapted_grads_ind[i][j];
-      }
-
-      adapted_grads_ind[i][dim] = adapted_grads_ind[i][dim + 1]; //output_channels = in_channels
     }
     
 
     // 2. set up convolution for backprop of filter weights: in_vals * grads
     KeyT grad_offset(f_sh.dimension(0),0);
     for(size_t i = 1; i < dim + 1; ++i){
-      grad_offset[i - 1] = (grads_sh(i) - 1) / 2;
+      grad_offset[i] = (grads_sh(i) - 1) / 2;
     }
 
     std::vector<int32> no_stride(stride_.size(), 1);
@@ -85,13 +79,17 @@ namespace tensorflow {
                                                                   dim);
 
     // 3. convolve grads and input values corresponding to filter index
-    back_props.resize(f_ind.dimension(0));
-    for(size_t i = 0; i < f_ind.dimension(0); ++i){
-      KeyT id(f_ind.dimension(1), 0);
-      for(size_t j = 1; j < dim + 1; ++j){
-        id[j] = f_ind(i,j-1) + grad_offset[j - 1] - filter_offset[j];
+    back_props.assign(f_ind.dimension(0), 0);
+    //for(size_t b = 0; b < f_sh(0); ++b){
+      for(size_t i = 0; i < f_ind.dimension(0); ++i){
+        KeyT id(f_ind.dimension(1), 0);
+        for(size_t j = 1; j < dim + 1; ++j){
+          id[j - 1] = f_ind(i,j-1) + grad_offset[j] - filter_offset[j];
+        }
+        id[dim + 1] = f_ind(i, dim + 1); //in channels;
+        id[dim] = f_ind(i, dim); //out channels;
+        back_props[i] += conv_function.backprop_at(id); //normal convolution (no voting sheme) for large matrices with VALID padding + zeros
       }
-      back_props[i] = conv_function.evaluate_at(id); //normal convolution (no voting sheme) for large matrices with VALID padding + zeros
-    }
+    //}
   }
 }

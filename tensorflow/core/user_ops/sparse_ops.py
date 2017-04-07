@@ -25,14 +25,6 @@ def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
   #strides = op.get_attr("strides")
   #padding = op.get_attr("padding")
 
-#new_grads_and_vars = []
-#x_indices, _ = tf.unique(tf.reshape(tf.slice(X.indices, [0, 1], [-1, 1]), shape=[-1]))  # <- not sorted
-#for grad, var in grads_and_vars:
-#   grad_vals = tf.gather(grad, indices=x_indices)
-#   grad_slice = tf.IndexedSlices(indices=x_indices, values=grad_vals)
-#   new_grads_and_vars.append((grad_slice, var))
-#grads_and_vars = new_grads_and_vars
-
 
   return [None, 
           sparse_nn_ops.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(op.inputs[0],
