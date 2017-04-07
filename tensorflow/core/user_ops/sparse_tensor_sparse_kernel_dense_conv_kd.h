@@ -126,6 +126,7 @@ namespace tensorflow {
       : m_data_index(data_index), m_data_value(data_value), m_filter_index(filter_index), 
         m_filter_weights(filter_weights),m_stride(stride), m_filter_offset(filter_offset), m_dimension(dimension)
     {
+      std::stringstream ss;
       m_padding_type = 0; //SAME: zero padding
       if(padding_type == "VALID") m_padding_type = 1;
       for(size_t i = 0; i < m_data_index->dimension(0); ++i){
@@ -133,13 +134,41 @@ namespace tensorflow {
         for(size_t j = 0; j < m_data_index->dimension(1); ++j){
           id[j] = (*m_data_index)(i,j);
         }
+        for(size_t j = 0; j < id.size(); ++j){
+          ss << id[j] << " ";
+        }
+        ss << ": " << (*data_value)(i) << std::endl;
         m_map.insert(std::make_pair(id, (*data_value)(i)));
       }
-
+      LOG(INFO) << ss.str();
     }
 
     inline DataT
-    backprop_at(const KeyT& a_id) const {
+    backprop_filter_at(const KeyT& a_id) const {
+      //input: [batch, depth, height, width, in_channels] 
+      //filter: [depth, height, width, in_channels, out_channels]
+      DataT conv_value = 0;
+      for(size_t i = 0; i < m_filter_index->dimension(0); ++i){
+        if((*m_filter_index)(i,m_dimension + 1) != a_id[m_dimension + 1]) continue; //channel of output == output channel of filter
+        KeyT key_look_up(a_id.size(), 0);
+        key_look_up[0] = (*m_filter_index)(i,0);
+        for(size_t j = 1; j < m_dimension + 1; ++j){
+          key_look_up[j] = a_id[j - 1] - m_filter_offset[j] + (*m_filter_index)(i,j);
+        }
+        key_look_up[m_dimension + 1] = a_id[m_dimension]; //channel of input == input channel of filter
+        auto it = m_map.find(key_look_up);
+
+        if(it != m_map.end()){
+          auto data_val = it->second;
+          auto weights = (*m_filter_weights)(i);
+          conv_value += data_val * weights;
+        }
+      }
+      return conv_value;
+    }
+
+    inline DataT
+    backprop_indices_at(const KeyT& a_id) const {
       //input: [batch, depth, height, width, in_channels] 
       //filter: [depth, height, width, in_channels, out_channels]
       std::stringstream ss;
@@ -148,27 +177,28 @@ namespace tensorflow {
       }
       ss << std::endl;
       DataT conv_value = 0;
-      for(size_t i = 0; i < m_filter_index->size(); ++i){
-        if((*m_filter_index)[i][m_dimension + 1] != a_id[m_dimension + 1]) continue; //channel of output == output channel of filter
+      for(size_t i = 0; i < m_filter_index->dimension(0); ++i){
+        if((*m_filter_index)(i,m_dimension) != a_id[m_dimension + 1]) continue; //channel of input == input channel of filter
         KeyT key_look_up(a_id.size(), 0);
-        key_look_up[0] = (*m_filter_index)[i][0];
+        key_look_up[0] = a_id[m_dimension]; //batch
         for(size_t j = 1; j < m_dimension + 1; ++j){
-          key_look_up[j] = a_id[j - 1] - m_filter_offset[j] + (*m_filter_index)[i][j];
+          key_look_up[j] = a_id[j - 1] - m_filter_offset[j] + (*m_filter_index)(i,j-1);
         }
-        key_look_up[m_dimension + 1] = a_id[m_dimension]; //channel of input == input channel of filter
+        key_look_up[m_dimension + 1] = (*m_filter_index)(i,m_dimension + 1); //channel of output == output channel of filter
         auto it = m_map.find(key_look_up);
 
-        for(size_t i = 0; i < key_look_up.size(); ++i){
-          ss << key_look_up[i] << " ";
+        for(size_t j = 0; j < key_look_up.size(); ++j){
+          ss << key_look_up[j] << " ";
         }
         ss << std::endl;
+
         if(it != m_map.end()){
           auto data_val = it->second;
           auto weights = (*m_filter_weights)(i);
           conv_value += data_val * weights;
           ss << data_val << " " << weights << " " << conv_value << std::endl;
         }
-        //LOG(INFO) << ss.str();
+        LOG(INFO) << ss.str();
       }
       return conv_value;
     }
