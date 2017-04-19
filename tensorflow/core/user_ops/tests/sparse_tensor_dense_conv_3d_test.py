@@ -56,7 +56,9 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       t3 = time.time()
       sv2 = sess.run(scskconv)
       t4 = time.time()
-
+    
+      print("input shape", tensor_in_sizes)
+      print("filter shape", filter_in_sizes)
       print("time dense: ", t2 - t1)
       print("time sparse: ", t4 - t3)
 
@@ -67,12 +69,10 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     #print("expected: \n", expected)
     #print("expected.shape: \n", expected.shape)
     #print("no stride expected: \n", nstr_expected)
-    self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5) 
-    '''
-    print("actual 1: \n", value1)
-    expected = value.flatten() #TODO remove
-    self.assertArrayNear(expected.flatten(), value1.flatten(), 1e-5)
-    '''
+    #self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5) 
+    #print("actual 1: \n", value1)
+
+    self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5)
 
 
   def testConv3D1x1x1Filter(self):
@@ -101,6 +101,13 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       rho_filter=1,
       padding='VALID')
     
+    self._VerifyValues(
+      tensor_in_sizes=[1, 100, 100, 100, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 3, 3, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      stride=1,
+      rho_data=0.01,
+      rho_filter=1,
+      padding='SAME')
 
   def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, padding = "SAME", test_type = "FILTER", dim = 3):
     if isinstance(stride, collections.Iterable):
@@ -151,11 +158,12 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
         output_sparse = output2.eval()
         value2 = sp.sparse_to_dense(t1ind, output_sparse, t1sh)
        
-      print("input: \n", d1)
+      '''print("input: \n", d1)
       print("filter: \n", d2)
       print("grads: \n", d3_)
       print("output dense: \n", output_dense)
       print("output sparse: \n", value2)
+      '''
 
       print("time dense: ", t2 - t1)
       print("time sparse: ", t3 - t2)
@@ -163,8 +171,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
     self.assertArrayNear(output_dense.flatten(), value2.flatten(), 1e-5) 
 
-  def testGradientValidPaddingStrideOne(self):  
-    ''' 
+  def testGradientValidPaddingStrideOne(self):   
     self.ConstructAndTestGradient(
       tensor_in_sizes=[1, 13, 11, 12, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[3, 4, 5, 1, 2], #[depth, height, width, in_channels, out_channels] 
@@ -178,7 +185,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       stride=1,
       padding="SAME",
       test_type = "FILTER")
-    '''
+    
 
     self.ConstructAndTestGradient(
       tensor_in_sizes=[2, 5, 5, 6, 1], #[batch, depth, height, width, in_channels]

@@ -11,11 +11,9 @@ tf_custom_op_library(
               "sparse_tensor_sparse_kernel_dense_conv_kd_grad.cc",
               "sparse_tensor_dense_relu_op.cc",
               "sparse_tensor_dense_relu_op_functor.h",
-              "sparse_tensor_dense_relu_op_gpu.cu.cc",
               "sparse_tensor_dense_relu_op.h",
 
             ],
-
 
 )
 

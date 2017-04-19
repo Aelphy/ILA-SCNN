@@ -27,69 +27,64 @@ sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
 raw_input("Press Enter to continue...")
 
-tensor_in_sizes=[1, 3, 3, 1, 1] #[batch, depth, height, width, in_channels]
-filter_in_sizes=[1, 3, 1, 1, 1] #[depth, height, width, in_channels, out_channels] 
+tensor_in_sizes=[1, 100, 100, 100, 1] #[batch, depth, height, width, in_channels]
+filter_in_sizes=[3, 3, 3, 1, 1] #[depth, height, width, in_channels, out_channels] 
 stride=1
+dim = 3
+rho_data = 0.01
+rho_filter=1
+padding='VALID'
+
 dim = 3
 
 if isinstance(stride, collections.Iterable):
-  strides = [1] + list(stride) + [1]
+	strides = [1] + list(stride) + [1]
 else:
-  strides = [1, stride, stride, stride, 1]
+	strides = [1, stride, stride, stride, 1]
 
-[t1ind, t1val, t1sh] = sp.createRandomSparseTensor(0.4, tensor_in_sizes)
+no_strides = [1, 1, 1, 1, 1]
+
+[t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
 s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
 d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
 
-[t2ind, t2val, t2sh] = sp.createRandomSparseTensor(1, filter_in_sizes)
+[t2ind, t2val, t2sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes)
 s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
 d2 = sp.sparse_to_dense(t2ind, t2val, t2sh)
-in_shape = tensor_in_sizes
-in_val = constant_op.constant(d1)
-filter_shape = filter_in_sizes
 
-# Make a convolution op with the current settings, just to easily get
-# the shape of the output.
+# print("input: \n", d1)
+# print("filter: \n", d2)
+# print("strides: \n", strides)
+
+# Initializes the input tensor with array containing incrementing
+# numbers from 1.
 config = tf.ConfigProto(
-        device_count = {'GPU': 0}
-    )
+			device_count = {'GPU': 0}
+	)
 
-with tf.Session(config=config):
-  conv_out = nn_ops.conv3d(d1,
-                           d2, strides,
-                           padding="SAME")
-  out_backprop_shape = conv_out.get_shape().as_list()
-  [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(0.4, out_backprop_shape, 1, 4)
-  d3 = constant_op.constant(sp.sparse_to_dense(t3ind, t3val, t3sh))
-  out_backprop_val = d3
-  t1 = time.time()
-  print("grad: ", d3.eval())
-  output = nn_ops.conv3d_backprop_filter_v2(in_val, filter_shape,
-                                            out_backprop_val, strides,
-                                            padding="SAME")
-  t2 = time.time()
-  output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t1ind, out_backprop_val, t1sh, strides, "SAME")
-  t3 = time.time()
-
-  print("input: ", d1)
-  print("filter: ", d2)
-  #print("filter indices: ", t2ind)
-  print("grad: ", d3.eval())
-  output_dense = output.eval()
-  print("output: ", output_dense)
-
-  raw_input("Press Enter to continue...")
-  output_sparse = output2.eval()
-
-  #print output.get_shape().as_list()
-  #err = gradient_checker.compute_gradient_error(
-  #    [in_val, out_backprop_val], [in_shape, out_backprop_shape],
-  #    output, filter_shape)
+with tf.Session(config=config) as sess:
 
 
-  print("output2: ", output_sparse)
-  print("time dense: ", t2 - t1)
-  print("time sparse: ", t3 - t2)
+	conv = nn_ops.conv3d(d1, d2, strides, padding)
+	f_conv = nn_ops.conv3d(d1, d2, no_strides, padding)
+	t1 = time.time()
+	expected = sess.run(conv)
+	t2 = time.time()
+	#nstr_expected = sess.run(f_conv)
 
+with tf.Session(config=config) as sess:
+	t3 = time.time()
+	scskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(t1ind, t1val, t1sh, t2ind, t2val, t2sh, strides, padding, dim);
+	sv2 = sess.run(scskconv)
+	t4 = time.time()
 
-value2 = sp.sparse_to_dense(t2ind, output_sparse, t2sh)
+	print("input shape", tensor_in_sizes)
+	print("filter shape", filter_in_sizes)
+	print("time dense: ", t2 - t1)
+	print("time sparse: ", t4 - t3)
+
+value2 = sp.sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
+#print("actual v2 sparse: \n", sv2)
+#print("actual v2 sparse shape: \n", sv2.sparse_shape)
+#print("actual v2: \n", value2)
+#print("expected: \n", expected)

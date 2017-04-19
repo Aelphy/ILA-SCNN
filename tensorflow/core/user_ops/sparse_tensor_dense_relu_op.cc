@@ -21,18 +21,26 @@ limitations under the License.
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/numeric_op.h"
+#include "sparse_tensor_dense_relu_op_functor.h"
 
-REGISTER_OP("Relu")
-    .Input("features: T")
-    .Output("activations: T")
+
+REGISTER_OP("SparseRelu")
+    .Input("in_indices: int64")
+    .Input("in_values: T")
+    .Input("in_shape: int64")
+  	.Output("sparse_indices: int64")
+  	.Output("sparse_values: T")
+  	.Output("sparse_shape: int64")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
 Computes rectified linear: `max(features, 0)`.
 )doc");
 
-REGISTER_OP("ReluGrad")
+REGISTER_OP("SparseReluGrad")
+    .Input("in_indices: int64")
+    .Input("in_values: T")
+  	.Input("out_indices: int64")
     .Input("gradients: T")
-    .Input("features: T")
     .Output("backprops: T")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
@@ -44,17 +52,22 @@ features: The features passed as input to the corresponding Relu operation, OR
 backprops: `gradients * (features > 0)`.
 )doc");
 
-REGISTER_OP("Relu6")
-    .Input("features: T")
-    .Output("activations: T")
+REGISTER_OP("SparseRelu6")
+    .Input("in_indices: int64")
+    .Input("in_values: T")
+    .Input("in_shape: int64")
+  	.Output("sparse_indices: int64")
+  	.Output("sparse_values: T")
+  	.Output("sparse_shape: int64")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
 Computes rectified linear 6: `min(max(features, 0), 6)`.
 )doc");
 
-REGISTER_OP("Relu6Grad")
-    .Input("gradients: T")
-    .Input("features: T")
+REGISTER_OP("SparseRelu6Grad")
+    .Input("in_indices: int64")
+    .Input("in_values: T")
+    .Input("out_indices: int64")
     .Output("backprops: T")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
@@ -66,9 +79,13 @@ backprops: The gradients:
   `gradients * (features > 0) * (features < 6)`.
 )doc");
 
-REGISTER_OP("Elu")
-    .Input("features: T")
-    .Output("activations: T")
+REGISTER_OP("SparseElu")
+    .Input("in_indices: int64")
+    .Input("in_values: T")
+    .Input("in_shape: int64")
+  	.Output("sparse_indices: int64")
+  	.Output("sparse_values: T")
+  	.Output("sparse_shape: int64")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
 Computes exponential linear: `exp(features) - 1` if < 0, `features` otherwise.
@@ -77,9 +94,11 @@ See [Fast and Accurate Deep Network Learning by Exponential Linear Units (ELUs)
 ](http://arxiv.org/abs/1511.07289)
 )doc");
 
-REGISTER_OP("EluGrad")
+REGISTER_OP("SparseEluGrad")
+    .Input("in_indices: int64")
+    .Input("out_indices: int64")
+    .Input("out_values: T")
     .Input("gradients: T")
-    .Input("outputs: T")
     .Output("backprops: T")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
@@ -104,105 +123,31 @@ namespace tensorflow {
 typedef Eigen::ThreadPoolDevice CPUDevice;
 typedef Eigen::GpuDevice GPUDevice;
 
-#define REGISTER_RELU_KERNELS(type)                                   \
-  REGISTER_KERNEL_BUILDER(                                            \
+#define REGISTER_RELU_KERNELS(type)                                         \
+  REGISTER_KERNEL_BUILDER(                                                  \
       Name("SparseRelu").Device(DEVICE_CPU).TypeConstraint<type>("T"),      \
-      SparseReluOp<CPUDevice, type>);                                       \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseReluGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"),  \
-      SparseReluGradOp<CPUDevice, type>);                                   \
-  REGISTER_KERNEL_BUILDER(                                            \
+      SparseReluOp<CPUDevice, type, functor::Relu>);                        \
+  REGISTER_KERNEL_BUILDER(                                                  \
       Name("SparseRelu6").Device(DEVICE_CPU).TypeConstraint<type>("T"),     \
-      SparseRelu6Op<CPUDevice, type>);                                      \
-  REGISTER_KERNEL_BUILDER(                                            \
+      SparseReluOp<CPUDevice, type, functor::Relu6>);                       \
+  REGISTER_KERNEL_BUILDER(                                                  \
+      Name("SparseElu").Device(DEVICE_CPU).TypeConstraint<type>("T"),       \
+      SparseReluOp<CPUDevice, type, functor::Elu>);                         \
+  REGISTER_KERNEL_BUILDER(                                                  \
+      Name("SparseReluGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"),  \
+      SparseReluGradOp<CPUDevice, type, functor::ReluGrad>);                \
+  REGISTER_KERNEL_BUILDER(                                                  \
       Name("SparseRelu6Grad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
-      SparseRelu6GradOp<CPUDevice, type>)
+      SparseReluGradOp<CPUDevice, type, functor::Relu6Grad>)                \
+  REGISTER_KERNEL_BUILDER(                                                  \
+      Name("SparseEluGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"),   \
+      SparseEluGradOp<CPUDevice, type, functor::EluGrad>)
 
-TF_CALL_REAL_NUMBER_TYPES(REGISTER_RELU_KERNELS);
-#undef REGISTER_RELU_KERNELS
 
-#define REGISTER_ELU_KERNELS(type)                                  \
-  REGISTER_KERNEL_BUILDER(                                          \
-      Name("SparseElu").Device(DEVICE_CPU).TypeConstraint<type>("T"),     \
-      SparseEluOp<CPUDevice, type>);                                      \
-  REGISTER_KERNEL_BUILDER(                                          \
-      Name("SparseEluGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
-      SparseEluGradOp<CPUDevice, type>)
-
-// SparseElu only makes sense with float or double.
-TF_CALL_GPU_NUMBER_TYPES(REGISTER_ELU_KERNELS);
-#undef REGISTER_ELU_KERNELS
-
-#if GOOGLE_CUDA
-// Forward declarations of the functor specializations for GPU.
-namespace functor {
-#define DECLARE_GPU_SPEC(T)                                                    \
-  template <>                                                                  \
-  void SparseRelu<GPUDevice, T>::operator()(                                         \
-      const GPUDevice& d, typename TTypes<T>::ConstTensor features,            \
-      typename TTypes<T>::Tensor activations);                                 \
-  extern template struct SparseRelu<GPUDevice, T>;                                   \
-                                                                               \
-  template <>                                                                  \
-  void SparseReluGrad<GPUDevice, T>::operator()(                                     \
-      const GPUDevice& d, typename TTypes<T>::ConstTensor gradients,           \
-      typename TTypes<T>::ConstTensor features,                                \
-      typename TTypes<T>::Tensor backprops);                                   \
-  extern template struct SparseReluGrad<GPUDevice, T>;                               \
-                                                                               \
-  template <>                                                                  \
-  void SparseRelu6<GPUDevice, T>::operator()(                                        \
-      const GPUDevice& d, typename TTypes<T>::ConstTensor features,            \
-      typename TTypes<T>::Tensor activations);                                 \
-  extern template struct SparseRelu6<GPUDevice, T>;                                  \
-                                                                               \
-  template <>                                                                  \
-  void SparseRelu6Grad<GPUDevice, T>::operator()(                                    \
-      const GPUDevice& d, typename TTypes<T>::ConstTensor gradients,           \
-      typename TTypes<T>::ConstTensor features,                                \
-      typename TTypes<T>::Tensor backprops);                                   \
-  extern template struct SparseRelu6Grad<GPUDevice, T>;                              \
-                                                                               \
-  template <>                                                                  \
-  void SparseElu<GPUDevice, T>::operator()(const GPUDevice& d,                       \
-                                     typename TTypes<T>::ConstTensor features, \
-                                     typename TTypes<T>::Tensor activations);  \
-  extern template struct SparseElu<GPUDevice, T>;                                    \
-                                                                               \
-  template <>                                                                  \
-  void SparseEluGrad<GPUDevice, T>::operator()(                                      \
-      const GPUDevice& d, typename TTypes<T>::ConstTensor gradients,           \
-      typename TTypes<T>::ConstTensor activations,                             \
-      typename TTypes<T>::Tensor backprops);                                   \
-  extern template struct SparseEluGrad<GPUDevice, T>;
-
-TF_CALL_GPU_NUMBER_TYPES(DECLARE_GPU_SPEC);
-}  // namespace functor
-
-// Registration of the GPU implementations.
-#define REGISTER_GPU_KERNELS(type)                                    \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseRelu").Device(DEVICE_GPU).TypeConstraint<type>("T"),      \
-      SparseReluOp<GPUDevice, type>);                                       \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseReluGrad").Device(DEVICE_GPU).TypeConstraint<type>("T"),  \
-      SparseReluGradOp<GPUDevice, type>);                                   \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseRelu6").Device(DEVICE_GPU).TypeConstraint<type>("T"),     \
-      SparseRelu6Op<GPUDevice, type>);                                      \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseRelu6Grad").Device(DEVICE_GPU).TypeConstraint<type>("T"), \
-      SparseRelu6GradOp<GPUDevice, type>);                                  \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseElu").Device(DEVICE_GPU).TypeConstraint<type>("T"),       \
-      SparseEluOp<GPUDevice, type>);                                        \
-  REGISTER_KERNEL_BUILDER(                                            \
-      Name("SparseEluGrad").Device(DEVICE_GPU).TypeConstraint<type>("T"),   \
-      SparseEluGradOp<GPUDevice, type>)
-
-TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_KERNELS);
-#undef REGISTER_GPU_KERNELS
-
-#endif  // GOOGLE_CUDA
+REGISTER_RELU_KERNELS(float)
+REGISTER_RELU_KERNELS(double)
+REGISTER_RELU_KERNELS(int64)
+REGISTER_RELU_KERNELS(int)
+//TF_CALL_REAL_NUMBER_TYPES(REGISTER_RELU_KERNELS);
 
 }  // namespace tensorflow

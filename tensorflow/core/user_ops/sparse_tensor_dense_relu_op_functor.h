@@ -13,9 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#pragma once
-
-// Functor definition for SparseReluOp and SparseReluGradOp, must be compilable by nvcc.
+#ifndef TENSORFLOW_SKERNELS_RELU_OP_FUNCTOR_H_
+#define TENSORFLOW_SKERNELS_RELU_OP_FUNCTOR_H_
+// Functor definition for ReluOp and ReluGradOp, must be compilable by nvcc.
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/tensor_types.h"
@@ -23,10 +23,10 @@ limitations under the License.
 namespace tensorflow {
 namespace functor {
 
-// Functor used by SparseReluOp to do the computations.
+// Functor used by ReluOp to do the computations.
 template <typename Device, typename T>
-struct SparseRelu {
-  // Computes SparseRelu activation.
+struct Relu {
+  // Computes Relu activation.
   //
   // features: any shape.
   // activations: same shape as "features".
@@ -36,30 +36,30 @@ struct SparseRelu {
   }
 };
 
-// Functor used by SparseReluGradOp to do the computations.
+// Functor used by ReluGradOp to do the computations.
 template <typename Device, typename T>
-struct SparseReluGrad {
-  // Computes SparseReluGrad backprops.
+struct ReluGrad {
+  // Computes ReluGrad backprops.
   //
-  // gradients: gradients backpropagated to the SparseRelu op.
-  // features: either the inputs that were passed to the SparseRelu or, or its
+  // gradients: gradients backpropagated to the Relu op.
+  // features: either the inputs that were passed to the Relu or, or its
   //           outputs (using either one yields the same result here).
-  // backprops: gradients to backpropagate to the SparseRelu inputs.
+  // backprops: gradients to backpropagate to the Relu inputs.
   void operator()(const Device& d, typename TTypes<T>::ConstTensor gradients,
                   typename TTypes<T>::ConstTensor features,
                   typename TTypes<T>::Tensor backprops) {
     // NOTE: When the activation is exactly zero, we do not propagate the
-    // associated gradient value. This allows the output of the SparseRelu to be used,
+    // associated gradient value. This allows the output of the Relu to be used,
     // as well as its input.
     backprops.device(d) =
         gradients * (features > static_cast<T>(0)).template cast<T>();
   }
 };
 
-// Functor used by SparseRelu6Op to do the computations.
+// Functor used by Relu6Op to do the computations.
 template <typename Device, typename T>
-struct SparseRelu6 {
-  // Computes SparseRelu6 activation.
+struct Relu6 {
+  // Computes Relu6 activation.
   //
   // features: any shape.
   // activations: same shape as "features".
@@ -70,14 +70,14 @@ struct SparseRelu6 {
   }
 };
 
-// Functor used by SparseReluGradOp to do the computations.
+// Functor used by ReluGradOp to do the computations.
 template <typename Device, typename T>
-struct SparseRelu6Grad {
-  // Computes SparseRelu6Grad backprops.
+struct Relu6Grad {
+  // Computes Relu6Grad backprops.
   //
-  // gradients: gradients backpropagated to the SparseRelu6 op.
-  // features: inputs that where passed to the SparseRelu6 op.
-  // backprops: gradients to backpropagate to the SparseRelu6 inputs.
+  // gradients: gradients backpropagated to the Relu6 op.
+  // features: inputs that where passed to the Relu6 op.
+  // backprops: gradients to backpropagate to the Relu6 inputs.
   void operator()(const Device& d, typename TTypes<T>::ConstTensor gradients,
                   typename TTypes<T>::ConstTensor features,
                   typename TTypes<T>::Tensor backprops) {
@@ -91,10 +91,10 @@ struct SparseRelu6Grad {
   }
 };
 
-// Functor used by SparseEluOp to do the computations.
+// Functor used by EluOp to do the computations.
 template <typename Device, typename T>
-struct SparseElu {
-  // Computes SparseElu activation.
+struct Elu {
+  // Computes Elu activation.
   //
   // features: any shape.
   // activations: same shape as "features".
@@ -108,14 +108,14 @@ struct SparseElu {
   }
 };
 
-// Functor used by SparseEluGradOp to do the computations.
+// Functor used by EluGradOp to do the computations.
 template <typename Device, typename T>
-struct SparseEluGrad {
-  // Computes SparseEluGrad backprops.
+struct EluGrad {
+  // Computes EluGrad backprops.
   //
-  // gradients: gradients backpropagated to the SparseElu op.
-  // activations: outputs of the SparseElu op.
-  // backprops: gradients to backpropagate to the SparseElu inputs.
+  // gradients: gradients backpropagated to the Elu op.
+  // activations: outputs of the Elu op.
+  // backprops: gradients to backpropagate to the Elu inputs.
   void operator()(const Device& d, typename TTypes<T>::ConstTensor gradients,
                   typename TTypes<T>::ConstTensor activations,
                   typename TTypes<T>::Tensor backprops) {
@@ -128,3 +128,4 @@ struct SparseEluGrad {
 }  // namespace functor
 }  // namespace tensorflow
 
+#endif  // TENSORFLOW_KERNELS_RELU_OP_FUNCTOR_H_
