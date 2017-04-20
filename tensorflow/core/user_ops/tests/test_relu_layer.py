@@ -24,6 +24,7 @@ print(pid)
 sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
 #print(dir(sc_module))
+print(dir(nn_grad))
 
 raw_input("Press Enter to continue...")
 
