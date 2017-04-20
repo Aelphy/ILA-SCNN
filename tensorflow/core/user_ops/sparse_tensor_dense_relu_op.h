@@ -39,7 +39,7 @@ class SparseReluOp : public OpKernel {
 
     //filter zeros in output
     for(size_t i = 0; i <tmp_out_vals.dimension(0); ++i){
-      if(tmp_out_vals(i) <= 0) non_zero_cnt++;
+      if(tmp_out_vals(i) > 0) non_zero_cnt++;
     }
 
     // Create an output tensor
@@ -47,9 +47,9 @@ class SparseReluOp : public OpKernel {
     TensorShape out_ind_shape = {non_zero_cnt, (int64) in_ind.dimension(1)};
     TensorShape out_val_shape = {non_zero_cnt};
     TensorShape out_sh_shape = {(int64) in_ind.dimension(1)};
-    OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &sparse_indices));
-    OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &sparse_values));
-    OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &sparse_shape));
+    OP_REQUIRES_OK(context, context->allocate_output("sparse_indices", out_ind_shape, &sparse_indices));
+    OP_REQUIRES_OK(context, context->allocate_output("sparse_values", out_val_shape, &sparse_values));
+    OP_REQUIRES_OK(context, context->allocate_output("sparse_shape", out_sh_shape, &sparse_shape));
 
     auto out_ind = sparse_indices->matrix<int64>(); //channels, depth, height, width, optionally others TODO: other cases?
     auto out_vals = sparse_values->flat<T>();
@@ -58,7 +58,7 @@ class SparseReluOp : public OpKernel {
     //filter zeros
     int64 idx = 0;
     for(size_t i = 0; i <tmp_out_vals.dimension(0); ++i){
-      if(tmp_out_vals(i) != 0){
+      if(tmp_out_vals(i) > 0){
         out_vals(idx) = tmp_out_vals(i);
         for(size_t j = 0; j < in_ind.dimension(1); ++j){
           out_ind(idx,j) = in_ind(i,j);

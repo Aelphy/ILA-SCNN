@@ -33,7 +33,7 @@ REGISTER_OP("SparseRelu")
   	.Output("sparse_shape: int64")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
-Computes rectified linear: `max(features, 0)`.
+Computes rectified linear: `max(in_values, 0)`.
 )doc");
 
 REGISTER_OP("SparseReluGrad")
@@ -47,9 +47,9 @@ REGISTER_OP("SparseReluGrad")
 Computes rectified linear gradients for a Relu operation.
 
 gradients: The backpropagated gradients to the corresponding Relu operation.
-features: The features passed as input to the corresponding Relu operation, OR
+in_values: The in_values passed as input to the corresponding Relu operation, OR
   the outputs of that operation (both work equivalently).
-backprops: `gradients * (features > 0)`.
+backprops: `gradients * (in_values > 0)`.
 )doc");
 
 REGISTER_OP("SparseRelu6")
@@ -61,22 +61,23 @@ REGISTER_OP("SparseRelu6")
   	.Output("sparse_shape: int64")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
-Computes rectified linear 6: `min(max(features, 0), 6)`.
+Computes rectified linear 6: `min(max(in_values, 0), 6)`.
 )doc");
 
 REGISTER_OP("SparseRelu6Grad")
     .Input("in_indices: int64")
     .Input("in_values: T")
     .Input("out_indices: int64")
+    .Input("gradients: T")
     .Output("backprops: T")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
 Computes rectified linear 6 gradients for a Relu6 operation.
 
 gradients: The backpropagated gradients to the corresponding Relu6 operation.
-features: The features passed as input to the corresponding Relu6 operation.
+in_values: The in_values passed as input to the corresponding Relu6 operation.
 backprops: The gradients:
-  `gradients * (features > 0) * (features < 6)`.
+  `gradients * (in_values > 0) * (in_values < 6)`.
 )doc");
 
 REGISTER_OP("SparseElu")
@@ -88,7 +89,7 @@ REGISTER_OP("SparseElu")
   	.Output("sparse_shape: int64")
     .Attr("T: realnumbertype")
     .Doc(R"doc(
-Computes exponential linear: `exp(features) - 1` if < 0, `features` otherwise.
+Computes exponential linear: `exp(in_values) - 1` if < 0, `in_values` otherwise.
 
 See [Fast and Accurate Deep Network Learning by Exponential Linear Units (ELUs)
 ](http://arxiv.org/abs/1511.07289)
@@ -105,8 +106,8 @@ REGISTER_OP("SparseEluGrad")
 Computes gradients for the exponential linear (Elu) operation.
 
 gradients: The backpropagated gradients to the corresponding Elu operation.
-outputs: The outputs of the corresponding Elu operation.
-backprops: The gradients: `gradients * (outputs + 1)` if outputs < 0,
+out_values: The out_values of the corresponding Elu operation.
+backprops: The gradients: `gradients * (out_values + 1)` if out_values < 0,
 `gradients` otherwise.
 )doc");
 
