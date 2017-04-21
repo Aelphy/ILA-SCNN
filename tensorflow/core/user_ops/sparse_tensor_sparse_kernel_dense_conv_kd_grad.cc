@@ -21,7 +21,7 @@
 //TODO: How do I use REGISTER_OP with parameter T?
 //  .Attr("T: {float, double, int32, complex64, complex128}")
 REGISTER_OP("SparseTensorSparseKernelDenseConvKDFilterGrad")
-  .Attr("T: {float}")
+  .Attr("T: realnumbertype")
   .Input("in_indices: int64")
   .Input("in_values: T")
   .Input("in_shape: int64")
@@ -38,7 +38,7 @@ REGISTER_OP("SparseTensorSparseKernelDenseConvKDFilterGrad")
 
 
 REGISTER_OP("SparseTensorSparseKernelDenseConvKDInputGrad")
-  .Attr("T: {float}")
+  .Attr("T: realnumbertype")
   .Input("in_indices: int64")
   .Input("in_values: T")
   .Input("in_shape: int64")
@@ -181,16 +181,16 @@ class SparseTensorSparseKernelDenseConvKDInputGrad : public OpKernel {
 };
 
 #define REGISTER_CPU(type)                                   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDFilterGrad").Device(DEVICE_CPU), \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDFilterGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
   SparseTensorSparseKernelDenseConvKDFilterGrad<CPUDevice, type>); \
   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDInputGrad").Device(DEVICE_CPU), \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDInputGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
   SparseTensorSparseKernelDenseConvKDInputGrad<CPUDevice, type>); \
 
 
 REGISTER_CPU(float);
-//REGISTER_CPU(double);
-//REGISTER_CPU(int32);
-//REGISTER_CPU(complex64);
-//REGISTER_CPU(complex128);
+REGISTER_CPU(double);
+REGISTER_CPU(int32);
+REGISTER_CPU(complex64);
+REGISTER_CPU(complex128);
 
