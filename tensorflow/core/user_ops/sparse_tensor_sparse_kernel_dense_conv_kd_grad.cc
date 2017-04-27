@@ -19,7 +19,6 @@
 
 
 //TODO: How do I use REGISTER_OP with parameter T?
-//  .Attr("T: {float, double, int32, complex64, complex128}")
 REGISTER_OP("SparseTensorSparseKernelDenseConvKDFilterGrad")
   .Attr("T: realnumbertype")
   .Input("in_indices: int64")
@@ -193,4 +192,4 @@ REGISTER_CPU(double);
 REGISTER_CPU(int32);
 REGISTER_CPU(complex64);
 REGISTER_CPU(complex128);
-
+#undef REGISTER_CPU

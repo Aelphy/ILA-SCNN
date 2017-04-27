@@ -107,7 +107,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       stride=1,
       rho_data=0.01,
       rho_filter=1,
-      padding='SAME')
+      padding='VALID')
 
   def ConstructAndTestGradient(self, tensor_in_sizes, filter_in_sizes, stride, padding = "SAME", test_type = "FILTER", dim = 3):
     if isinstance(stride, collections.Iterable):

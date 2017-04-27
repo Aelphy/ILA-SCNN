@@ -19,8 +19,6 @@
 
 
 
-//TODO: How do I use REGISTER_OP with parameter T?
-//  .Attr("T: {float, double, int32, complex64, complex128}")
 REGISTER_OP("SparseTensorSparseKernelDenseConvKD")
   .Attr("T: realnumbertype")
   .Input("in_indices: int64")
@@ -35,8 +33,6 @@ REGISTER_OP("SparseTensorSparseKernelDenseConvKD")
   .Attr("strides: list(int)")
   .Attr("padding: string")
   .Attr("filter_dim: int = 3");
-//  .Output("debug_output: string")
-
 
 
 #include "tensorflow/core/framework/op_kernel.h"
@@ -103,17 +99,6 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     for(int64 idx = 0; idx < in_ind.dimension(1); ++idx){
         out_sh(idx) = out_shape[idx];
     }
-
-
-    //debug output
-/*    Tensor* debug_ = NULL;
-    OP_REQUIRES_OK(context,
-                   context->allocate_output(0, TensorShape(), &debug_));
-    auto output_ = debug_->scalar<string>();
-    //std::stringstream debug; debug << "DEBUG OUTPUT:" << std::endl; 
-    //std::string deb_string = debug.str();
-    output_() = "test";
-*/  
   }
 
  private:
@@ -131,4 +116,4 @@ REGISTER_CPU(double);
 REGISTER_CPU(int32);
 REGISTER_CPU(complex64);
 REGISTER_CPU(complex128);
-
+#undef REGISTER_CPU
