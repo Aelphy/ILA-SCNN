@@ -57,26 +57,38 @@ def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
 @ops.RegisterGradient("SparseTensorSparseKernelDenseConvKDInput")
 def _SparseTensorSparseKernelDenseConvKDInputGrad(op, grad):
   return [None,
-          nn_ops.conv3d_backprop_filter_v2(grad,
-                                           array_ops.shape(op.inputs[1]),
-                                           op.inputs[2],
-                                           strides=op.get_attr("strides"),
-                                           padding=op.get_attr("padding")),
-          nn_ops.conv3d(grad,
-                        op.inputs[1],
-                        strides=op.get_attr("strides"),
-                        padding=op.get_attr("padding"))]
+          sparse_nn_ops.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(op.inputs[0],
+                                                op.inputs[1],
+                                                op.inputs[2],
+                                                op.inputs[3],
+                                                op.inputs[4],
+                                                op.inputs[5],
+                                                op.outputs[0],
+                                                grad,
+                                                op.outputs[2],
+                                                strides=op.get_attr("strides"),
+                                                padding=op.get_attr("padding")),
+          None,
+          None,
+          None,
+          None]
 
 
 @ops.RegisterGradient("SparseTensorSparseKernelDenseConvKDFilter")
 def _SparseTensorSparseKernelDenseConvKDFilterGrad(op, grad):
-  return [nn_ops.conv3d_backprop_input_v2(array_ops.shape(op.inputs[0]),
-                                          grad,
-                                          op.inputs[2],
-                                          strides=op.get_attr("strides"),
-                                          padding=op.get_attr("padding")),
+  return [None,
           None,
-          nn_ops.conv3d(op.inputs[0],
-                        grad,
-                        strides=op.get_attr("strides"),
-                        padding=op.get_attr("padding"))]
+          None,
+          None,
+          sparse_nn_ops.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(op.inputs[0],
+                                                op.inputs[1],
+                                                op.inputs[2],
+                                                op.inputs[3],
+                                                op.inputs[4],
+                                                op.inputs[5],
+                                                op.outputs[0],
+                                                grad,
+                                                op.outputs[2],
+                                                strides=op.get_attr("strides"),
+                                                padding=op.get_attr("padding")),
+          None]

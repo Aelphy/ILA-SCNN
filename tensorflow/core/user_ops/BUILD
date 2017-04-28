@@ -1,3 +1,12 @@
+package(
+    default_visibility = ["//tensorflow:internal"],
+    features = [
+        "-layering_check",
+        "-parse_headers",
+    ],
+)
+
+
 load("//tensorflow:tensorflow.bzl", "tf_py_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
 
@@ -22,6 +31,7 @@ py_library(
     srcs = [
               "sparse_ops.py"
            ],
+    data = [":sparse_tensor_dense_conv_3d.so"],
     srcs_version = "PY2AND3",
 )
 

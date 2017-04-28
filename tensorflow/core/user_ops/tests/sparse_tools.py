@@ -80,3 +80,12 @@ def createRandomSparseTensor(non_zero_percentage, shape, min_range = 1, max_rang
   tensor_vals = np.array(vals, dtype=np.float32)
   return [tensor_ind, tensor_vals, shape]
 
+def checkSparsity(matrix):
+  flat = matrix.flatten()
+  zero_count = 0
+  for i in flat:
+    if i == 0:
+      zero_count = zero_count + 1
+  return zero_count / float(len(flat))
+
+
