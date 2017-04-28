@@ -24,12 +24,11 @@ print(pid)
 sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
 #print(dir(sc_module))
-print(dir(nn_grad))
 
 raw_input("Press Enter to continue...")
 
 tensor_in_sizes=[1, 100, 100, 100, 1] #[batch, depth, height, width, in_channels]
-rho_data = 0.01
+rho_data = 0.15
 test_type='Relu'
 
 [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
@@ -37,7 +36,9 @@ s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
 d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
 
 config = tf.ConfigProto(
-			device_count = {'GPU': 0}
+			device_count = {'GPU': 0},
+      inter_op_parallelism_threads=1,
+      intra_op_parallelism_threads=1
 	)
 
 with tf.Session(config=config) as sess:

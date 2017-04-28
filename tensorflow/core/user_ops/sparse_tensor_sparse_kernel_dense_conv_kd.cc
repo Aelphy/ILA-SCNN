@@ -70,7 +70,7 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     auto f_vals = filter_values->flat<T>();
     auto f_sh = filter_shape->flat<int64>();
 
-    std::map<std::vector<int64>, T> output_map; //stores the values for the output tensor
+    std::map<int64, T> output_map; //stores the values for the output tensor
     std::vector<int64> out_shape;
 
     sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, filter_dim, output_map, out_shape, padding);
@@ -90,7 +90,7 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
 
     int64 idx = 0;
     for(auto it = output_map.begin(); it != output_map.end(); ++it, idx++){
-        const std::vector<int64> &indice = it->first;
+        const std::vector<int64> indice = getHighDimIndexVec(it->first, out_shape);
         for(int64 j = 0; j < indice.size(); ++j){
           out_ind(idx,j) = indice[j];
         }

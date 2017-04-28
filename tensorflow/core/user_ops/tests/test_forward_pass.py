@@ -33,7 +33,7 @@ dim = 3
 
 
 def sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dense_in, sparse_in_ind, sparse_in_val):  
-  [filter1_ind, filter1_weights, filter1_sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes, -5, 5)
+  [filter1_ind, filter1_weights, filter1_sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes, -5, 2)
   sparse_filter_weights = tf.SparseTensor(indices=filter1_ind, values=filter1_weights, dense_shape=filter1_sh)
   dense_filter_w = sp.sparse_to_dense(filter1_ind, filter1_weights, filter1_sh)
   dense_filter_weights = tf.constant(dense_filter_w, dtype=tf.float32)
@@ -74,16 +74,18 @@ v1_sparseness = sp.checkSparsity(dense_data)
 #raw_input("Press Enter to continue...")
 
 config = tf.ConfigProto(
-			device_count = {'GPU': 0}
+			device_count = {'GPU': 0},
+      inter_op_parallelism_threads=2,
+      intra_op_parallelism_threads=1
 	)
 
 with tf.Session(config=config) as sess:
 
   t1 = time.time()
-  expected = sess.run(dc3)
+  expected = sess.run(dc2)
   t2 = time.time()
   t3 = time.time()
-  sv2 = sess.run(sc3)
+  sv2 = sess.run(sc2)
   t4 = time.time()
 
 print("input shape", tensor_in_sizes)

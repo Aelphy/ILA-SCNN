@@ -94,7 +94,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       padding='SAME')
     
     self._VerifyValues(
-      tensor_in_sizes=[1, 5, 4, 7, 2], #[batch, depth, height, width, in_channels]
+      tensor_in_sizes=[2, 5, 4, 7, 2], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[3, 3, 3, 2, 2], #[depth, height, width, in_channels, out_channels] 
       stride=1,
       rho_data=1,

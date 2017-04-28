@@ -72,7 +72,9 @@ dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
 #raw_input("Press Enter to continue...")
 
 config = tf.ConfigProto(
-			device_count = {'GPU': 0}
+			device_count = {'GPU': 0},
+      inter_op_parallelism_threads=2,
+      intra_op_parallelism_threads=1
 	)
 
 with tf.Session(config=config) as sess:

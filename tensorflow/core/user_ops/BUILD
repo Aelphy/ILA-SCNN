@@ -21,7 +21,8 @@ tf_custom_op_library(
               "sparse_tensor_dense_relu_op.cc",
               "sparse_tensor_dense_relu_op_functor.h",
               "sparse_tensor_dense_relu_op.h",
-              "sparse_tensor_max_pooling.cc"
+              "sparse_tensor_max_pooling.cc",
+              "indexing.h"
             ],
 
 )

@@ -6,6 +6,7 @@
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "indexing.h"
 
 namespace tensorflow {
 
@@ -19,7 +20,7 @@ namespace tensorflow {
                         const FShapeT& f_sh,
                         const std::vector<int32>& stride_,
                         const int64 dim,
-                        std::map<std::vector<int64>, T>& output_map,
+                        std::map<int64, T>& output_map,
                         std::vector<int64>& out_shape,
                         const std::string padding="SAME") {
     int padding_type = 1;
@@ -62,14 +63,14 @@ namespace tensorflow {
       }
     }
 
+    std::vector<int64> update_ids(in_ind.dimension(1), 0);
     //TODO: use batch in parallel? (needs more ram than a parallelization of conv)
     for(int64 i = 0; i < in_ind.dimension(0); ++i){ //TODO: parallelize filtering
       //a) prepare filter to update output based on current value
-      std::map<std::vector<int64>, T> filter_update;
+      std::vector<std::pair<int64,T> > filter_update;
       for(int64 j = 0; j < f_ind.dimension(0); ++j){
         if(f_ind(j, id_f_in_channels) != in_ind(i,id_in_in_channels)) continue; //filter channel != input channel
         bool is_valid = true;
-        std::vector<int64> update_ids(in_ind.dimension(1), 0);
         update_ids[id_in_batch] = in_ind(i,id_in_batch); //output channel is filter number
         update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
         for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
@@ -93,7 +94,8 @@ namespace tensorflow {
         }
         if(is_valid){
           T update_val = in_vals(i) * f_vals(j); //input value times filter weight at index
-          filter_update.insert(std::make_pair(update_ids, update_val));
+          int64 id_hash = getIndex1D<int64>(update_ids, out_shape);
+          filter_update.push_back(std::make_pair(id_hash, update_val));
         }
       }
       
