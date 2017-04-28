@@ -6,15 +6,13 @@ exports_files(["LICENSE"])
 
 package(default_visibility = ["//tensorflow:__subpackages__"])
 
-load("//tensorflow:tensorflow.bzl", "tf_kernel_library")
-
 cc_library(
     name = "all_kernels",
     deps = [
         ":clustering_ops",
         ":masked_matmul_ops",
         ":wals_solver_ops",
-        "@protobuf//:protobuf",
+        "@protobuf//:protobuf_headers",
     ],
 )
 
@@ -24,7 +22,7 @@ cc_library(
     deps = [
         "//tensorflow/core:framework_headers_lib",
         "//third_party/eigen3",
-        "@protobuf//:protobuf",
+        "@protobuf//:protobuf_headers",
     ],
     alwayslink = 1,
 )
@@ -35,7 +33,7 @@ cc_library(
     deps = [
         "//tensorflow/core:framework_headers_lib",
         "//third_party/eigen3",
-        "@protobuf//:protobuf",
+        "@protobuf//:protobuf_headers",
     ],
     alwayslink = 1,
 )
@@ -46,7 +44,7 @@ cc_library(
     deps = [
         "//tensorflow/core:framework_headers_lib",
         "//third_party/eigen3",
-        "@protobuf//:protobuf",
+        "@protobuf//:protobuf_headers",
     ],
     alwayslink = 1,
 )

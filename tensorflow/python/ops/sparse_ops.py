@@ -14,25 +14,14 @@
 # ==============================================================================
 
 # pylint: disable=g-short-docstring-punctuation
-"""## Sparse Tensor Representation
-
-TensorFlow supports a `SparseTensor` representation for data that is sparse
-in multiple dimensions. Contrast this representation with `IndexedSlices`,
-which is efficient for representing tensors that are sparse in their first
-dimension, and dense along all other dimensions.
+"""Sparse Tensor Representation. See the @{python/sparse_ops} guide.
 
 @@SparseTensor
 @@SparseTensorValue
-
-## Conversion
-
 @@sparse_to_dense
 @@sparse_tensor_to_dense
 @@sparse_to_indicator
 @@sparse_merge
-
-## Manipulation
-
 @@sparse_concat
 @@sparse_reorder
 @@sparse_reshape
@@ -41,18 +30,15 @@ dimension, and dense along all other dimensions.
 @@sparse_reset_shape
 @@sparse_fill_empty_rows
 @@sparse_transpose
-
-## Reduction
 @@sparse_reduce_sum
 @@sparse_reduce_sum_sparse
-
-## Math Operations
 @@sparse_add
 @@sparse_softmax
 @@sparse_tensor_dense_matmul
 @@sparse_maximum
 @@sparse_minimum
 """
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -1253,7 +1239,7 @@ def sparse_tensor_dense_matmul(sp_a,
     A should be sorted in order of increasing dimension 1 (i.e., "column major"
     order instead of "row major" order).
 
-  Deciding when to use sparse_tensor_dense_matmul vs. matmul(sp_a=True):
+  Deciding when to use sparse_tensor_dense_matmul vs. matmul(a_is_sparse=True):
 
   There are a number of questions to ask in the decision process, including:
 
@@ -1263,14 +1249,14 @@ def sparse_tensor_dense_matmul(sp_a,
 
   If the answer to several of these questions is yes, consider
   converting the `SparseTensor` to a dense one and using `tf.matmul` with
-  `sp_a=True`.
+  `a_is_sparse=True`.
 
   This operation tends to perform well when A is more sparse, if the column size
   of the product is small (e.g. matrix-vector multiplication), if
   `sp_a.dense_shape` takes on large values.
 
   Below is a rough speed comparison between sparse_tensor_dense_matmul,
-  labelled 'sparse', and matmul(sp_a=True), labelled 'dense'.  For purposes of
+  labelled 'sparse', and matmul(a_is_sparse=True), labelled 'dense'.  For purposes of
   the comparison, the time spent converting from a SparseTensor to a dense
   Tensor is not included, so it is overly conservative with respect to
   the time ratio.

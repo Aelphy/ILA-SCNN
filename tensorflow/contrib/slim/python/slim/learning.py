@@ -18,9 +18,9 @@ This script contains various functions for training models. These include
 manipulating gradients, creating a `train_op` (an operation that computes the
 loss and applies the gradients) and a training loop function. The training loop
 allows the user to pass in the `train_op` and runs the optimization according
-to user-specified arguments. Note that the training loop uses the tf.Supervisor
-and its managed_session in its implementation to ensure the ability of worker
-processes to recover from failures.
+to user-specified arguments. Note that the training loop uses the
+tf.train.Supervisor and its managed_session in its implementation to ensure the
+ability of worker processes to recover from failures.
 
 ************************************
 * A simple working training script *
@@ -329,13 +329,15 @@ def multiply_gradients(grads_and_vars, gradient_multipliers):
       if grad is None:
         raise ValueError('Requested multiple of `None` gradient.')
 
+      multiplier = gradient_multipliers[key]
+      if not isinstance(multiplier, ops.Tensor):
+        multiplier = constant_op.constant(multiplier, dtype=grad.dtype)
+
       if isinstance(grad, ops.IndexedSlices):
-        tmp = grad.values * constant_op.constant(
-            gradient_multipliers[key], dtype=grad.dtype)
+        tmp = grad.values * multiplier
         grad = ops.IndexedSlices(tmp, grad.indices, grad.dense_shape)
       else:
-        grad *= constant_op.constant(
-            gradient_multipliers[key], dtype=grad.dtype)
+        grad *= multiplier
     multiplied_grads_and_vars.append((grad, var))
   return multiplied_grads_and_vars
 
@@ -380,7 +382,8 @@ def create_train_op(total_loss,
                     gate_gradients=tf_optimizer.Optimizer.GATE_OP,
                     aggregation_method=None,
                     colocate_gradients_with_ops=False,
-                    gradient_multipliers=None):
+                    gradient_multipliers=None,
+                    check_numerics=True):
   """Creates an `Operation` that evaluates the gradients and returns the loss.
 
   Args:
@@ -406,6 +409,8 @@ def create_train_op(total_loss,
     gradient_multipliers: A dictionary of either `Variables` or `Variable` op
       names to the coefficient by which the associated gradient should be
       scaled.
+    check_numerics: Whether or not we apply check_numerics.
+
   Returns:
     A `Tensor` that when evaluated, computes the gradients and returns the total
       loss value.
@@ -431,7 +436,8 @@ def create_train_op(total_loss,
       summarize_gradients=summarize_gradients,
       gate_gradients=gate_gradients,
       aggregation_method=aggregation_method,
-      colocate_gradients_with_ops=colocate_gradients_with_ops)
+      colocate_gradients_with_ops=colocate_gradients_with_ops,
+      check_numerics=check_numerics)
 
 
 def _wait_for_step(sess, global_step, step):
@@ -496,7 +502,7 @@ def train_step(sess, train_op, global_step, train_step_kwargs):
 
   if 'should_log' in train_step_kwargs:
     if sess.run(train_step_kwargs['should_log']):
-      logging.info('global step %d: loss = %.4f (%.2f sec/step)',
+      logging.info('global step %d: loss = %.4f (%.3f sec/step)',
                    np_global_step, total_loss, time_elapsed)
 
   # TODO(nsilberman): figure out why we can't put this into sess.run. The
@@ -572,8 +578,10 @@ def train(train_op,
       replica during replica training.
     global_step: The `Tensor` representing the global step. If left as `None`,
       then slim.variables.get_or_create_global_step() is used.
-    number_of_steps: The max number of gradient steps to take during training.
-      If the value is left as None, training proceeds indefinitely.
+    number_of_steps: The max number of gradient steps to take during training,
+      as measured by 'global_step': training will stop if global_step is
+      greater than 'number_of_steps'. If the value is left as None, training
+      proceeds indefinitely.
     init_op: The initialization operation. If left to its default value, then
       the session is initialized by calling `tf.global_variables_initializer()`.
     init_feed_dict: A feed dictionary to use when executing the `init_op`.
@@ -669,8 +677,6 @@ def train(train_op,
     if summary_writer == _USE_DEFAULT:
       summary_writer = supervisor.Supervisor.USE_DEFAULT
 
-    cleanup_op = None
-
     if is_chief and sync_optimizer is not None:
       if not isinstance(sync_optimizer,
                         (sync_replicas_optimizer.SyncReplicasOptimizer)):
@@ -680,9 +686,6 @@ def train(train_op,
       # Need to create these BEFORE the supervisor finalizes the graph:
       init_tokens_op = sync_optimizer.get_init_tokens_op()
       chief_queue_runner = sync_optimizer.get_chief_queue_runner()
-      if isinstance(sync_optimizer,
-                    sync_replicas_optimizer.SyncReplicasOptimizer):
-        cleanup_op = sync_optimizer.get_clean_up_op()
 
     if train_step_kwargs == _USE_DEFAULT:
       with ops.name_scope('train_step'):
@@ -740,25 +743,19 @@ def train(train_op,
           sv.start_queue_runners(sess, [chief_queue_runner])
           sess.run(init_tokens_op)
         try:
-          try:
-            while not sv.should_stop():
-              total_loss, should_stop = train_step_fn(
-                  sess, train_op, global_step, train_step_kwargs)
-              if should_stop:
-                logging.info('Stopping Training.')
-                break
-          except errors.OutOfRangeError:
-            # OutOfRangeError is thrown when epoch limit per
-            # tf.train.limit_epochs is reached.
-            logging.info('Caught OutOfRangeError. Stopping Training.')
-          if logdir and sv.is_chief:
-            logging.info('Finished training! Saving model to disk.')
-            sv.saver.save(sess, sv.save_path, global_step=sv.global_step)
-        except:
-          if sv.is_chief and cleanup_op is not None:
-            logging.info('About to execute sync_clean_up_op!')
-            sess.run(cleanup_op)
-          raise
+          while not sv.should_stop():
+            total_loss, should_stop = train_step_fn(
+                sess, train_op, global_step, train_step_kwargs)
+            if should_stop:
+              logging.info('Stopping Training.')
+              break
+        except errors.OutOfRangeError:
+          # OutOfRangeError is thrown when epoch limit per
+          # tf.train.limit_epochs is reached.
+          logging.info('Caught OutOfRangeError. Stopping Training.')
+        if logdir and sv.is_chief:
+          logging.info('Finished training! Saving model to disk.')
+          sv.saver.save(sess, sv.save_path, global_step=sv.global_step)
 
     except errors.AbortedError:
       # Always re-run on AbortedError as it indicates a restart of one of the

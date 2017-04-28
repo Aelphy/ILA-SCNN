@@ -23,7 +23,6 @@ import numpy as np
 from tensorflow.contrib.distributions.python.ops import distribution
 from tensorflow.contrib.distributions.python.ops import distribution_util
 from tensorflow.contrib.distributions.python.ops import kullback_leibler
-from tensorflow.contrib.framework.python.framework import tensor_util as contrib_tensor_util
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
@@ -112,21 +111,21 @@ class Gamma(distribution.Distribution):
         distribution(s). Must contain only positive values.
       rate: Floating point tensor, the inverse scale params of the
         distribution(s). Must contain only positive values.
-      validate_args: Python `Boolean`, default `False`. When `True` distribution
+      validate_args: Python `bool`, default `False`. When `True` distribution
         parameters are checked for validity despite possibly degrading runtime
         performance. When `False` invalid inputs may silently render incorrect
         outputs.
-      allow_nan_stats: Python `Boolean`, default `True`. When `True`, statistics
+      allow_nan_stats: Python `bool`, default `True`. When `True`, statistics
         (e.g., mean, mode, variance) use the value "`NaN`" to indicate the
-        result is undefined.  When `False`, an exception is raised if one or
+        result is undefined. When `False`, an exception is raised if one or
         more of the statistic's batch members are undefined.
-      name: `String` name prefixed to Ops created by this class.
+      name: Python `str` name prefixed to Ops created by this class.
 
     Raises:
       TypeError: if `concentration` and `rate` are different dtypes.
     """
     parameters = locals()
-    with ops.name_scope(name, values=[concentration, rate]) as ns:
+    with ops.name_scope(name, values=[concentration, rate]):
       with ops.control_dependencies([
           check_ops.assert_positive(concentration),
           check_ops.assert_positive(rate),
@@ -134,18 +133,17 @@ class Gamma(distribution.Distribution):
         self._concentration = array_ops.identity(
             concentration, name="concentration")
         self._rate = array_ops.identity(rate, name="rate")
-        contrib_tensor_util.assert_same_float_dtype(
+        check_ops.assert_same_float_dtype(
             [self._concentration, self._rate])
     super(Gamma, self).__init__(
         dtype=self._concentration.dtype,
         validate_args=validate_args,
         allow_nan_stats=allow_nan_stats,
-        is_continuous=True,
         reparameterization_type=distribution.NOT_REPARAMETERIZED,
         parameters=parameters,
         graph_parents=[self._concentration,
                        self._rate],
-        name=ns)
+        name=name)
 
   @staticmethod
   def _param_shapes(sample_shape):
@@ -231,7 +229,7 @@ class Gamma(distribution.Distribution):
 
   @distribution_util.AppendDocstring(
       """The mode of a gamma distribution is `(shape - 1) / rate` when
-      `shape > 1`, and `NaN` otherwise.  If `self.allow_nan_stats` is `False`,
+      `shape > 1`, and `NaN` otherwise. If `self.allow_nan_stats` is `False`,
       an exception will be raised rather than returning `NaN`.""")
   def _mode(self):
     mode = (self.concentration - 1.) / self.rate
@@ -250,7 +248,7 @@ class Gamma(distribution.Distribution):
           ], mode)
 
   def _maybe_assert_valid_sample(self, x):
-    contrib_tensor_util.assert_same_float_dtype(tensors=[x], dtype=self.dtype)
+    check_ops.assert_same_float_dtype(tensors=[x], dtype=self.dtype)
     if not self.validate_args:
       return x
     return control_flow_ops.with_dependencies([
@@ -268,14 +266,14 @@ class GammaWithSoftplusConcentrationRate(Gamma):
                allow_nan_stats=True,
                name="GammaWithSoftplusConcentrationRate"):
     parameters = locals()
-    with ops.name_scope(name, values=[concentration, rate]) as ns:
+    with ops.name_scope(name, values=[concentration, rate]):
       super(GammaWithSoftplusConcentrationRate, self).__init__(
           concentration=nn.softplus(concentration,
                                     name="softplus_concentration"),
           rate=nn.softplus(rate, name="softplus_rate"),
           validate_args=validate_args,
           allow_nan_stats=allow_nan_stats,
-          name=ns)
+          name=name)
     self._parameters = parameters
 
 
