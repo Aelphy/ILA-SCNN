@@ -12,30 +12,30 @@ t_sparse_kernel = importdata('build/result_sparse_kernel_merge_sort.txt');
 hold on;
 
 
-% hTitle  = title ('Runtime on CPU');
-% hXLabel = xlabel('number of threads', 'FontSize',13);
-% hYLabel = ylabel('time [s]', 'FontSize',13);
-% 
-% num_cores = 1 : length(t_p_hash);
-% plot(num_cores, t_p_hash, 'b','LineWidth',2);
-% 
-% num_cores = 1 : length(t_s_map);
-% plot(num_cores, t_s_map, 'xr','LineWidth',2);
-% 
-% num_cores = 1 : length(t_p_merge_sort);
-% plot(num_cores, t_p_merge_sort, 'c','LineWidth',2);
-% 
-% hLegend = legend('parallel hash map', 'serial ordered map', 'parallel merge sort', 'Location', 'northeast')
+hTitle  = title ('Runtime on CPU');
+hXLabel = xlabel('number of threads', 'FontSize',13);
+hYLabel = ylabel('time [s]', 'FontSize',13);
+
+num_cores = 1 : length(t_p_hash);
+plot(num_cores, t_p_hash, 'b','LineWidth',2);
+
+num_cores = 1 : length(t_s_map);
+plot(num_cores, t_s_map, 'xr','LineWidth',2);
+
+num_cores = 1 : length(t_p_merge_sort);
+plot(num_cores, t_p_merge_sort, 'c','LineWidth',2);
+
+hLegend = legend('parallel hash map', 'serial ordered map', 'parallel merge sort', 'Location', 'northeast')
 
 
-
-hTitle  = title ('Runtime on CPU with varying Filter Density');
-hXLabel = xlabel('Sparsity of Filter', 'FontSize',13);
-hYLabel = ylabel('Time [s]', 'FontSize',13);
-
-num_samples = 1 : length(t_sparse_kernel);
-density_samples = 1 - num_samples / length(t_sparse_kernel);
-plot(fliplr(density_samples), fliplr(t_sparse_kernel), 'c','LineWidth',2);
+% 
+% hTitle  = title ('Runtime on CPU with varying Filter Density');
+% hXLabel = xlabel('Sparsity of Filter', 'FontSize',13);
+% hYLabel = ylabel('Time [s]', 'FontSize',13);
+% 
+% num_samples = 1 : length(t_sparse_kernel);
+% density_samples = 1 - num_samples / length(t_sparse_kernel);
+% plot(fliplr(density_samples), fliplr(t_sparse_kernel), 'c','LineWidth',2);
 
 
 set( gca                       , ...

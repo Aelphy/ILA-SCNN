@@ -19,6 +19,7 @@ hXLabel = xlabel('Sparsity of Filter', 'FontSize',13);
 hYLabel = ylabel('Time [s]', 'FontSize',13);
 plot(res, dc, 'c','LineWidth',2);
 plot(res, sc, 'b','LineWidth',2);
+hLegend = legend('dense conv', 'sparse conv')
 %plot(res, dbpf, 'g','LineWidth',2);
 %plot(res, sbpf, 'r','LineWidth',2);
 %plot(res, dbpi, 'k','LineWidth',2);

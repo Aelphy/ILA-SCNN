@@ -70,15 +70,16 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     auto f_vals = filter_values->flat<T>();
     auto f_sh = filter_shape->flat<int64>();
 
-    std::map<int64, T> output_map; //stores the values for the output tensor
+    std::vector<std::vector<int64> > output_keys; //stores the values for the output tensor
+    std::vector<T> output_values;
     std::vector<int64> out_shape;
 
-    sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, filter_dim, output_map, out_shape, padding);
+    sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, filter_dim, output_keys, output_values, out_shape, padding);
 
     // Create an output tensor
     Tensor *sparse_values = NULL, *sparse_indices = NULL, *sparse_shape = NULL;
-    TensorShape out_ind_shape = {(int64) output_map.size(), (int64) in_ind.dimension(1)};
-    TensorShape out_val_shape = {(int64) output_map.size()};
+    TensorShape out_ind_shape = {(int64) output_keys.size(), (int64) in_ind.dimension(1)};
+    TensorShape out_val_shape = {(int64) output_keys.size()};
     TensorShape out_sh_shape = {(int64) in_ind.dimension(1)};
     OP_REQUIRES_OK(context, context->allocate_output("sparse_indices", out_ind_shape, &sparse_indices));
     OP_REQUIRES_OK(context, context->allocate_output("sparse_values", out_val_shape, &sparse_values));
@@ -88,13 +89,11 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     auto out_vals = sparse_values->flat<T>();
     auto out_sh = sparse_shape->flat<int64>();
 
-    int64 idx = 0;
-    for(auto it = output_map.begin(); it != output_map.end(); ++it, idx++){
-        const std::vector<int64> indice = getHighDimIndexVec(it->first, out_shape);
-        for(int64 j = 0; j < indice.size(); ++j){
-          out_ind(idx,j) = indice[j];
+    for(auto i = 0; i < output_keys.size(); ++i){
+        for(int64 j = 0; j < output_keys[i].size(); ++j){
+          out_ind(i,j) = output_keys[i][j];
         }
-        out_vals(idx) = it->second;
+        out_vals(i) = output_values[i];
     }
     for(int64 idx = 0; idx < in_ind.dimension(1); ++idx){
         out_sh(idx) = out_shape[idx];
@@ -114,6 +113,6 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
 REGISTER_CPU(float);
 REGISTER_CPU(double);
 REGISTER_CPU(int32);
-REGISTER_CPU(complex64);
-REGISTER_CPU(complex128);
+//REGISTER_CPU(complex64);
+//REGISTER_CPU(complex128);
 #undef REGISTER_CPU

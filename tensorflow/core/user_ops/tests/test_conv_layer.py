@@ -18,14 +18,15 @@ import time
 import sparse_tools as sp
 import os
 
-#pid = os.getpid()
-#print(pid)
 
 sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
+pid = os.getpid()
+print(pid)
+
 #print(dir(sc_module))
 
-#raw_input("Press Enter to continue...")
+raw_input("Press Enter to continue...")
 
 
 filter_in_sizes=[3, 3, 3, 1, 1] #[depth, height, width, in_channels, out_channels] 

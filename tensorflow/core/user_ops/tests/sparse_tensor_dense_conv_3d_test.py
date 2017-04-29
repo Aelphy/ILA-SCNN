@@ -39,9 +39,9 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
     d2 = sp.sparse_to_dense(t2ind, t2val, t2sh)
   
-    # print("input: \n", d1)
-    # print("filter: \n", d2)
-    # print("strides: \n", strides)
+    #print("input: \n", d1)
+    #print("filter: \n", d2)
+    #print("strides: \n", strides)
 
     # Initializes the input tensor with array containing incrementing
     # numbers from 1.
@@ -78,8 +78,8 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
   def testConv3D1x1x1Filter(self):
     # These are equivalent to the Conv2D1x1 case.        
     self._VerifyValues(
-      tensor_in_sizes=[1, 7, 8, 9, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      tensor_in_sizes=[1, 6, 1, 1, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 1, 1, 1, 1], #[depth, height, width, in_channels, out_channels] 
       stride=2,
       rho_data=1,
       rho_filter=1,

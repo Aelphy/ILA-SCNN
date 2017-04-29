@@ -1,5 +1,6 @@
 #pragma once
 
+#include <omp.h>
 #include <map>
 #include <sstream>
 #include "tensorflow/core/framework/op.h"
@@ -7,6 +8,7 @@
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "indexing.h"
+#include "hash_map.h"
 
 namespace tensorflow {
 
@@ -20,11 +22,14 @@ namespace tensorflow {
                         const FShapeT& f_sh,
                         const std::vector<int32>& stride_,
                         const int64 dim,
-                        std::map<int64, T>& output_map,
+                        std::vector<std::vector<int64> >& output_keys,
+                        std::vector<T>& output_values,
                         std::vector<int64>& out_shape,
                         const std::string padding="SAME") {
     int padding_type = 1;
     if(padding == "SAME") padding_type = 0;
+
+    auto in_ind_ptr = &in_ind; auto in_vals_ptr = &in_vals; auto f_ind_ptr = &f_ind; auto f_vals_ptr = &f_vals; auto in_sh_ptr = &in_sh;
 
     const int id_in_batch = 0, id_in_depth = 1, id_in_width = id_in_depth + dim - 1, id_in_in_channels = id_in_depth + dim;
     const int id_f_depth = 0, id_f_width = id_f_depth + dim - 1, id_f_in_channels = id_f_depth + dim, id_f_out_channels = id_f_depth + dim + 1;
@@ -63,22 +68,29 @@ namespace tensorflow {
       }
     }
 
-    std::vector<int64> update_ids(in_ind.dimension(1), 0);
+
     //TODO: use batch in parallel? (needs more ram than a parallelization of conv)
-    for(int64 i = 0; i < in_ind.dimension(0); ++i){ //TODO: parallelize filtering
+  //omp_set_num_threads(8);
+
+    LFMap<std::vector<int64>, T> map(out_shape);
+    auto map_ptr = &map;
+
+#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr)
+    for(int64 i = 0; i < (*in_ind_ptr).dimension(0); ++i){ //TODO: parallelize filtering
       //a) prepare filter to update output based on current value
       std::vector<std::pair<int64,T> > filter_update;
-      for(int64 j = 0; j < f_ind.dimension(0); ++j){
-        if(f_ind(j, id_f_in_channels) != in_ind(i,id_in_in_channels)) continue; //filter channel != input channel
+      std::vector<int64> update_ids((*in_ind_ptr).dimension(1), 0);
+      for(int64 j = 0; j < (*f_ind_ptr).dimension(0); ++j){
+        if((*f_ind_ptr)(j, id_f_in_channels) != (*in_ind_ptr)(i,id_in_in_channels)) continue; //filter channel != input channel
         bool is_valid = true;
-        update_ids[id_in_batch] = in_ind(i,id_in_batch); //output channel is filter number
-        update_ids[id_in_in_channels] = f_ind(j,id_f_out_channels); //output channel is filter number
+        update_ids[id_in_batch] = (*in_ind_ptr)(i,id_in_batch); //output channel is filter number
+        update_ids[id_in_in_channels] = (*f_ind_ptr)(j,id_f_out_channels); //output channel is filter number
         for(int64 k = id_f_depth, l = id_in_depth; k <= id_f_width; ++k, ++l){ //TODO: ugly coding style... prototype
-          int64 out_plain_id = (int64)(in_ind(i,l) - f_ind(j,k) + filter_offset[l]);
+          int64 out_plain_id = (int64)((*in_ind_ptr)(i,l) - (*f_ind_ptr)(j,k) + filter_offset[l]);
           if(padding_type == 1){ //valid padding
             out_plain_id = out_plain_id - filter_offset[l];
           }
-          if(in_sh(l) > 1 && stride_[l] > 1){
+          if((*in_sh_ptr)(l) > 1 && stride_[l] > 1){
             if(((out_plain_id ) % stride_[l]) != str_padding_offset[l]){
               is_valid = false;
               break;          
@@ -93,24 +105,13 @@ namespace tensorflow {
           }
         }
         if(is_valid){
-          T update_val = in_vals(i) * f_vals(j); //input value times filter weight at index
-          int64 id_hash = getIndex1D<int64>(update_ids, out_shape);
-          filter_update.push_back(std::make_pair(id_hash, update_val));
-        }
-      }
-      
-
-      //b) check if output exists (search required) and create or update output based on filter_update
-        //TODO: concept: tree search to find upper and lower filter bound; binary search in between?
-      for(auto it = filter_update.begin(); it != filter_update.end(); ++it){
-        auto res_it = output_map.find(it->first);
-        if(res_it == output_map.end()){
-          output_map.insert(*it);
-        } else {
-          res_it->second += it->second;
+          T update_val = (*in_vals_ptr)(i) * (*f_vals_ptr)(j); //input value times filter weight at index
+          map_ptr->update(update_ids, update_val);
         }
       }
     }
+    map.traverse(output_keys,output_values);
+    
   }
 
   //normal convolution in sparse data

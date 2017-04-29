@@ -9,8 +9,14 @@ package(
 
 load("//tensorflow:tensorflow.bzl", "tf_py_test")
 load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
+load("//tensorflow:tensorflow.bzl", "tf_py_wrap_cc")
+load("//tensorflow/core/user_ops:custom_bzl.bzl", "tf_custom_op_library_flags")
 
-tf_custom_op_library(
+
+
+
+
+tf_custom_op_library_flags(
     name = "sparse_tensor_dense_conv_3d.so",
 
     srcs =  [
@@ -21,10 +27,9 @@ tf_custom_op_library(
               "sparse_tensor_dense_relu_op.cc",
               "sparse_tensor_dense_relu_op_functor.h",
               "sparse_tensor_dense_relu_op.h",
-              "sparse_tensor_max_pooling.cc",
-              "indexing.h"
+              "indexing.h",
+              "hash_map.h"
             ],
-
 )
 
 py_library(
