@@ -34,7 +34,7 @@ dim = 3
 rho_filter=1
 padding='SAME'
 
-num_resolutions = 20
+num_resolutions = 64
 res_step_size = 4
 num_trials = 4
 
@@ -94,7 +94,11 @@ for res_step in range(1, num_resolutions + 1):
     t_sparse = t_sparse + t2 - t1
   t_sparse = t_sparse / float(num_trials)
 
-
+  t_bp1 = 0
+  t_bp2 = 0
+  t_bp3 = 0
+  t_bp4 = 0
+  '''
   out_backprop_shape = conv.get_shape().as_list()
   [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(1, out_backprop_shape, 1, 9)
   d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
@@ -102,7 +106,6 @@ for res_step in range(1, num_resolutions + 1):
   out_backprop_val = d3
   
   
-  t_bp1 = 0
   time.sleep(1)
   with tf.Session(config=config) as sess:
     for i in range(num_trials):
@@ -113,7 +116,6 @@ for res_step in range(1, num_resolutions + 1):
     t_bp1 = t_bp1 + t2 - t1
   t_bp1 = t_bp1 / float(num_trials)
   
-  t_bp2 = 0
   time.sleep(1)
   with tf.Session(config=config) as sess:
     for i in range(num_trials):
@@ -124,7 +126,6 @@ for res_step in range(1, num_resolutions + 1):
     t_bp2 = t_bp2 + t2 - t1
   t_bp2 = t_bp2 / float(num_trials)
   
-  t_bp3 = 0
   time.sleep(1)
   with tf.Session(config=config) as sess:
     for i in range(num_trials):
@@ -135,7 +136,6 @@ for res_step in range(1, num_resolutions + 1):
     t_bp3 = t_bp3 + t2 - t1
   t_bp3 = t_bp3 / float(num_trials)
   
-  t_bp4 = 0
   time.sleep(1)
   with tf.Session(config=config) as sess:
     for i in range(num_trials):
@@ -145,7 +145,8 @@ for res_step in range(1, num_resolutions + 1):
       t2 = time.time()
     t_bp4 = t_bp4 + t2 - t1
   t_bp4 = t_bp4 / float(num_trials)
-  
+  '''
+  tf.reset_default_graph()
   print("input shape", tensor_in_sizes)
   print("filter shape", filter_in_sizes)
   print("time dense: ", t_dense)
