@@ -96,6 +96,11 @@ for res_step in range(1, num_resolutions + 1):
     t_sparse = t_sparse + t2 - t1
   t_sparse = t_sparse / float(num_trials)
 
+  print("input shape", tensor_in_sizes)
+  print("filter shape", filter_in_sizes)
+  print("time dense: ", t_dense)
+  print("time sparse: ", t_sparse)
+  
   t_bp1 = 0
   t_bp2 = 0
   t_bp3 = 0
@@ -103,21 +108,36 @@ for res_step in range(1, num_resolutions + 1):
   t_bp5 = 0
   
   out_backprop_shape = conv.get_shape().as_list()
-  [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(1, out_backprop_shape, 1, 9)
-  d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
-  d3 = constant_op.constant(d3_)
-  out_backprop_val = d3
+  [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(rho_data + 0.01, out_backprop_shape, 1, 9)
   
   
-  time.sleep(1)
-  with tf.Session(config=config) as sess:
-    for i in range(num_trials):
-      fbp = nn_ops.conv3d_backprop_filter_v2(d1, filter_in_sizes,  out_backprop_val, strides, padding)
-      t1 = time.time()
-      sess.run(fbp)
-      t2 = time.time()
-    t_bp1 = t_bp1 + t2 - t1
-  t_bp1 = t_bp1 / float(num_trials)
+  if res < 136: #dummy line
+    d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
+    d3 = constant_op.constant(d3_)
+    out_backprop_val = d3
+    
+    
+    time.sleep(1)
+    with tf.Session(config=config) as sess:
+      for i in range(num_trials):
+        fbp = nn_ops.conv3d_backprop_filter_v2(d1, filter_in_sizes,  out_backprop_val, strides, padding)
+        t1 = time.time()
+        sess.run(fbp)
+        t2 = time.time()
+      t_bp1 = t_bp1 + t2 - t1
+    t_bp1 = t_bp1 / float(num_trials)
+    print("time bp1: ", t_bp1)
+  
+    time.sleep(1)
+    with tf.Session(config=config) as sess:
+      for i in range(num_trials):
+        fbp = nn_ops.conv3d_backprop_input_v2(tensor_in_sizes, d2, out_backprop_val, strides, padding)
+        t1 = time.time()
+        sess.run(fbp)
+        t2 = time.time()
+      t_bp2 = t_bp2 + t2 - t1
+    t_bp2 = t_bp2 / float(num_trials)
+    print("time bp2: ", t_bp2)
   
   time.sleep(1)
   with tf.Session(config=config) as sess:
@@ -126,18 +146,9 @@ for res_step in range(1, num_resolutions + 1):
       t1 = time.time()
       sess.run(fbp)
       t2 = time.time()
-    t_bp2 = t_bp2 + t2 - t1
-  t_bp2 = t_bp2 / float(num_trials)
-  
-  time.sleep(1)
-  with tf.Session(config=config) as sess:
-    for i in range(num_trials):
-      fbp = nn_ops.conv3d_backprop_input_v2(tensor_in_sizes, d2, out_backprop_val, strides, padding)
-      t1 = time.time()
-      sess.run(fbp)
-      t2 = time.time()
     t_bp3 = t_bp3 + t2 - t1
   t_bp3 = t_bp3 / float(num_trials)
+  print("time bp3: ", t_bp3)
   
   time.sleep(1)
   with tf.Session(config=config) as sess:
@@ -148,6 +159,7 @@ for res_step in range(1, num_resolutions + 1):
       t2 = time.time()
     t_bp4 = t_bp4 + t2 - t1
   t_bp4 = t_bp4 / float(num_trials)
+  print("time bp4: ", t_bp4)
 
   time.sleep(1)
   with tf.Session(config=config) as sess:
@@ -160,15 +172,7 @@ for res_step in range(1, num_resolutions + 1):
   t_bp5 = t_bp5 / float(num_trials)
   
   tf.reset_default_graph()
-  print("input shape", tensor_in_sizes)
-  print("filter shape", filter_in_sizes)
-  print("time dense: ", t_dense)
-  print("time sparse: ", t_sparse)
 
-  print("time bp1: ", t_bp1)
-  print("time bp2: ", t_bp2)
-  print("time bp3: ", t_bp3)
-  print("time bp4: ", t_bp4)
   print("time bp5: ", t_bp5)
   all_res[res_step - 1] = res
   all_t_s[res_step - 1] = t_sparse
