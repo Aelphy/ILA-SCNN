@@ -53,6 +53,11 @@ public:
         return m_cmap.find(a_key_1D);
     }
 
+    void
+    reserve(size_t size){
+      m_cmap.reserve(size);
+    }
+
     ConcurrentMap m_cmap;
 protected:
     inline KeyType

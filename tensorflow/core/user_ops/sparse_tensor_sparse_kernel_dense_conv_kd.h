@@ -70,6 +70,7 @@ namespace tensorflow {
 
     LFMap<std::vector<int64>, T> map(out_shape);
     auto map_ptr = &map;
+    map.reserve(in_ind.dimension(0) * f_ind.dimension(0));
 
 #pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr)
     for(int64 i = 0; i < (*in_ind_ptr).dimension(0); ++i){ //TODO: parallelize filtering
