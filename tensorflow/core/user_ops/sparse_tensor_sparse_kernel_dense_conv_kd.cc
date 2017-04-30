@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <map>
 #include <sstream>
 #include "tensorflow/core/framework/op.h"
@@ -89,11 +90,13 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     auto out_vals = sparse_values->flat<T>();
     auto out_sh = sparse_shape->flat<int64>();
 
-    for(auto i = 0; i < output_keys.size(); ++i){
-        for(int64 j = 0; j < output_keys[i].size(); ++j){
-          out_ind(i,j) = output_keys[i][j];
+    auto out_ind_ptr = &out_ind; auto out_vals_ptr = &out_vals; auto output_keys_ptr = &output_keys; auto output_values_ptr = &output_values;
+#pragma omp parallel for firstprivate(output_keys_ptr, output_values_ptr, out_vals_ptr, out_ind_ptr)
+    for(auto i = 0; i < (*output_keys_ptr).size(); ++i){
+        for(int64 j = 0; j < (*output_keys_ptr)[i].size(); ++j){
+          (*out_ind_ptr)(i,j) = (*output_keys_ptr)[i][j];
         }
-        out_vals(i) = output_values[i];
+        (*out_vals_ptr)(i) = (*output_values_ptr)[i];
     }
     for(int64 idx = 0; idx < in_ind.dimension(1); ++idx){
         out_sh(idx) = out_shape[idx];
