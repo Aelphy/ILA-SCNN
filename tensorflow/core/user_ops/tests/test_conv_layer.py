@@ -46,6 +46,7 @@ all_bp1 = [None] * num_resolutions
 all_bp2 = [None] * num_resolutions
 all_bp3 = [None] * num_resolutions
 all_bp4 = [None] * num_resolutions
+all_bp5 = [None] * num_resolutions
 
 if isinstance(stride, collections.Iterable):
   strides = [1] + list(stride) + [1]
@@ -99,7 +100,8 @@ for res_step in range(1, num_resolutions + 1):
   t_bp2 = 0
   t_bp3 = 0
   t_bp4 = 0
-  '''
+  t_bp5 = 0
+  
   out_backprop_shape = conv.get_shape().as_list()
   [t3ind, t3val, t3sh] = sp.createRandomSparseTensor(1, out_backprop_shape, 1, 9)
   d3_ = sp.sparse_to_dense(t3ind, t3val, t3sh)
@@ -146,13 +148,28 @@ for res_step in range(1, num_resolutions + 1):
       t2 = time.time()
     t_bp4 = t_bp4 + t2 - t1
   t_bp4 = t_bp4 / float(num_trials)
-  '''
+
+  time.sleep(1)
+  with tf.Session(config=config) as sess:
+    for i in range(num_trials):
+      fbp = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_grad_v2(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
+      t1 = time.time()
+      sess.run(fbp)
+      t2 = time.time()
+    t_bp5 = t_bp5 + t2 - t1
+  t_bp5 = t_bp5 / float(num_trials)
+  
   tf.reset_default_graph()
   print("input shape", tensor_in_sizes)
   print("filter shape", filter_in_sizes)
   print("time dense: ", t_dense)
   print("time sparse: ", t_sparse)
 
+  print("time bp1: ", t_bp1)
+  print("time bp2: ", t_bp2)
+  print("time bp3: ", t_bp3)
+  print("time bp4: ", t_bp4)
+  print("time bp5: ", t_bp5)
   all_res[res_step - 1] = res
   all_t_s[res_step - 1] = t_sparse
   all_t_d[res_step - 1] = t_dense
@@ -160,8 +177,9 @@ for res_step in range(1, num_resolutions + 1):
   all_bp2[res_step - 1] = t_bp2
   all_bp3[res_step - 1] = t_bp3
   all_bp4[res_step - 1] = t_bp4
+  all_bp5[res_step - 1] = t_bp5
 
 result_file = open('eval_time_conv.txt', 'w')
 for i in range(len(all_t_s)):
-  result_file.write("%s %s %s %s %s %s %s\n" % (all_res[i], all_t_d[i], all_t_s[i], all_bp1[i], all_bp2[i], all_bp3[i], all_bp4[i]))
+  result_file.write("%s %s %s %s %s %s %s %s\n" % (all_res[i], all_t_d[i], all_t_s[i], all_bp1[i], all_bp2[i], all_bp3[i], all_bp4[i], all_bp5[i]))
 

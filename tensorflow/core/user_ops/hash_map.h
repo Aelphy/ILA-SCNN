@@ -19,6 +19,12 @@ public:
     }
 
     void
+    insert(KeyType a_key, ValueT a_v){
+        IndexT hash_key = getIndex1D(a_key, m_shape);
+        m_cmap.insert(hash_key, a_v);
+    }
+
+    void
     traverse(std::vector<KeyType>& keys, std::vector<ValueT>& values){
         keys.resize(m_cmap.size());
         values.resize(m_cmap.size());
@@ -28,6 +34,12 @@ public:
             keys[cnt] = getHighDimIndexVec(it->first, m_shape);
             values[cnt] = it->second;
         }
+    }
+
+    bool
+    find(const KeyType& a_key, ValueT& a_val) const {
+        IndexT hash_key = getIndex1D(a_key, m_shape);
+        return m_cmap.find(hash_key, a_val);
     }
 
     ValueT
