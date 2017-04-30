@@ -12,6 +12,12 @@
 
 namespace tensorflow {
 
+  template<typename T> void 
+  atomic_add_cas(std::atomic<T>& current_val, T add_val) {
+    auto current = current_val.load();
+    while (!current_val.compare_exchange_weak(current, current + add_val));
+  }
+
   //voting sheme convolution (see vote3d)
   template <typename IndexT, typename ValueT, typename ShapeT, typename T> void
   sparseCuboidConvKD(   const IndexT& in_ind, 
@@ -25,7 +31,8 @@ namespace tensorflow {
                         std::vector<std::vector<int64> >& output_keys,
                         std::vector<T>& output_values,
                         std::vector<int64>& out_shape,
-                        const std::string padding="SAME") {
+                        const std::string padding="SAME",
+                        bool approx = false) {
     int padding_type = 1;
     if(padding == "SAME") padding_type = 0;
 
@@ -70,9 +77,27 @@ namespace tensorflow {
 
     LFMap<std::vector<int64>, T> map(out_shape);
     auto map_ptr = &map;
-    map.reserve(in_ind.dimension(0) * f_ind.dimension(0));
+    std::vector<std::atomic<T> > approx_out_val((*in_ind_ptr).dimension(0));
+    auto approx_out_val_ptr = &approx_out_val; auto output_keys_ptr = &output_keys; auto output_values_ptr = &output_values;
+    if(approx){
+      output_keys.assign(in_ind.dimension(0), std::vector<int64>(in_ind.dimension(1)));
+      output_values.resize(in_ind.dimension(0));
+#pragma omp parallel for firstprivate(in_ind_ptr, approx_out_val_ptr, map_ptr, output_keys_ptr)
+      for(int64 i = 0; i < in_ind_ptr->dimension(0); ++i){
+        std::vector<int64> update_ids((*in_ind_ptr).dimension(1), 0);
+        for(size_t j = 0; j < (*in_ind_ptr).dimension(1); ++j){
+          update_ids[j] = (*in_ind_ptr)(i,j);
+          (*output_keys_ptr)[i][j] = (*in_ind_ptr)(i,j);
+        }
+        map_ptr->insert(update_ids, i);
+        (*approx_out_val_ptr)[i] = 0;
+      }
 
-#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr)
+    } else {
+      map.reserve(in_ind.dimension(0) * f_ind.dimension(0));
+    }
+
+#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr, approx_out_val_ptr)
     for(int64 i = 0; i < (*in_ind_ptr).dimension(0); ++i){ //TODO: parallelize filtering
       //a) prepare filter to update output based on current value
       std::vector<std::pair<int64,T> > filter_update;
@@ -103,11 +128,26 @@ namespace tensorflow {
         }
         if(is_valid){
           T update_val = (*in_vals_ptr)(i) * (*f_vals_ptr)(j); //input value times filter weight at index
-          map_ptr->update(update_ids, update_val);
+          if(!approx){
+            map_ptr->update(update_ids, update_val);
+          } else {
+            T id;
+            bool res_has_id = map_ptr->find(update_ids, id);
+            if(res_has_id){
+              atomic_add_cas((*approx_out_val_ptr)[id], update_val);
+            }
+          }
         }
       }
     }
-    map.traverse(output_keys,output_values);
+    if(approx){
+#pragma omp parallel for firstprivate(output_values_ptr, approx_out_val_ptr)
+      for(int64 i = 0; i < output_values_ptr->size(); ++i){
+        (*output_values_ptr)[i] = (*approx_out_val_ptr)[i];
+      }
+    } else {
+      map.traverse(output_keys,output_values);
+    }
   }
 
   //normal convolution in sparse data
@@ -195,13 +235,6 @@ namespace tensorflow {
     std::vector<int64> m_filter_offset;
     std::map<KeyT, DataT> m_map;
   };
-
-
-  template<typename T> void 
-  atomic_add_cas(std::atomic<T>& current_val, T add_val) {
-    auto current = current_val.load();
-    while (!current_val.compare_exchange_weak(current, current + add_val));
-  }
 
   //voting sheme convolution (see vote3d)
   template <typename IndexT, typename ValueT, typename ShapeT, typename T, typename OutT> void
@@ -319,13 +352,14 @@ namespace tensorflow {
           }
         }
         if(is_valid){
-          T grad;
+          T grad = 0;
           bool res = map_ptr->find(update_ids, grad);
-          //assert(res); // programming mistake if there is no gradient for op?!
-          T input_val_up = (*in_vals_ptr)(i) * grad;
-          T filter_val_up = (*f_vals_ptr)(j) * grad; //input value times filter weight at index
-          atomic_add_cas((*input_bp_ptr)[i], filter_val_up);
-          atomic_add_cas((*filter_bp_ptr)[j], input_val_up);
+          if(res){
+            T input_val_up = (*in_vals_ptr)(i) * grad;
+            T filter_val_up = (*f_vals_ptr)(j) * grad; //input value times filter weight at index
+            atomic_add_cas((*input_bp_ptr)[i], filter_val_up);
+            atomic_add_cas((*filter_bp_ptr)[j], input_val_up);
+          }
         }
       }
     }

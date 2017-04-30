@@ -2,29 +2,32 @@ clear;
 clc;
 close all;
 
-data = importdata('eval_time_conv.txt');
+data = importdata('eval_time_conv_2.txt');
 
 res = data(:,1)';
 dc = data(:,2)';
 sc = data(:,3)';
 dbpf = data(:,4)';
-sbpf = data(:,5)';
-dbpi = data(:,6)';
+dbpi = data(:,5)';
+sbpf = data(:,6)';
 sbpi = data(:,7)';
+sbpc = data(:,8)';
+
 
 hold on;
 
-hTitle  = title ('Runtime on CPU with varying Filter Density');
-hXLabel = xlabel('Sparsity of Filter', 'FontSize',13);
+hTitle  = title ('Runtime on CPU with varying resolution');
+hXLabel = xlabel('resolution : density = 1 / resolution', 'FontSize',13);
 hYLabel = ylabel('Time [s]', 'FontSize',13);
 plot(res, dc, 'c','LineWidth',2);
 plot(res, sc, 'b','LineWidth',2);
 hLegend = legend('dense conv', 'sparse conv')
-%plot(res, dbpf, 'g','LineWidth',2);
-%plot(res, sbpf, 'r','LineWidth',2);
-%plot(res, dbpi, 'k','LineWidth',2);
-%plot(res, sbpi, 'm','LineWidth',2);
-%hLegend = legend('dense conv', 'sparse conv', 'dense bp filter', 'sparse bp filter', 'dense bp input', 'sparse bp input')
+plot(res(:,1:33), dbpf(:, 1:33), 'g','LineWidth',2);
+plot(res, sbpf, 'r','LineWidth',2);
+plot(res(:,1:33), dbpi(:,1:33), 'k','LineWidth',2);
+plot(res, sbpi, 'm','LineWidth',2);
+plot(res, sbpc, 'x','LineWidth',2);
+hLegend = legend('dense conv', 'sparse conv', 'dense bp filter', 'sparse bp filter', 'dense bp input', 'sparse bp input','direct sparse backprop')
 
 
 set( gca                       , ...

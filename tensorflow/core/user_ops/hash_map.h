@@ -2,6 +2,7 @@
 
 #include <libcuckoo/cuckoohash_map.hh>
 #include <libcuckoo/city_hasher.hh>
+#include <omp.h>
 
 template<typename KeyType, typename ValueT>
 class LFMap {
@@ -29,10 +30,11 @@ public:
         keys.resize(m_cmap.size());
         values.resize(m_cmap.size());
         auto lmap = m_cmap.lock_table();
-        int cnt = 0;
-        for(auto it = lmap.begin(); it != lmap.end(); ++it, cnt++){
-            keys[cnt] = getHighDimIndexVec(it->first, m_shape);
-            values[cnt] = it->second;
+        auto lmap_ptr = &lmap; auto keys_ptr = &keys; auto values_ptr = &values; auto m_shape_ptr = &m_shape;
+        for(auto it = lmap_ptr->begin(); it != lmap_ptr->end(); ++it){
+            int cnt = std::distance(lmap_ptr->begin(), it);
+            (*keys_ptr)[cnt] = getHighDimIndexVec(it->first, (*m_shape_ptr));
+            (*values_ptr)[cnt] = it->second;
         }
     }
 

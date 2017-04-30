@@ -33,7 +33,8 @@ REGISTER_OP("SparseTensorSparseKernelDenseConvKD")
   .Output("sparse_shape: int64")
   .Attr("strides: list(int)")
   .Attr("padding: string")
-  .Attr("filter_dim: int = 3");
+  .Attr("filter_dim: int = 3")
+  .Attr("approx: bool = true");
 
 
 #include "tensorflow/core/framework/op_kernel.h"
@@ -52,6 +53,7 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
                 errors::InvalidArgument("Sliding window strides field must "
                                         "specify 5 dimensions"));
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
+    OP_REQUIRES_OK(context, context->GetAttr("approx", &approx));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -75,7 +77,7 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     std::vector<T> output_values;
     std::vector<int64> out_shape;
 
-    sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, filter_dim, output_keys, output_values, out_shape, padding);
+    sparseCuboidConvKD(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, stride_, filter_dim, output_keys, output_values, out_shape, padding, approx);
 
     // Create an output tensor
     Tensor *sparse_values = NULL, *sparse_indices = NULL, *sparse_shape = NULL;
@@ -107,6 +109,7 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
   std::vector<int32> stride_;
   int32 filter_dim;
   std::string padding;
+  bool approx;
 };
 
 #define REGISTER_CPU(type)                                   \
