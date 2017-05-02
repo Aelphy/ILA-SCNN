@@ -19,7 +19,8 @@ import sparse_tools as sp
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
-sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
+# XXX Modify according to path
+sc_module = tf.load_op_library('/home/gsilvano/src/tensorflow-timo/bazel-bin/tensorflow/core/user_ops/sparse_tensor_dense_conv_3d.so')
 
 class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
@@ -34,11 +35,11 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
     s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
     d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
-    
+
     [t2ind, t2val, t2sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes)
     s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
     d2 = sp.sparse_to_dense(t2ind, t2val, t2sh)
-  
+
     #print("input: \n", d1)
     #print("filter: \n", d2)
     #print("strides: \n", strides)
@@ -56,7 +57,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       t3 = time.time()
       sv2 = sess.run(scskconv)
       t4 = time.time()
-    
+
       print("input shape", tensor_in_sizes)
       print("filter shape", filter_in_sizes)
       print("time dense: ", t2 - t1)
@@ -69,41 +70,41 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     #print("expected: \n", expected)
     #print("expected.shape: \n", expected.shape)
     #print("no stride expected: \n", nstr_expected)
-    #self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5) 
+    #self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5)
     #print("actual 1: \n", value1)
 
     self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5)
 
 
   def testConv3D1x1x1Filter(self):
-    # These are equivalent to the Conv2D1x1 case.        
+    # These are equivalent to the Conv2D1x1 case.
     self._VerifyValues(
       tensor_in_sizes=[1, 6, 1, 1, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 1, 1, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 1, 1, 1, 1], #[depth, height, width, in_channels, out_channels]
       stride=2,
       rho_data=1,
       rho_filter=1,
       padding='VALID')
-    
+
     self._VerifyValues(
       tensor_in_sizes=[1, 4, 5, 4, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels]
       stride=1,
       rho_data=1,
       rho_filter=1,
       padding='SAME')
-    
+
     self._VerifyValues(
       tensor_in_sizes=[2, 5, 4, 7, 2], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 3, 2, 2], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 3, 3, 2, 2], #[depth, height, width, in_channels, out_channels]
       stride=1,
       rho_data=1,
       rho_filter=1,
       padding='VALID')
-    
+
     self._VerifyValues(
       tensor_in_sizes=[1, 100, 100, 100, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 3, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 3, 3, 1, 1], #[depth, height, width, in_channels, out_channels]
       stride=1,
       rho_data=0.01,
       rho_filter=1,
@@ -119,7 +120,7 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
     [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(1, tensor_in_sizes)
     s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
     d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
-    
+
     [t2ind, t2val, t2sh] = sp.createRandomSparseTensor(1, filter_in_sizes)
     s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
     d2 = sp.sparse_to_dense(t2ind, t2val, t2sh)
@@ -151,53 +152,53 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
         value2 = sp.sparse_to_dense(t2ind, output_sparse, t2sh)
         value3 = sp.sparse_to_dense(t2ind, output_sparse2, t2sh)
       else: # test_type == "INPUT"
-        t1 = time.time()        
+        t1 = time.time()
         output = nn_ops.conv3d_backprop_input_v2(tensor_in_sizes, d2, out_backprop_val, strides, padding)
         t2 = time.time()
         output2 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
         t3 = time.time()
         [output3, output4] = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd_grad_v2(t1ind, t1val, t1sh, t2ind, t2val, t2sh, t3ind, t3val, t3sh, strides, padding)
         t4 = time.time()
-        
+
         output_dense = output.eval()
         output_sparse = output2.eval()
         output_sparse2 = output3.eval()
         value2 = sp.sparse_to_dense(t1ind, output_sparse, t1sh)
         value3 = sp.sparse_to_dense(t1ind, output_sparse2, t1sh)
-       
+
       #print("input: \n", d1)
       #print("filter: \n", d2)
       #print("grads: \n", d3_)
       #print("output dense: \n", output_dense)
       #print("output sparse: \n", value2)
       #print("output sparse v2: \n", value3)
-      
+
 
       print("time dense: ", t2 - t1)
       print("time sparse: ", t3 - t2)
 
 
     self.assertArrayNear(output_dense.flatten(), value2.flatten(), 1e-5)
-    self.assertArrayNear(output_dense.flatten(), value3.flatten(), 1e-5) 
+    self.assertArrayNear(output_dense.flatten(), value3.flatten(), 1e-5)
 
-  def testGradientValidPaddingStrideOne(self):   
+  def testGradientValidPaddingStrideOne(self):
     self.ConstructAndTestGradient(
       tensor_in_sizes=[2, 14, 15, 8, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 5, 7, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 5, 7, 1, 1], #[depth, height, width, in_channels, out_channels]
       stride=1,
       padding="VALID",
       test_type = "FILTER")
-    
+
     self.ConstructAndTestGradient(
       tensor_in_sizes=[2, 13, 13, 1, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 1, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 3, 1, 1, 1], #[depth, height, width, in_channels, out_channels]
       stride=1,
       padding="SAME",
       test_type = "FILTER")
-    
+
     self.ConstructAndTestGradient(
       tensor_in_sizes=[2, 5, 5, 6, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 5, 1, 2], #[depth, height, width, in_channels, out_channels] 
+      filter_in_sizes=[3, 3, 5, 1, 2], #[depth, height, width, in_channels, out_channels]
       stride=1,
       padding="SAME",
       test_type = "INPUT")
