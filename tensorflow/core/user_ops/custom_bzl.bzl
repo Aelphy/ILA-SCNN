@@ -7,10 +7,10 @@ def tf_custom_op_library_flags(name, srcs=[], gpu_srcs=[], deps=[]):
       name=name,
       srcs=srcs,
       deps=deps,
-      copts=tf_copts() + ["-fopenmp", "-fexceptions"],
+      copts=tf_copts() + ["-fopenmp", "-fexceptions", "-D_GLIBCXX_USE_CXX11_ABI=0"],
       linkshared=1,
       linkopts= [
-              "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash", 
+              "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash"
           ],
      )
 
