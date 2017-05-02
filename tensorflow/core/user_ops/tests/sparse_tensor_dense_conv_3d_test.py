@@ -45,46 +45,71 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
 
     # Initializes the input tensor with array containing incrementing
     # numbers from 1.
+    print("input shape", tensor_in_sizes)
+    print("filter shape", filter_in_sizes)
     with self.test_session(use_gpu=False) as sess:
-      scskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(t1ind, t1val, t1sh, t2ind, t2val, t2sh, strides, padding, dim);
+      scskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(t1ind, t1val, t1sh, t2ind, t2val, t2sh, strides, padding, dim, False);
+      approx_scskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(t1ind, t1val, t1sh, t2ind, t2val, t2sh, strides, padding, dim, True);
       conv = nn_ops.conv3d(d1, d2, strides, padding)
       f_conv = nn_ops.conv3d(d1, d2, no_strides, padding)
       t1 = time.time()
       expected = sess.run(conv)
       t2 = time.time()
+      print("time dense: ", t2 - t1)
       #nstr_expected = sess.run(f_conv)
       t3 = time.time()
       sv2 = sess.run(scskconv)
       t4 = time.time()
-    
-      print("input shape", tensor_in_sizes)
-      print("filter shape", filter_in_sizes)
-      print("time dense: ", t2 - t1)
       print("time sparse: ", t4 - t3)
+      t5 = time.time()
+      sv3 = sess.run(approx_scskconv)
+      t6 = time.time()
+      print("time approx sparse: ", t6 - t5)
 
-    value2 = sp.sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
-    #print("actual v2 sparse: \n", sv2)
-    #print("actual v2 sparse shape: \n", sv2.sparse_shape)
-    #print("actual v2: \n", value2)
+      #print("sparse input: \n", s1.eval())
+      
+    #print("actual sparse: \n", sv2)
+    #print("actual v2 sparse: \n", sv3)
     #print("expected: \n", expected)
+    value2 = sp.sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
+    value3 = sp.sparse_to_dense(sv3.sparse_indices, sv3.sparse_values, sv3.sparse_shape)
+    #print("actual v2 sparse shape: \n", sv2.sparse_shape)
+    #print("actual sparse: \n", value2)
+    #print("approx sparse: ", value3)
     #print("expected.shape: \n", expected.shape)
     #print("no stride expected: \n", nstr_expected)
     #self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5) 
     #print("actual 1: \n", value1)
 
     self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5)
-
+    
+    #approximative convolution: compare non-zero entries
+    approx_cmp = expected.flatten();
+    approx = value3.flatten();
+    for i in range(len(approx_cmp)):
+      if approx[i] == 0:
+        approx_cmp[i] = 0
+    self.assertArrayNear(approx_cmp, approx, 1e-5)
 
   def testConv3D1x1x1Filter(self):
-    # These are equivalent to the Conv2D1x1 case.        
+    # These are equivalent to the Conv2D1x1 case.
+    
     self._VerifyValues(
-      tensor_in_sizes=[1, 6, 1, 1, 1], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 1, 1, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      tensor_in_sizes=[1, 3, 4, 1, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 3, 1, 1, 1], #[depth, height, width, in_channels, out_channels] 
+      stride=1,
+      rho_data=1,
+      rho_filter=1,
+      padding='VALID')
+     
+    self._VerifyValues(
+      tensor_in_sizes=[1, 7, 12, 9, 2], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 7, 5, 2, 2], #[depth, height, width, in_channels, out_channels] 
       stride=2,
       rho_data=1,
       rho_filter=1,
       padding='VALID')
-    
+     
     self._VerifyValues(
       tensor_in_sizes=[1, 4, 5, 4, 1], #[batch, depth, height, width, in_channels]
       filter_in_sizes=[3, 3, 4, 1, 1], #[depth, height, width, in_channels, out_channels] 
@@ -92,10 +117,10 @@ class SparseTensorSparseKernelDenseConv3DTest(test.TestCase):
       rho_data=1,
       rho_filter=1,
       padding='SAME')
-    
+   
     self._VerifyValues(
-      tensor_in_sizes=[2, 5, 4, 7, 2], #[batch, depth, height, width, in_channels]
-      filter_in_sizes=[3, 3, 3, 2, 2], #[depth, height, width, in_channels, out_channels] 
+      tensor_in_sizes=[1, 3, 1, 4, 1], #[batch, depth, height, width, in_channels]
+      filter_in_sizes=[3, 1, 3, 1, 1], #[depth, height, width, in_channels, out_channels] 
       stride=1,
       rho_data=1,
       rho_filter=1,

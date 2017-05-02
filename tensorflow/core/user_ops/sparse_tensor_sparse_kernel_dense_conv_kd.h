@@ -32,11 +32,12 @@ namespace tensorflow {
                         std::vector<T>& output_values,
                         std::vector<int64>& out_shape,
                         const std::string padding="SAME",
-                        bool approx = false) {
+                        bool approx = false){
     int padding_type = 1;
     if(padding == "SAME") padding_type = 0;
 
-    auto in_ind_ptr = &in_ind; auto in_vals_ptr = &in_vals; auto f_ind_ptr = &f_ind; auto f_vals_ptr = &f_vals; auto in_sh_ptr = &in_sh;
+    auto in_ind_ptr = &in_ind; auto in_vals_ptr = &in_vals; auto in_sh_ptr = &in_sh; 
+    auto f_ind_ptr = &f_ind; auto f_vals_ptr = &f_vals; auto f_sh_ptr = &f_sh;
 
     const int id_in_batch = 0, id_in_depth = 1, id_in_width = id_in_depth + dim - 1, id_in_in_channels = id_in_depth + dim;
     const int id_f_depth = 0, id_f_width = id_f_depth + dim - 1, id_f_in_channels = id_f_depth + dim, id_f_out_channels = id_f_depth + dim + 1;
@@ -77,27 +78,38 @@ namespace tensorflow {
 
     LFMap<std::vector<int64>, T> map(out_shape);
     auto map_ptr = &map;
-    std::vector<std::atomic<T> > approx_out_val((*in_ind_ptr).dimension(0));
-    auto approx_out_val_ptr = &approx_out_val; auto output_keys_ptr = &output_keys; auto output_values_ptr = &output_values;
+    std::vector<std::atomic<T> > approx_out_val((*in_ind_ptr).dimension(0) * (*f_sh_ptr)(id_f_out_channels));
+    auto approx_out_val_ptr = &approx_out_val;
     if(approx){
-      output_keys.assign(in_ind.dimension(0), std::vector<int64>(in_ind.dimension(1)));
-      output_values.resize(in_ind.dimension(0));
-#pragma omp parallel for firstprivate(in_ind_ptr, approx_out_val_ptr, map_ptr, output_keys_ptr)
+//#pragma omp parallel for firstprivate(in_ind_ptr, f_sh_ptr, approx_out_val_ptr, map_ptr)
       for(int64 i = 0; i < in_ind_ptr->dimension(0); ++i){
         std::vector<int64> update_ids((*in_ind_ptr).dimension(1), 0);
-        for(size_t j = 0; j < (*in_ind_ptr).dimension(1); ++j){
+        update_ids[id_in_batch] = (*in_ind_ptr)(i,id_in_batch);
+        bool is_valid = true;
+        for(size_t j = id_in_depth; j <= id_in_width; ++j){
           update_ids[j] = (*in_ind_ptr)(i,j);
-          (*output_keys_ptr)[i][j] = (*in_ind_ptr)(i,j);
+          if(padding_type == 1){ //valid padding
+            update_ids[j] = update_ids[j] - filter_offset[j];
+          }
+          if((*in_sh_ptr)(j) > 1 && stride_[j] > 1){
+            update_ids[j] = float(update_ids[j]) / stride_[j]; //depth, width and height
+          }
+          if(update_ids[j] < 0 || update_ids[j] >= out_shape[j]){
+            is_valid = false;
+            break;
+          }
         }
-        map_ptr->insert(update_ids, i);
-        (*approx_out_val_ptr)[i] = 0;
+        if(is_valid)
+          map_ptr->insert(update_ids, i);
+        for(size_t j = 0; j < (*f_sh_ptr)(id_f_out_channels); ++j)
+          (*approx_out_val_ptr)[i + (j * (*in_ind_ptr).dimension(0))] = 0;
       }
 
     } else {
       map.reserve(in_ind.dimension(0) * f_ind.dimension(0));
     }
 
-#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr, approx_out_val_ptr)
+//#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr, approx_out_val_ptr)
     for(int64 i = 0; i < (*in_ind_ptr).dimension(0); ++i){ //TODO: parallelize filtering
       //a) prepare filter to update output based on current value
       std::vector<std::pair<int64,T> > filter_update;
@@ -132,25 +144,54 @@ namespace tensorflow {
             map_ptr->update(update_ids, update_val);
           } else {
             T id;
+            update_ids[id_in_in_channels] = 0;
             bool res_has_id = map_ptr->find(update_ids, id);
             if(res_has_id){
-              atomic_add_cas((*approx_out_val_ptr)[id], update_val);
+              size_t lookup_id = ((*f_ind_ptr)(j,id_f_out_channels) * (*in_ind_ptr).dimension(0)) + id;
+              atomic_add_cas((*approx_out_val_ptr)[lookup_id], update_val);
             }
           }
         }
       }
     }
     if(approx){
-#pragma omp parallel for firstprivate(output_values_ptr, approx_out_val_ptr)
-      for(int64 i = 0; i < output_values_ptr->size(); ++i){
-        (*output_values_ptr)[i] = (*approx_out_val_ptr)[i];
+      int64 num_non_zero = 0;
+      std::vector<int64> look_up_ids((*approx_out_val_ptr).size(), 0);
+      for(size_t i  = 0; i < (*approx_out_val_ptr).size(); ++i){
+        if((*approx_out_val_ptr)[i] != 0){
+          look_up_ids[num_non_zero] = i;
+          num_non_zero++;
+        }
+      }
+      auto look_up_ids_ptr = &look_up_ids;
+      output_keys.assign(num_non_zero, std::vector<int64>(in_ind.dimension(1)));
+      output_values.resize(num_non_zero, 0);
+      auto output_keys_ptr = &output_keys; auto output_values_ptr = &output_values;
+//#pragma omp parallel for firstprivate(output_values_ptr, output_keys_ptr, in_ind_ptr, approx_out_val_ptr, look_up_ids_ptr)
+      for(int64 i = 0; i < num_non_zero; ++i){
+        (*output_values_ptr)[i] = (*approx_out_val_ptr)[(*look_up_ids_ptr)[i]];
+        int64 data_id = (*look_up_ids_ptr)[i] % (*in_ind_ptr).dimension(0);
+        int64 data_channel = ((*look_up_ids_ptr)[i] - data_id) / (*in_ind_ptr).dimension(0);
+        (*output_keys_ptr)[i][id_in_batch] = (*in_ind_ptr)(data_id,id_in_batch);
+        (*output_keys_ptr)[i][id_in_in_channels] = data_channel;
+        //(*output_keys_ptr)[i][id_in_batch] = data_id;
+        for(int64 j = id_in_depth; j  <= id_in_width; ++j){
+          auto outplainid = (*in_ind_ptr)(data_id,j);
+          if(padding_type == 1){ //valid padding
+            outplainid = outplainid - filter_offset[j];
+          }
+          if((*in_sh_ptr)(j) > 1 && stride_[j] > 1){
+            outplainid = outplainid / stride_[j]; //depth, width and height
+          } 
+          (*output_keys_ptr)[i][j]= outplainid;
+        }
       }
     } else {
       map.traverse(output_keys,output_values);
     }
   }
 
-  //normal convolution in sparse data
+  //normal convolution in sparse data523.
   template <typename IndexT, typename FIndexT, typename ValueT, typename KeyT, typename DataT>
   class ConvKDHelper {
   public:
