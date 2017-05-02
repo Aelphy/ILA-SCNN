@@ -1,0 +1,9 @@
+#For the pip package
+bazel build --config=opt --jobs=10 --cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0" //tensorflow/tools/pip_package:build_pip_package
+#To compile and test sparse conv
+bazel test --config=opt --jobs=8 --cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0"  //tensorflow/core/user_ops:sparse_tensor_dense_conv_3d_test 
+#bazel test --jobs=8 --cxxopt="-D_GLIBCXX_USE_CXX11_ABI=0"  //tensorflow/core/user_ops:sparse_tensor_dense_conv_3d_test 
+
+g++  --std=c++11 -D_GLIBCXX_USE_CXX11_ABI=0 -shared  sparse_tensor_sparse_kernel_dense_conv_kd.cc -o tests/sparse_tensor_sparse_kernel_dense_conv_kd.so -fPIC -I $TF_INC -O2 -lcityhash
+
+
