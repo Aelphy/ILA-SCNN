@@ -81,7 +81,7 @@ namespace tensorflow {
     std::vector<std::atomic<T> > approx_out_val((*in_ind_ptr).dimension(0) * (*f_sh_ptr)(id_f_out_channels));
     auto approx_out_val_ptr = &approx_out_val;
     if(approx){
-//#pragma omp parallel for firstprivate(in_ind_ptr, f_sh_ptr, approx_out_val_ptr, map_ptr)
+#pragma omp parallel for firstprivate(in_ind_ptr, f_sh_ptr, approx_out_val_ptr, map_ptr)
       for(int64 i = 0; i < in_ind_ptr->dimension(0); ++i){
         std::vector<int64> update_ids((*in_ind_ptr).dimension(1), 0);
         update_ids[id_in_batch] = (*in_ind_ptr)(i,id_in_batch);
@@ -109,7 +109,7 @@ namespace tensorflow {
       map.reserve(in_ind.dimension(0) * f_ind.dimension(0));
     }
 
-//#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr, approx_out_val_ptr)
+#pragma omp parallel for firstprivate(in_ind_ptr, f_ind_ptr, in_vals_ptr, f_vals_ptr, in_sh_ptr, map_ptr, approx_out_val_ptr)
     for(int64 i = 0; i < (*in_ind_ptr).dimension(0); ++i){ //TODO: parallelize filtering
       //a) prepare filter to update output based on current value
       std::vector<std::pair<int64,T> > filter_update;
@@ -167,7 +167,7 @@ namespace tensorflow {
       output_keys.assign(num_non_zero, std::vector<int64>(in_ind.dimension(1)));
       output_values.resize(num_non_zero, 0);
       auto output_keys_ptr = &output_keys; auto output_values_ptr = &output_values;
-//#pragma omp parallel for firstprivate(output_values_ptr, output_keys_ptr, in_ind_ptr, approx_out_val_ptr, look_up_ids_ptr)
+#pragma omp parallel for firstprivate(output_values_ptr, output_keys_ptr, in_ind_ptr, approx_out_val_ptr, look_up_ids_ptr)
       for(int64 i = 0; i < num_non_zero; ++i){
         (*output_values_ptr)[i] = (*approx_out_val_ptr)[(*look_up_ids_ptr)[i]];
         int64 data_id = (*look_up_ids_ptr)[i] % (*in_ind_ptr).dimension(0);

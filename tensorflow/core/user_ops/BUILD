@@ -28,7 +28,9 @@ tf_custom_op_library_flags(
               "sparse_tensor_dense_relu_op_functor.h",
               "sparse_tensor_dense_relu_op.h",
               "indexing.h",
-              "hash_map.h"
+              "hash_map.h",
+              "sparse_tensor_pooling.cc",
+              "sparse_tensor_pooling.h",
             ],
 )
 
