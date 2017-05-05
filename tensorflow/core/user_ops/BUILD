@@ -30,6 +30,7 @@ tf_custom_op_library_flags(
               "indexing.h",
               "hash_map.h",
               "sparse_tensor_pooling.cc",
+              "sparse_tensor_pooling_grad.cc",
               "sparse_tensor_pooling.h",
             ],
 )
