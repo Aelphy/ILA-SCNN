@@ -2,7 +2,7 @@ clear;
 clc;
 close all;
 
-data = importdata('eval_time_conv.txt');
+data = importdata('eval_time_conv_2.txt');
 
 res = data(:,1)';
 dc = data(:,2)';

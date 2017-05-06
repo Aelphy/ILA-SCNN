@@ -74,9 +74,9 @@ class SparseTensorPoolingGrad : public OpKernel {
                           SparseTensorPoolingGrad<CPUDevice, type>);
 
 REGISTER_CPU(float);
-//REGISTER_CPU(double);
-//REGISTER_CPU(int32);
-//REGISTER_CPU(complex64);
-//REGISTER_CPU(complex128);
+REGISTER_CPU(double);
+REGISTER_CPU(int32);
+REGISTER_CPU(complex64);
+REGISTER_CPU(complex128);
 #undef REGISTER_CPU
 

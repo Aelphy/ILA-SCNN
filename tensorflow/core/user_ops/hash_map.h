@@ -48,6 +48,7 @@ public:
     traverse(std::vector<KeyType>& keys, std::vector<ValT>& values, std::vector<IdT>& ids){
       keys.resize(m_cmap.size());
       values.resize(m_cmap.size());
+      ids.resize(m_cmap.size());
       auto lmap = m_cmap.lock_table();
       int cnt = 0;
       for(auto it = lmap.begin(); it != lmap.end(); ++it, cnt++){
