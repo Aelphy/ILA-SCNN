@@ -1,6 +1,7 @@
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import sparse_ops
+import tensorflow as tf
 
 sparse_nn_ops = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
@@ -16,16 +17,6 @@ def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
       (input_indices, input_values, input_shape, filter_indices, filter_value, filter_shape)
     The gradients for input_indices, input_shape, filter_indices and filter_shape are None.
   """
-  #input_indices = op.inputs[0]
-  #input_values = op.inputs[1]
-  #input_shape = op.inputs[2]
-  #filter_indices = op.inputs[3]
-  #filter_values = op.inputs[4]
-  #filter_shape = op.inputs[5]
-  #strides = op.get_attr("strides")
-  #padding = op.get_attr("padding")
-
-
   return [None, 
           sparse_nn_ops.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(op.inputs[0],
                                                 op.inputs[1],
@@ -40,7 +31,6 @@ def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
                                                 padding=op.get_attr("padding")),
           None,
           None,
-          #SparseTensorSparseKernelDenseConvKDFilterGrad
           sparse_nn_ops.sparse_tensor_sparse_kernel_dense_conv_kd_filter_grad(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
