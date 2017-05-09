@@ -24,7 +24,7 @@ namespace tensorflow {
 
     auto map_ptr = &map; auto in_ind_ptr = &in_ind; auto p_sh_ptr = &p_sh; auto in_val_ptr = &in_val;
 
-//#pragma omp parallel for firstprivate(in_ind_ptr, p_sh_ptr, in_val_ptr, map_ptr)
+#pragma omp parallel for firstprivate(in_ind_ptr, p_sh_ptr, in_val_ptr, map_ptr)
     for(size_t i = 0; i < (*in_ind_ptr).dimension(0); ++i){
       std::vector<int64> update_id((*in_ind_ptr).dimension(1), 0);
       for(size_t j = 0; j < update_id.size(); ++j){

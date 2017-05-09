@@ -28,9 +28,9 @@ REGISTER_OP("SparseTensorSparseKernelDenseConvKD")
   .Input("filter_indices: int64")
   .Input("filter_values: T")
   .Input("filter_shape: int64")
-  .Output("sparse_indices: int64")
-  .Output("sparse_values: T")
-  .Output("sparse_shape: int64")
+  .Output("out_indices: int64")
+  .Output("out_values: T")
+  .Output("out_shape: int64")
   .Attr("strides: list(int)")
   .Attr("padding: string")
   .Attr("filter_dim: int = 3")
@@ -84,9 +84,9 @@ class SparseTensorSparseKernelDenseConvKD : public OpKernel {
     TensorShape out_ind_shape = {(int64) output_keys.size(), (int64) in_ind.dimension(1)};
     TensorShape out_val_shape = {(int64) output_keys.size()};
     TensorShape out_sh_shape = {(int64) in_ind.dimension(1)};
-    OP_REQUIRES_OK(context, context->allocate_output("sparse_indices", out_ind_shape, &sparse_indices));
-    OP_REQUIRES_OK(context, context->allocate_output("sparse_values", out_val_shape, &sparse_values));
-    OP_REQUIRES_OK(context, context->allocate_output("sparse_shape", out_sh_shape, &sparse_shape));
+    OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &sparse_indices));
+    OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &sparse_values));
+    OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &sparse_shape));
 
     auto out_ind = sparse_indices->matrix<int64>(); //channels, depth, height, width, optionally others TODO: other cases?
     auto out_vals = sparse_values->flat<T>();

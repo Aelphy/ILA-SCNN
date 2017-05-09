@@ -54,4 +54,4 @@ with tf.Session(config=config) as sess:
   print("time dense: ", t2 - t1)
   print("time sparse: ", t3 - t2)
 
-#value2 = sp.sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
+#value2 = sp.sparse_to_dense(sv2.out_indices, sv2.out_values, sv2.out_shape)

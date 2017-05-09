@@ -22,19 +22,18 @@ sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
 #just a quick test, no nice code
 
-print(dir(sc_module))
 
-
-tensor_in_sizes=[1, 20, 20, 20, 1] #[batch, depth, height, width, in_channels]
+tensor_in_sizes=[5, 36, 36, 36, 1] #[batch, depth, height, width, in_channels]
 filter_in_sizes=[3, 3, 3, 1, 1] #[depth, height, width, in_channels, out_channels] 
 stride=1
-rho_data = 0.01
+rho_data = 0.03
 rho_filter=1
 padding='SAME'
 dim = 3
+approx = True
 
-def sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dense_in, sparse_in_ind, sparse_in_val):  
-  [filter1_ind, filter1_weights, filter1_sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes, -5, 5)
+def sparse_and_dense_conv_relu_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dense_in, sparse_in_ind, sparse_in_val):  
+  [filter1_ind, filter1_weights, filter1_sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes, 1, 10)
   sparse_filter_weights = tf.SparseTensor(indices=filter1_ind, values=filter1_weights, dense_shape=filter1_sh)
   dense_filter_w = sp.sparse_to_dense(filter1_ind, filter1_weights, filter1_sh)
   dense_filter_weights = tf.constant(dense_filter_w, dtype=tf.float32)
@@ -45,9 +44,19 @@ def sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, r
   t_in_sh = tf.constant(tensor_in_sizes, dtype=tf.int64);
   conv = nn_ops.conv3d(dense_in, dense_filter_weights, strides, padding)
   conv_relu = nn_ops.relu(conv)
-  stskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(sparse_in_ind, sparse_in_val, t_in_sh, f_ind, f_w, f_sh, strides, padding, dim);
-  stskconv_relu = sc_module.sparse_relu(stskconv.sparse_indices, stskconv.sparse_values, stskconv.sparse_shape);
+  stskconv = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(sparse_in_ind, sparse_in_val, t_in_sh, f_ind, f_w, f_sh, strides, padding, dim, True);
+  stskconv_relu = sc_module.sparse_relu(stskconv.out_indices, stskconv.out_values, stskconv.out_shape);
   return [conv_relu, stskconv_relu];
+
+def sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dense_in, sparse_in_ind, sparse_in_val):
+  [dc1, sc1] = sparse_and_dense_conv_relu_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dense_in, sparse_in_ind, sparse_in_val)
+  [dc2, sc2] = sparse_and_dense_conv_relu_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dc1, sc1.out_indices, sc1.out_values);
+  [dc3, sc3] = sparse_and_dense_conv_relu_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dc2, sc2.out_indices, sc2.out_values);
+  return [dc3, sc3]
+  pooling_size = [1,2,2,2,1]
+  pooling = tf.nn.max_pool3d(dc3, pooling_size, pooling_size, "SAME");
+  stpooling = sc_module.sparse_tensor_max_pooling(sc3.out_indices, sc3.out_values, sc3.out_shape, pooling_size);
+  return [pooling, stpooling]
 
 
 if isinstance(stride, collections.Iterable):
@@ -59,12 +68,20 @@ else:
 sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_shape=data_sh)
 dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
 
+
+v1_sparseness = sp.checkSparsity(dense_data)
 [dc1, sc1] = sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dense_data, data_ind, data_val);
-[dc2, sc2] = sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dc1, sc1.sparse_indices, sc1.sparse_values);
-[dc3, sc3] = sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dc2, sc2.sparse_indices, sc2.sparse_values);
+[dc2, sc2] = sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dc1, sc1.out_indices, sc1.out_values);
+[dc3, sc3] = sparse_and_dense_block(tensor_in_sizes, filter_in_sizes, strides, padding, rho_filter, dim, dc2, sc2.out_indices, sc2.out_values);
+#fcd = 
+
+#c = tf.nn.softmax_cross_entropy_with_logits(
+#    logits=b, labels=a
+#    )
 
 
 #print("dense data: ", dense_data)
+
 
 #pid = os.getpid()
 #print(pid)
@@ -78,6 +95,7 @@ config = tf.ConfigProto(
 	)
 
 with tf.Session(config=config) as sess:
+
   t1 = time.time()
   expected = sess.run(dc3)
   t2 = time.time()
@@ -90,7 +108,10 @@ print("filter shape", filter_in_sizes)
 print("time dense: ", t2 - t1)
 print("time sparse: ", t4 - t3)
 
-value2 = sp.sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
+value2 = sp.sparse_to_dense(sv2.out_indices, sv2.out_values, sv2.out_shape)
+v2_sparseness = sp.checkSparsity(value2)
+print("Density before convolution: ", 1 - v1_sparseness)
+print("Density after convolution: ", 1 - v2_sparseness)
 
 #print("values sparse: ", value2)
 #print("expected values: ", expected)

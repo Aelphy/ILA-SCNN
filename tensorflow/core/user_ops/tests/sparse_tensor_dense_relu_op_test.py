@@ -53,7 +53,7 @@ class SparseTensorDenseReluTest(test.TestCase):
         t2 = time.time()
         sv2 = sess.run(strelu)
         t3 = time.time()
-        strelu_grad = sc_module.sparse_relu_grad(t1ind, t1val, sv2.sparse_indices, sv2.sparse_values);
+        strelu_grad = sc_module.sparse_relu_grad(t1ind, t1val, sv2.out_indices, sv2.out_values);
         relu_grad = gen_nn_ops._relu_grad(d1, expected)
         t4 = time.time()
         expected_grad = sess.run(relu_grad)
@@ -68,7 +68,7 @@ class SparseTensorDenseReluTest(test.TestCase):
         t2 = time.time()
         sv2 = sess.run(strelu)
         t3 = time.time()
-        strelu_grad = sc_module.sparse_relu6_grad(t1ind, t1val, sv2.sparse_indices, sv2.sparse_values);
+        strelu_grad = sc_module.sparse_relu6_grad(t1ind, t1val, sv2.out_indices, sv2.out_values);
         relu_grad = gen_nn_ops._relu6_grad(d1, expected)
         t4 = time.time()
         expected_grad = sess.run(relu_grad)
@@ -83,7 +83,7 @@ class SparseTensorDenseReluTest(test.TestCase):
         t2 = time.time()
         sv2 = sess.run(strelu)
         t3 = time.time()
-        strelu_grad = sc_module.sparse_elu_grad(t1ind, sv2.sparse_indices, sv2.sparse_values, t1val);
+        strelu_grad = sc_module.sparse_elu_grad(t1ind, sv2.out_indices, sv2.out_values, t1val);
         relu_grad = gen_nn_ops._elu_grad(expected, d1)
         t4 = time.time()
         expected_grad = sess.run(relu_grad)
@@ -97,8 +97,8 @@ class SparseTensorDenseReluTest(test.TestCase):
       print("time sparse: ", t3 - t2)
       print("time dense grad: ", t5 - t4)
       print("time sparse grad: ", t6 - t5)
-    value2 = sp.sparse_to_dense(sv2.sparse_indices, sv2.sparse_values, sv2.sparse_shape)
-    value2grad = sp.sparse_to_dense(sv2.sparse_indices, sv2_grad, sv2.sparse_shape)
+    value2 = sp.sparse_to_dense(sv2.out_indices, sv2.out_values, sv2.out_shape)
+    value2grad = sp.sparse_to_dense(sv2.out_indices, sv2_grad, sv2.out_shape)
     #print("dense result: ", expected)
     #print("sparse result: ", value2)
     self.assertArrayNear(expected.flatten(), value2.flatten(), 1e-5)

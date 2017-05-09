@@ -35,8 +35,8 @@ dim = 3
 rho_filter=1
 padding='SAME'
 
-num_resolutions = 4
-res_step_size = 1
+num_resolutions = 64
+res_step_size = 4
 num_trials = 4
 
 all_t_s = [None] * num_resolutions
@@ -76,7 +76,7 @@ for res_step in range(3, num_resolutions + 1):
   t_dense = t_dense / float(num_trials)
   print("time dense: ", t_dense)
 
-  print("expected: ", expected)
+#  print("expected: ", expected)
 
   t_sparse = 0
   time.sleep(1)
@@ -90,8 +90,8 @@ for res_step in range(3, num_resolutions + 1):
   t_sparse = t_sparse / float(num_trials)
   print("time sparse: ", t_sparse)
   
-  value2 = sp.sparse_to_dense(sv2.out_indices, sv2.out_values, sv2.out_shape)
-  print("out: ", value2)
+#  value2 = sp.sparse_to_dense(sv2.out_indices, sv2.out_values, sv2.out_shape)
+#  print("out: ", value2)
 
   t_bp1 = 0
   t_bp2 = 0
@@ -124,6 +124,8 @@ for res_step in range(3, num_resolutions + 1):
     t_bp2 = t_bp2 + t2 - t1
   t_bp2 = t_bp2 / float(num_trials)
   print("time bp2: ", t_bp2)'''
+  
+  tf.reset_default_graph()
 
   all_res[res_step - 1] = res
   all_t_s[res_step - 1] = t_sparse
