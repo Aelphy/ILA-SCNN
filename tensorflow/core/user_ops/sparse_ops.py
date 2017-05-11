@@ -82,3 +82,33 @@ def _SparseTensorSparseKernelDenseConvKDFilterGrad(op, grad):
                                                 strides=op.get_attr("strides"),
                                                 padding=op.get_attr("padding")),
           None]
+
+
+
+@ops.RegisterGradient("SparseRelu")
+def _SparseReluGrad(op, grad):
+  return [None,
+          sparse_nn_ops.sparse_relu_grad(op.inputs[0],
+                                         op.inputs[1],
+                                         op.outputs[1],
+                                         grad,
+                                         op.outputs[2]),
+          None]
+
+
+@ops.RegisterGradient("SparseTensorMaxPooling")
+def _SparseTensorMaxPoolingGrad(op, grad):
+  return [None,
+          sparse_nn_ops.sparse_relu_grad(op.inputs[0],
+                                         grad,
+                                         op.outputs[3]),
+          None]
+
+
+
+@ops.RegisterGradient("DirectSparseToDense")
+def _DirectSparseToDenseGrad(op, grad):
+  return [None,
+          sparse_nn_ops.direct_sparse_to_dense_grad(op.inputs[0],
+                                         grad),
+          None]

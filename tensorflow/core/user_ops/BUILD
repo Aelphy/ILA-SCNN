@@ -13,9 +13,6 @@ load("//tensorflow:tensorflow.bzl", "tf_py_wrap_cc")
 load("//tensorflow/core/user_ops:custom_bzl.bzl", "tf_custom_op_library_flags")
 
 
-
-
-
 tf_custom_op_library_flags(
     name = "sparse_tensor_dense_conv_3d.so",
 
@@ -32,13 +29,16 @@ tf_custom_op_library_flags(
               "sparse_tensor_pooling.cc",
               "sparse_tensor_pooling_grad.cc",
               "sparse_tensor_pooling.h",
+              "direct_sparse_to_dense_op.cc",
+              "direct_sparse_to_dense_op_grad.cc",
             ],
 )
 
 py_library(
     name = "sparse_nn_ops",
     srcs = [
-              "sparse_ops.py"
+              "sparse_ops.py",
+              "sparse_layers.py"
            ],
     data = [":sparse_tensor_dense_conv_3d.so"],
     srcs_version = "PY2AND3",

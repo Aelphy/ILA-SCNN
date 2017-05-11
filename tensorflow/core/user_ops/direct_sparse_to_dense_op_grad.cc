@@ -3,7 +3,6 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
-#include "sparse_tensor_pooling.h"
 
 
 /** SparseTensorMaxPoolingGrad
@@ -18,11 +17,11 @@
   */
 
 
-REGISTER_OP("SparseTensorMaxPoolingGrad")
+REGISTER_OP("DirectSparseToDenseGrad")
   .Attr("T: realnumbertype")
-  .Input("in_indices: int64")
+  .Attr("Tindices: realnumbertype")
+  .Input("in_indices: Tindices")
   .Input("gradients: T")
-  .Input("corresponding_indices: int64")
   .Output("backprops: T");
 
 
@@ -32,10 +31,10 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 using namespace tensorflow;
 
-template <typename Device, typename T>
-class SparseTensorPoolingGrad : public OpKernel {
+template <typename Device, typename T, typename Tindices>
+class DirectSparseToDenseGrad : public OpKernel {
  public:
-  explicit SparseTensorPoolingGrad(OpKernelConstruction* context) : OpKernel(context){}
+  explicit DirectSparseToDenseGrad(OpKernelConstruction* context) : OpKernel(context){}
 
 
 
@@ -46,9 +45,9 @@ class SparseTensorPoolingGrad : public OpKernel {
     OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
     OP_REQUIRES_OK(context, context->input("gradients", &gradients));
     OP_REQUIRES_OK(context, context->input("corresponding_indices", &corresponding_ind));
-    auto in_ind = in_indices->matrix<int64>(); //channels, depth, height, width, optionally others TODO: other cases?
+    auto in_ind = in_indices->matrix<Tindices>(); //channels, depth, height, width, optionally others TODO: other cases?
     auto grads = gradients->flat<T>();
-    auto cor_ind = corresponding_ind->flat<int64>();
+    auto cor_ind = corresponding_ind->flat<Tindices>();
 
     //allocate output data
     Tensor *backprops = NULL;
@@ -63,20 +62,20 @@ class SparseTensorPoolingGrad : public OpKernel {
     }
     
 #pragma omp parallel for firstprivate(in_ind_ptr, grads_ptr, cor_ind_ptr, bp_ptr)
-    for(int64 i = 0; i < cor_ind_ptr->dimension(0); ++i){
-      (*bp_ptr)((*cor_ind_ptr)(i)) = (*grads_ptr)(i);
+    for(int64 i = 0; i < in_ind_ptr->dimension(0); ++i){
+      (*bp_ptr)(i) = (*grads_ptr)((*in_ind_ptr)(i));
     }
   }
 };
 
-#define REGISTER_CPU(type)                                   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorMaxPoolingGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
-                          SparseTensorPoolingGrad<CPUDevice, type>);
+#define REGISTER_CPU(type, index_type)                                   \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseToDenseGrad").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<index_type>("Tindices"), \
+                          DirectSparseToDenseGrad<CPUDevice, type, index_type>);
 
-REGISTER_CPU(float);
-REGISTER_CPU(double);
-REGISTER_CPU(int32);
-REGISTER_CPU(complex64);
-REGISTER_CPU(complex128);
+REGISTER_CPU(float, int64);
+REGISTER_CPU(double, int64);
+REGISTER_CPU(int32, int64);
+REGISTER_CPU(complex64, int64);
+REGISTER_CPU(complex128, int64);
 #undef REGISTER_CPU
 
