@@ -17,11 +17,11 @@ import numpy as np
 import time
 import sparse_tools as sp
 import os
+from sparse_module import sparse_nn_ops as sc_module
 
 pid = os.getpid()
 print(pid)
 
-sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
 
 #print(dir(sc_module))
 

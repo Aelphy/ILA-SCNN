@@ -18,12 +18,12 @@ import time
 import sparse_tools as sp
 import os
 from tensorflow.python import debug as tf_debug
-sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
+from sparse_module import sparse_nn_ops as sc_module
 
 #just a quick test, no nice code
 
 
-tensor_in_sizes=[1, 100, 100, 100, 1] #[batch, depth, height, width, in_channels]
+tensor_in_sizes=[5, 100, 100, 100, 1] #[batch, depth, height, width, in_channels]
 filter_in_sizes=[3, 3, 3, 1, 1] #[depth, height, width, in_channels, out_channels] 
 stride=1
 rho_data = 0.01
@@ -74,9 +74,7 @@ v1_sparseness = sp.checkSparsity(dense_data)
 #raw_input("Press Enter to continue...")
 
 config = tf.ConfigProto(
-			device_count = {'GPU': 0},
-      inter_op_parallelism_threads=2,
-      intra_op_parallelism_threads=1
+			device_count = {'GPU': 0}
 	)
 
 with tf.Session(config=config) as sess:

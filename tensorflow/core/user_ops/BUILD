@@ -38,7 +38,8 @@ py_library(
     name = "sparse_nn_ops",
     srcs = [
               "sparse_ops.py",
-              "sparse_layers.py"
+              "sparse_module",
+              "sparse_tools.py",
            ],
     data = [":sparse_tensor_dense_conv_3d.so"],
     srcs_version = "PY2AND3",

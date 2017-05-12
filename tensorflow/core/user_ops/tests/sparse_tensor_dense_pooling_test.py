@@ -32,10 +32,7 @@ import random
 import numpy as np
 import time
 import sparse_tools as sp
-
-tf.logging.set_verbosity(tf.logging.INFO)
-
-sc_module = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
+from sparse_module import sparse_nn_ops as sc_module
 
 class SparseTensorDensePoolingTest(test.TestCase):
 

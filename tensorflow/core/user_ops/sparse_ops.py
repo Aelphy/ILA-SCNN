@@ -2,8 +2,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import sparse_ops
 import tensorflow as tf
-
-sparse_nn_ops = tf.load_op_library('sparse_tensor_dense_conv_3d.so')
+from sparse_module import sparse_nn_ops as sparse_nn_ops
 
 @ops.RegisterGradient("SparseTensorSparseKernelDenseConvKD")
 def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
