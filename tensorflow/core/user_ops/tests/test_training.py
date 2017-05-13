@@ -80,13 +80,12 @@ res = 20
 batch_size = 5
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
+nr_batchs = 10
 
 filter_in_sizes = np.array(filter_in_sizes_, dtype=np.int64)
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
 
-[data_ind, data_val, data_sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
-random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_shape=data_sh)
-random_dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
+
 
 dense_data = tf.placeholder(tf.float32, shape=tensor_in_sizes, name="dense_placeholder")
 sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="sparse_placeholder")
@@ -97,6 +96,8 @@ else:
    strides = [1, stride, stride, stride, 1]
 
 var_list = []
+
+#initialize graph
 
 [dc1, sc1_] = create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sparse_data, dense_data, "sc1")
 sc1 = layer_to_sparse_tensor(sc1_)
@@ -126,9 +127,6 @@ sd_flat = tf.reshape(sd, [batch_size, -1])
 dd_flat = tf.reshape(d_out, [batch_size, -1])
 
 dense_labels = tf.placeholder(tf.float32, shape=sd_flat.shape, name="labels_placeholder")
-
-[label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, dd_flat.get_shape().as_list())
-random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 sd_loss = tf.Variable(tf.losses.softmax_cross_entropy(dense_labels, sd_flat), name = "sparse_loss")
 dd_loss = tf.Variable(tf.losses.softmax_cross_entropy(dense_labels, dd_flat), name = "dense_loss")
 
@@ -138,13 +136,15 @@ sd_train_op = tf.contrib.layers.optimize_loss(
     sd_loss,
     tf.contrib.framework.get_global_step(),
     optimizer='SGD',
-    learning_rate=0.001)
+    learning_rate=0.001,
+    variables = tf.trainable_variables())
 
 dd_train_op = tf.contrib.layers.optimize_loss(
     dd_loss,
     tf.contrib.framework.get_global_step(),
     optimizer='SGD',
-    learning_rate=0.001)
+    learning_rate=0.001,
+    variables = tf.trainable_variables())
 
 config = tf.ConfigProto(
   device_count = {'GPU': 0}
@@ -153,14 +153,42 @@ config = tf.ConfigProto(
 initlocal = tf.variables_initializer(var_list)
 initall = tf.global_variables_initializer()
 
+#initialize variables
+#create random training data
+[data_ind, data_val, data_sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
+random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_shape=data_sh)
+random_dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
+
+[label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, dd_flat.get_shape().as_list())
+random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 with tf.Session(config=config) as sess:
+  trainable = tf.trainable_variables()
+  print("trainable: ", trainable)
   writer = tf.summary.FileWriter("/tmp/test", sess.graph)
   feed_dict={sparse_data: tf.SparseTensorValue(data_ind, data_val, data_sh), dense_data: random_dense_data, dense_labels: random_dense_label}
   sess.run(initlocal, feed_dict=feed_dict)
   sess.run(initall, feed_dict=feed_dict)
-  sparse_result = sess.run(sd_train_op, feed_dict=feed_dict)
-  dense_result = sess.run(dd_train_op, feed_dict=feed_dict)
+  
+  for i in range(1, nr_batchs):
+    print("batch nr: ", i)
+    #create random training data
+    [data_ind, data_val, data_sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
+    random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_shape=data_sh)
+    random_dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
 
-print("sparse result: ", sparse_result)
-print("dense result: ", dense_result)
+    [label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, dd_flat.get_shape().as_list())
+    random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
+
+    #perform training
+    sparse_result = sess.run(sd_train_op, feed_dict=feed_dict)
+    dense_result = sess.run(dd_train_op, feed_dict=feed_dict)
+    rsc1 = tf.get_default_graph().get_tensor_by_name("sc1/filter_weights:0")
+    print("filter weights: ", rsc1.eval())
+    #grads = tf.gradients(sd_loss, var_list)
+    #res_grads = sess.run(grads, feed_dict=feed_dict)
+    #print("resulting gradients", res_grads)
+
+  print("sparse result: ", sparse_result)
+  print("dense result: ", dense_result)
+
 

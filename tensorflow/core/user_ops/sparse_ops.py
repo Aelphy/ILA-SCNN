@@ -110,4 +110,5 @@ def _DirectSparseToDenseGrad(op, grad):
   return [None,
           sparse_nn_ops.direct_sparse_to_dense_grad(op.inputs[0],
                                          grad),
+          None,
           None]
