@@ -66,3 +66,6 @@ def create_dense_relu_layer(dense_data):
 
 def create_dense_pooling_layer(dense_data, pooling_sizes, padding = "SAME"):
   return tf.nn.max_pool3d(dense_data, pooling_sizes, pooling_sizes, padding);
+
+def create_direct_sparse_to_dense(sparse_data):
+  return  sc_module.direct_sparse_to_dense(sparse_indices=sparse_data.indices, output_shape=sparse_data.dense_shape, sparse_values=sparse_data.values, default_value=0, validate_indices=False)

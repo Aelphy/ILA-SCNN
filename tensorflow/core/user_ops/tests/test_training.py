@@ -20,7 +20,9 @@ import os
 import sparse_ops
 from tensorflow.python import debug as tf_debug
 from sparse_module import sparse_nn_ops as sc_module
+import pdb
 
+tf.logging.set_verbosity(tf.logging.DEBUG)
 
 def layer_to_sparse_tensor(layer):
   tensor = tf.SparseTensor(indices = layer.out_indices, values = layer.out_values, dense_shape = layer.out_shape)
@@ -101,38 +103,40 @@ var_list = []
 
 [dc1, sc1_] = create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sparse_data, dense_data, "sc1")
 sc1 = layer_to_sparse_tensor(sc1_)
-sr1 = layer_to_sparse_tensor(create_sparse_relu_layer(sc1))
-dr1 = create_dense_relu_layer(dc1)
-sp1 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr1, pooling_sizes, dim))
-dp1 = create_dense_pooling_layer(dr1, pooling_sizes)
-[dc2, sc2_] = create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sp1, dp1, "sc2")
-sc2 = layer_to_sparse_tensor(sc2_)
-sr2 = layer_to_sparse_tensor(create_sparse_relu_layer(sc2))
-dr2 = create_dense_relu_layer(dc2)
-sp2 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr2, pooling_sizes, dim))
-dp2 = create_dense_pooling_layer(dr2, pooling_sizes)
-[dc3, sc3_] = create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sp2, dp2, "sc3")
-sc3 = layer_to_sparse_tensor(sc3_)
-sr3 = layer_to_sparse_tensor(create_sparse_relu_layer(sc3))
-dr3 = create_dense_relu_layer(dc3)
-sp3 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr3, pooling_sizes, dim))
-dp3 = create_dense_pooling_layer(dr3, pooling_sizes)
+#sr1 = layer_to_sparse_tensor(create_sparse_relu_layer(sc1))
+#dr1 = create_dense_relu_layer(dc1)
+#sp1 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr1, pooling_sizes, dim))
+#dp1 = create_dense_pooling_layer(dr1, pooling_sizes)
+#[dc2, sc2_] = create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sp1, dp1, "sc2")
+#sc2 = layer_to_sparse_tensor(sc2_)
+#sr2 = layer_to_sparse_tensor(create_sparse_relu_layer(sc2))
+#dr2 = create_dense_relu_layer(dc2)
+#sp2 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr2, pooling_sizes, dim))
+#dp2 = create_dense_pooling_layer(dr2, pooling_sizes)
+#[dc3, sc3_] = create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sp2, dp2, "sc3")
+#sc3 = layer_to_sparse_tensor(sc3_)
+#sr3 = layer_to_sparse_tensor(create_sparse_relu_layer(sc3))
+#dr3 = create_dense_relu_layer(dc3)
+#sp3 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr3, pooling_sizes, dim))
+#dp3 = create_dense_pooling_layer(dr3, pooling_sizes)
 
-s_out = sp3
-d_out = dp3
+s_out = sc1
+d_out = dc1
 
 sd = sc_module.direct_sparse_to_dense(sparse_indices=s_out.indices, output_shape=s_out.dense_shape, sparse_values=s_out.values, default_value=0, validate_indices=False)
 
 sd_flat = tf.reshape(sd, [batch_size, -1])
 dd_flat = tf.reshape(d_out, [batch_size, -1])
 
-dense_labels = tf.placeholder(tf.float32, shape=sd_flat.shape, name="labels_placeholder")
-sd_loss = tf.Variable(tf.losses.softmax_cross_entropy(dense_labels, sd_flat), name = "sparse_loss")
-dd_loss = tf.Variable(tf.losses.softmax_cross_entropy(dense_labels, dd_flat), name = "dense_loss")
+dense_labels = tf.placeholder(tf.float32, shape=dd_flat.shape, name="labels_placeholder")
+dd_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=dd_flat, labels=dense_labels))
+sd_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=sd_flat, labels=dense_labels))
 
-#sd_train_op = tf.train.GradientDescentOptimizer(0.01).minimize(sd_loss)
 
-sd_train_op = tf.contrib.layers.optimize_loss(
+dd_train_op = tf.train.AdagradOptimizer(0.1).minimize(dd_loss)
+sd_train_op = tf.train.AdagradOptimizer(0.1)
+
+'''sd_train_op = tf.contrib.layers.optimize_loss(
     sd_loss,
     tf.contrib.framework.get_global_step(),
     optimizer='SGD',
@@ -143,12 +147,16 @@ dd_train_op = tf.contrib.layers.optimize_loss(
     dd_loss,
     tf.contrib.framework.get_global_step(),
     optimizer='SGD',
-    learning_rate=0.001,
+    learning_rate=0.00001,
     variables = tf.trainable_variables())
+'''
 
 config = tf.ConfigProto(
   device_count = {'GPU': 0}
 )
+
+sd_train =  sd_train_op.minimize(sd_loss)
+sd_grads = sd_train_op.compute_gradients(sd_loss)
 
 initlocal = tf.variables_initializer(var_list)
 initall = tf.global_variables_initializer()
@@ -180,13 +188,13 @@ with tf.Session(config=config) as sess:
     random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 
     #perform training
-    sparse_result = sess.run(sd_train_op, feed_dict=feed_dict)
+    sparse_result = sess.run(sd_train, feed_dict=feed_dict)
     dense_result = sess.run(dd_train_op, feed_dict=feed_dict)
+
     rsc1 = tf.get_default_graph().get_tensor_by_name("sc1/filter_weights:0")
     print("filter weights: ", rsc1.eval())
-    #grads = tf.gradients(sd_loss, var_list)
-    #res_grads = sess.run(grads, feed_dict=feed_dict)
-    #print("resulting gradients", res_grads)
+    rdc1 = tf.get_default_graph().get_tensor_by_name("sc1/dense_weights:0")
+    print("filter weights: ", rdc1.eval())
 
   print("sparse result: ", sparse_result)
   print("dense result: ", dense_result)

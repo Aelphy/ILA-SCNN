@@ -41,13 +41,11 @@ class DirectSparseToDenseGrad : public OpKernel {
   void Compute(OpKernelContext* context) override {
 
     //get input data
-    const Tensor *in_indices, *gradients, *corresponding_ind;
+    const Tensor *in_indices, *gradients;
     OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
     OP_REQUIRES_OK(context, context->input("gradients", &gradients));
-    OP_REQUIRES_OK(context, context->input("corresponding_indices", &corresponding_ind));
     auto in_ind = in_indices->matrix<Tindices>(); //channels, depth, height, width, optionally others TODO: other cases?
     auto grads = gradients->flat<T>();
-    auto cor_ind = corresponding_ind->flat<Tindices>();
 
     //allocate output data
     Tensor *backprops = NULL;
@@ -55,13 +53,13 @@ class DirectSparseToDenseGrad : public OpKernel {
     OP_REQUIRES_OK(context, context->allocate_output("backprops", backprops_shape, &backprops));
     auto bp = backprops->flat<T>();
 
-    auto in_ind_ptr = &in_ind; auto grads_ptr = &grads; auto cor_ind_ptr = &cor_ind; auto bp_ptr = &bp;
+    auto in_ind_ptr = &in_ind; auto grads_ptr = &grads; auto bp_ptr = &bp;
 #pragma omp parallel for firstprivate(bp_ptr)
     for(int64 i = 0; i < bp_ptr->dimension(0); ++i){
       (*bp_ptr)(i) = 0;
     }
     
-#pragma omp parallel for firstprivate(in_ind_ptr, grads_ptr, cor_ind_ptr, bp_ptr)
+#pragma omp parallel for firstprivate(in_ind_ptr, grads_ptr, bp_ptr)
     for(int64 i = 0; i < in_ind_ptr->dimension(0); ++i){
       (*bp_ptr)(i) = (*grads_ptr)((*in_ind_ptr)(i));
     }

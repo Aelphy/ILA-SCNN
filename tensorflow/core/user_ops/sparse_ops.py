@@ -5,7 +5,7 @@ import tensorflow as tf
 from sparse_module import sparse_nn_ops as sparse_nn_ops
 
 @ops.RegisterGradient("SparseTensorSparseKernelDenseConvKD")
-def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
+def _SparseTensorSparseKernelDenseConvKDGrad(op, *grads):
   """Gradients for the SparseTensorSparseKernelDenseConvKD op.
   Args:
     op: the SparseTensorSparseKernelDenseConvKD op
@@ -24,7 +24,7 @@ def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
                                                 op.inputs[4],
                                                 op.inputs[5],
                                                 op.outputs[0],
-                                                grad,
+                                                grads[1],
                                                 op.outputs[2],
                                                 strides=op.get_attr("strides"),
                                                 padding=op.get_attr("padding")),
@@ -37,14 +37,14 @@ def _SparseTensorSparseKernelDenseConvKDGrad(op, grad):
                                                 op.inputs[4],
                                                 op.inputs[5],
                                                 op.outputs[0],
-                                                grad,
+                                                grads[1],
                                                 op.outputs[2],
                                                 strides=op.get_attr("strides"),
                                                 padding=op.get_attr("padding")),
           None]
 
 @ops.RegisterGradient("SparseTensorSparseKernelDenseConvKDInput")
-def _SparseTensorSparseKernelDenseConvKDInputGrad(op, grad):
+def _SparseTensorSparseKernelDenseConvKDInputGrad(op, *grads):
   return [None,
           sparse_nn_ops.sparse_tensor_sparse_kernel_dense_conv_kd_input_grad(op.inputs[0],
                                                 op.inputs[1],
@@ -53,7 +53,7 @@ def _SparseTensorSparseKernelDenseConvKDInputGrad(op, grad):
                                                 op.inputs[4],
                                                 op.inputs[5],
                                                 op.outputs[0],
-                                                grad,
+                                                grads[1],
                                                 op.outputs[2],
                                                 strides=op.get_attr("strides"),
                                                 padding=op.get_attr("padding")),
@@ -64,7 +64,7 @@ def _SparseTensorSparseKernelDenseConvKDInputGrad(op, grad):
 
 
 @ops.RegisterGradient("SparseTensorSparseKernelDenseConvKDFilter")
-def _SparseTensorSparseKernelDenseConvKDFilterGrad(op, grad):
+def _SparseTensorSparseKernelDenseConvKDFilterGrad(op, *grads):
   return [None,
           None,
           None,
@@ -76,7 +76,7 @@ def _SparseTensorSparseKernelDenseConvKDFilterGrad(op, grad):
                                                 op.inputs[4],
                                                 op.inputs[5],
                                                 op.outputs[0],
-                                                grad,
+                                                grads[1],
                                                 op.outputs[2],
                                                 strides=op.get_attr("strides"),
                                                 padding=op.get_attr("padding")),
@@ -85,21 +85,21 @@ def _SparseTensorSparseKernelDenseConvKDFilterGrad(op, grad):
 
 
 @ops.RegisterGradient("SparseRelu")
-def _SparseReluGrad(op, grad):
+def _SparseReluGrad(op, *grads):
   return [None,
           sparse_nn_ops.sparse_relu_grad(op.inputs[0],
                                          op.inputs[1],
                                          op.outputs[1],
-                                         grad,
+                                         grads[1],
                                          op.outputs[2]),
           None]
 
 
 @ops.RegisterGradient("SparseTensorMaxPooling")
-def _SparseTensorMaxPoolingGrad(op, grad):
+def _SparseTensorMaxPoolingGrad(op, *grads):
   return [None,
           sparse_nn_ops.sparse_relu_grad(op.inputs[0],
-                                         grad,
+                                         grads[1],
                                          op.outputs[3]),
           None]
 
@@ -108,7 +108,7 @@ def _SparseTensorMaxPoolingGrad(op, grad):
 @ops.RegisterGradient("DirectSparseToDense")
 def _DirectSparseToDenseGrad(op, grad):
   return [None,
+          None,
           sparse_nn_ops.direct_sparse_to_dense_grad(op.inputs[0],
                                          grad),
-          None,
           None]

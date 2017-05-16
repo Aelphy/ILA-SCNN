@@ -56,10 +56,15 @@ else:
 var_list = []
 
 #initialize graph
-sc1_ = ld.create_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sparse_data, "sc1")
-sc1 = ld.layer_to_sparse_tensor(sc1_)
+#sc1_ = ld.create_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sparse_data, "sc1")
+#sc1 = ld.layer_to_sparse_tensor(sc1_)
 
-sd = sc_module.direct_sparse_to_dense(sparse_indices=sc1.indices, output_shape=sc1.dense_shape, sparse_values=sc1.values, default_value=0, validate_indices=False)
+sc1_ = ld.create_sparse_pooling_layer(sparse_data, pooling_sizes, dim)
+sc1 = ld.layer_to_sparse_tensor(sc1_)
+#sc1 = sc1_
+
+#sd = sc_module.direct_sparse_to_dense(sparse_indices=sc1.out_indices, output_shape=sc1.out_shape, sparse_values=sc1.out_values, default_value=0, validate_indices=False)
+sd = ld.create_direct_sparse_to_dense(sc1)
 
 sd_flat = tf.reshape(sd, [batch_size, -1])
 #dd_flat = tf.reshape(dc1, [batch_size, -1])
@@ -70,8 +75,7 @@ dense_labels = tf.placeholder(tf.float32, shape=sd_flat.shape, name="labels_plac
 
 #sd_train_op = tf.train.GradientDescentOptimizer(0.01).minimize(sd_loss)
 
-pdb.set_trace()
-pdb.run("grads =tf.gradients(sd, sc1_, name='sc1', colocate_gradients_with_ops=True, gate_gradients=True)")
+grads =tf.gradients(sd, list(sc1_), name='sc1', colocate_gradients_with_ops=True, gate_gradients=True)
 
 
 #opt = tf.train.AdagradOptimizer(0.1)
@@ -98,12 +102,14 @@ with tf.Session(config=config) as sess:
   print("trainable: ", trainable)
   writer = tf.summary.FileWriter("/tmp/test", sess.graph)
   #feed_dict={sparse_data: tf.SparseTensorValue(data_ind, data_val, data_sh), dense_data: random_dense_data, dense_labels: random_dense_label}
-  feed_dict={dense_labels: random_dense_label}
-  sess.run(initlocal, feed_dict=feed_dict)
-  sess.run(initall, feed_dict=feed_dict)
-  sparse_result = sess.run(grads, feed_dict=feed_dict)
-  rsc1 = tf.get_default_graph().get_tensor_by_name("sc1/filter_weights:0")
-  print("filter weights: ", rsc1.eval())
+  #feed_dict={dense_labels: random_dense_label}
+  feed_dict={}
+  
+  sess.run(initlocal)
+  sess.run(initall)
+  pdb.run("sparse_result = sess.run(grads)")
+  #rsc1 = tf.get_default_graph().get_tensor_by_name("sc1/filter_weights:0")
+  #print("filter weights: ", rsc1.eval())
 
   print("sparse result: ", sparse_result)
   #print("dense result: ", dense_result)

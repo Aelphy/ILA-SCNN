@@ -233,6 +233,7 @@ class SparseTensorSparseKernelDenseConvKDGradV2 : public OpKernel {
     auto grads = gradients->flat<T>();
     auto grad_sh = gradients_shape->flat<int64>();
 
+
     // Create an output tensor
     Tensor *sparse_bp_fl = NULL, *sparse_bp_in = NULL;
     TensorShape out_in_shape = {(int64) in_vals.size()};
