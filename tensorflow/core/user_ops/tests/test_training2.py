@@ -83,6 +83,8 @@ batch_size = 5
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
 nr_batchs = 10
+batch_label_sizes = [5, 8]
+
 
 filter_in_sizes = np.array(filter_in_sizes_, dtype=np.int64)
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
@@ -103,8 +105,9 @@ var_list = []
 
 sc1_ = create_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sparse_data, "sc1")
 sc1 = layer_to_sparse_tensor(sc1_)
-
-s_out = sc1
+sr1 = layer_to_sparse_tensor(create_sparse_relu_layer(sc1))
+#sp1 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr1, pooling_sizes, dim))
+s_out = sr1
 
 
 sd = sc_module.direct_sparse_to_dense(sparse_indices=s_out.indices, output_shape=s_out.dense_shape, sparse_values=s_out.values, default_value=0, validate_indices=False)
@@ -112,11 +115,11 @@ sd = sc_module.direct_sparse_to_dense(sparse_indices=s_out.indices, output_shape
 sd_flat = tf.reshape(sd, [batch_size, -1])
 
 dense_labels = tf.placeholder(tf.float32, shape=sd_flat.shape, name="labels_placeholder")
-sd_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=sd_flat, labels=dense_labels))
+sd_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=sd_flat, labels=dense_labels, name = "softmax_loss"))
 
 
 sd_train_op = tf.train.AdagradOptimizer(0.1)
-sd_train =  sd_train_op.minimize(sd_loss)
+pdb.run("sd_train =  sd_train_op.minimize(sd_loss)")
 sd_grads = sd_train_op.compute_gradients(sd_loss)
 
 
@@ -135,7 +138,7 @@ initall = tf.global_variables_initializer()
 random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_shape=data_sh)
 random_dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
 
-[label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, [5, 27])
+[label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, batch_label_sizes)
 random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 with tf.Session(config=config) as sess:
   trainable = tf.trainable_variables()
@@ -152,7 +155,7 @@ with tf.Session(config=config) as sess:
     random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_shape=data_sh)
     random_dense_data = sp.sparse_to_dense(data_ind, data_val, data_sh)
 
-    [label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, [5, 27])
+    [label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, batch_label_sizes)
     random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 
     #perform training
