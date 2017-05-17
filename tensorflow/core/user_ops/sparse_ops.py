@@ -95,6 +95,14 @@ def _SparseReluGrad(op, *grads):
           None]
 
 
+@ops.RegisterGradient("SparseFilterZeroOp")
+def _SparseFilterZeroOpGrad(op, *grads):
+  return [None,
+          sparse_nn_ops.sparse_filter_zero_grad_op(op.inputs[0],
+                                         op.outputs[0],
+                                         grads[1]),
+          None]
+
 @ops.RegisterGradient("SparseTensorMaxPooling")
 def _SparseTensorMaxPoolingGrad(op, *grads):
   return [None,

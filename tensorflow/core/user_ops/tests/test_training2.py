@@ -57,6 +57,11 @@ def create_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, appr
     s5 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(sparse_data.indices, sparse_data.values, sparse_data.dense_shape, f_ind_var, f_w_var, f_sh_var, strides, padding, dim, approx);
     return s5
 
+def create_sparse_relu_layer_(sparse_data):
+  res_val = nn_ops.relu(sparse_data.values);
+  res = tf.SparseTensor(indices = sparse_data.indices, values = res_val, dense_shape = sparse_data.dense_shape)
+  return sc_module.sparse_filter_zero_op(res.indices, res.values, res.dense_shape)
+
 def create_sparse_relu_layer(sparse_data):
   return sc_module.sparse_relu(sparse_data.indices, sparse_data.values, sparse_data.dense_shape);
 
@@ -83,7 +88,7 @@ batch_size = 5
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
 nr_batchs = 10
-batch_label_sizes = [5, 8]
+batch_label_sizes = [5, 27]
 
 
 filter_in_sizes = np.array(filter_in_sizes_, dtype=np.int64)
@@ -105,7 +110,8 @@ var_list = []
 
 sc1_ = create_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, approx, dim, var_list, sparse_data, "sc1")
 sc1 = layer_to_sparse_tensor(sc1_)
-sr1 = layer_to_sparse_tensor(create_sparse_relu_layer(sc1))
+#sr1 = layer_to_sparse_tensor(create_sparse_relu_layer(sc1))
+sr1 = layer_to_sparse_tensor(create_sparse_relu_layer_(sc1))
 #sp1 = layer_to_sparse_tensor(create_sparse_pooling_layer(sr1, pooling_sizes, dim))
 s_out = sr1
 
