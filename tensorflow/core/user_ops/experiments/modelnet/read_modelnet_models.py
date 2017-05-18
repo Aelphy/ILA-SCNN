@@ -2,6 +2,7 @@ import numpy as np
 import os
 import random
 import threading
+import math
 
 class ModelnetReader():
   def __init__(self, path, res, grid_size, batch_size, train=True, save = False):
@@ -22,11 +23,11 @@ class ModelnetReader():
   
   def start(self):
     self.thread.start()
+    return self.thread
 
   def init(self):
     self.samples = []
     for i in range(0, len(self.categories)):
-      #TODO
       class_label = [0] * len(self.categories)
       #class_label = [0] * 10
       class_label[i] = 1
@@ -45,9 +46,8 @@ class ModelnetReader():
   def load_batch(self):
     shape = [self.batch_size, self.res, self.res, self.res, 1]
     self.batch = [[],[],shape,[]]
-    if self.train:
-      if len(self.samples) < self.batch_size:
-        return
+    if len(self.samples) < self.batch_size:
+      return
     for i in range(0, self.batch_size):
       elem = self.samples.pop()
       [indices, values] = self.getData(self.path  + elem[0], i)
@@ -67,9 +67,21 @@ class ModelnetReader():
     self.thread = threading.Thread(target=self.run)
     return [data, has_data]
     
+  def randomRotation2D(self, points):
+    angle = random.uniform(0, math.pi)
+    for point in points:
+      x = point[0]
+      y = point[1]
+      s = math.sin(angle)
+      c = math.cos(angle)
+      points[0] = x * c - y * s
+      points[1] = y * c + x * s
+    return points
 
   def getData(self, data_path, batch = 0):
     points = np.loadtxt(data_path)
+    if self.train:
+      points = self.randomRotation2D(points)
     [indices, values] = self.toVoxelGrid(points, batch)
     return [indices, values]
 

@@ -1,7 +1,7 @@
 from read_modelnet_models import ModelnetReader
 import time
 
-reader = ModelnetReader("/home/thackel/Desktop/ModelNet10", 3, 8, 3, train=True, save=True)
+reader = ModelnetReader("/home/thackel/Desktop/ModelNet10", 64, 8, 3, train=True, save=True)
 reader.init()
 reader.start()
 

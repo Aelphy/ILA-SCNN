@@ -51,8 +51,7 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = False, tr
   fc512 = tf.layers.dense(conv_out, 512)
   fc10 = tf.layers.dense(fc512, 10)
   if train:
-    sd_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
-    sd_out = sd_loss
+    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
   else:
     sd_out = tf.nn.softmax(logits=fc10)
   return sd_out

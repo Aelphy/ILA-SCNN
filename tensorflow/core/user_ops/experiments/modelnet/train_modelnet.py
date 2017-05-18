@@ -26,6 +26,7 @@ from read_modelnet_models import ModelnetReader
 
 data_location = '/home/thackel/Desktop/ModelNet10'
 model_location = '/tmp/modelnet10_8'
+learning_rate = 0.01
 dim = 3
 approx = True
 res = 8
@@ -48,7 +49,7 @@ var_list = []
 
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
 sd_loss = models.model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, approx = approx)
-sd_train_op = tf.train.AdagradOptimizer(0.1)
+sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
 sd_grads = sd_train_op.compute_gradients(sd_loss)
 
@@ -81,6 +82,8 @@ with tf.Session(config=config) as sess:
     reader.init()
     reader.start()
     has_data = True
+    av_loss = 0
+    batches = 0
     while has_data:
       #create random training data
       t1 = time.time()
@@ -93,14 +96,18 @@ with tf.Session(config=config) as sess:
       feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
 
       #perform training
-      sess.run(sd_train, feed_dict=feed_dict)
-
+      [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
+      av_loss = av_loss + loss_val
+      batches = batches + 1
       '''sparse_grads = sess.run(sd_grads, feed_dict=feed_dict)
       print("sparse_grads: ", sparse_grads)
       rsc1 = tf.get_default_graph().get_tensor_by_name("sc1/filter_weights:0")
       print("filter weights: ", rsc1.eval())
       sparse_loss = sess.run(sd_loss, feed_dict=feed_dict)
       print("loss: ", sparse_loss)'''
+      print("loss val: ", loss_val)
+    av_loss = av_loss / batches
+    print("average loss: ", av_loss)
     saver.save(sess, model_location + str(epoch))
   saver.save(sess, model_location)
 
