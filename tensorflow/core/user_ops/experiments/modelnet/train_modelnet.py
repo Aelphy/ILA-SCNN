@@ -25,11 +25,11 @@ from read_modelnet_models import ModelnetReader
 #just a quick test, no nice code
 
 data_location = '/home/thackel/Desktop/ModelNet10'
-model_location = '/tmp/modelnet10_8'
+model_location = '/tmp/modelnet10_256'
 learning_rate = 0.01
 dim = 3
 approx = True
-res = 8
+res = 256
 rho_data = 1. / res
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
@@ -48,7 +48,7 @@ var_list = []
 #initialize graph
 
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
-sd_loss = models.model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, approx = approx)
+sd_loss = models.model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, approx = approx)
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
 sd_grads = sd_train_op.compute_gradients(sd_loss)
