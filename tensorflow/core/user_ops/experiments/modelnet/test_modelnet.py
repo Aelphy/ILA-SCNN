@@ -6,7 +6,7 @@ from read_modelnet_models import ModelnetReader
 from eval_confusion_matrix import ConfusionMatrixEval
 
 data_location = '/home/thackel/Desktop/ModelNet10'
-model_location = '/tmp/modelnet10_89'
+model_location = '/tmp/modelnet10_848'
 dim = 3 
 approx = True
 res = 8 
@@ -14,7 +14,9 @@ rho_data = 1. / res
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
-batch_label_sizes = [batch_size, 10] 
+num_classes = 10
+
+batch_label_sizes = [batch_size, num_classes] 
 
 
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
@@ -43,7 +45,7 @@ sess=tf.Session(config=config)
 saver.restore(sess,model_location)
 
 writer = tf.summary.FileWriter("/tmp/test", sess.graph)
-reader = ModelnetReader(data_location, res, 8, batch_size, train=False)
+reader = ModelnetReader(data_location, res, 0, batch_size, train=False)
 reader.init()
 reader.start()
 has_data = True
@@ -63,7 +65,7 @@ while has_data:
   loss_val = sess.run(sd_loss, feed_dict=feed_dict)
   predictions = sess.run(tf.argmax(loss_val, axis=1))
   actual = sess.run(tf.argmax(batch[3], axis=1))
-  batch_conf_matrix = conf_matrix = sess.run(tf.confusion_matrix(actual, predictions))
+  batch_conf_matrix = conf_matrix = sess.run(tf.confusion_matrix(actual, predictions, num_classes=num_classes))
   if batches == 0:
     all_conf_mat = batch_conf_matrix
   else:

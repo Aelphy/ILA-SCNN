@@ -25,17 +25,18 @@ from read_modelnet_models import ModelnetReader
 #just a quick test, no nice code
 
 data_location = '/home/thackel/Desktop/ModelNet10'
-model_location = '/tmp/modelnet10_256'
+pretrained_model = '/home/thackel/cnn_models/modelnet10_856'
+model_location = '/home/thackel/cnn_models/modelnet10_8'
 learning_rate = 0.01
 dim = 3
 approx = True
-res = 256
+res = 8
 rho_data = 1. / res
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
 batch_label_sizes = [batch_size, 10]
-max_epochs = 200
+max_epochs = 1000
 
 
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
@@ -48,7 +49,7 @@ var_list = []
 #initialize graph
 
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
-sd_loss = models.model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, approx = approx)
+sd_loss = models.model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, approx = approx)
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
 sd_grads = sd_train_op.compute_gradients(sd_loss)
@@ -77,20 +78,20 @@ with tf.Session(config=config) as sess:
   feed_dict={sparse_data: tf.SparseTensorValue(data_ind, data_val, data_sh), dense_labels: random_dense_label}
   sess.run(initlocal, feed_dict=feed_dict)
   sess.run(initall, feed_dict=feed_dict)
+  if len(pretrained_model) > 0:
+    saver.restore(sess,pretrained_model)
   for epoch in range(1, max_epochs):
-    reader = ModelnetReader(data_location, res, 8, batch_size)
+    reader = ModelnetReader(data_location, res, 0, batch_size)
     reader.init()
     reader.start()
     has_data = True
     av_loss = 0
     batches = 0
+    t1 = time.time()
     while has_data:
       #create random training data
-      t1 = time.time()
       [batch, has_data] = reader.next_batch()
       reader.start()
-      t2 = time.time()
-      print("time: ", t2 - t1)
       values_ = np.array(batch[1], dtype=np.float32)
       indices_ = np.array(batch[0], dtype =np.int64)
       feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
@@ -99,16 +100,12 @@ with tf.Session(config=config) as sess:
       [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
       av_loss = av_loss + loss_val
       batches = batches + 1
-      '''sparse_grads = sess.run(sd_grads, feed_dict=feed_dict)
-      print("sparse_grads: ", sparse_grads)
-      rsc1 = tf.get_default_graph().get_tensor_by_name("sc1/filter_weights:0")
-      print("filter weights: ", rsc1.eval())
-      sparse_loss = sess.run(sd_loss, feed_dict=feed_dict)
-      print("loss: ", sparse_loss)'''
-      print("loss val: ", loss_val)
+    t2 = time.time()
     av_loss = av_loss / batches
+    print("epoch: ", epoch)
     print("average loss: ", av_loss)
-    saver.save(sess, model_location + str(epoch))
+    print("time: ", t2 - t1)
+    saver.save(sess, model_location + "_" + str(epoch))
   saver.save(sess, model_location)
 
 

@@ -84,7 +84,7 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = False, 
   sp10 = ld.layer_to_sparse_tensor(ld.create_sparse_pooling_layer(sc10, pooling_sizes, dim))
   s_out = sp10
   sd = ld.create_direct_sparse_to_dense(s_out)
-  sd_flat = tf.reshape(sd, [batch_size, total_size * 32])
+  sd_flat = tf.reshape(sd, [batch_size, int(total_size * 32 / 32768)])
   if train:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
   else:
