@@ -11,7 +11,7 @@
 #include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
-  template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GIndexT, typename GradT, typename T> void
+  template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GIndexT, typename GradT, typename T, typename IndiceT> void
   sparseCuboidConvKDFilterGrad(   const IndexT& in_ind, 
                         const ValueT& in_vals, 
                         const ShapeT& in_sh, 
@@ -23,11 +23,12 @@ namespace tensorflow {
                         const ShapeT& grads_sh,
                         const std::vector<int32>& stride_,
                         const string& padding,
-                        const int64 dim,
+                        const IndiceT dim,
                         std::vector<T>& back_props) 
   {
+
     //sparse back propagation (only backpropergate errors to features or filter weights, which exist (unequal zero)):
-    typedef std::vector<int64> KeyT;
+    typedef std::vector<IndiceT> KeyT;
 
     // 1. reverse strides and effects of padding to make grad (output layer) and in_vals (input layer) comparable
     KeyT filter_offset(f_sh.dimension(0), 0);
@@ -41,7 +42,7 @@ namespace tensorflow {
 
     //reverse effects of tensorflows (SAME) padding rule
     std::vector<int> str_padding_offset(in_ind.dimension(1), 0);
-    for(int64 i = 0; i < str_padding_offset.size(); ++i){
+    for(IndiceT i = 0; i < str_padding_offset.size(); ++i){
       if(int(in_sh(i)) % stride_[i] == 1){
         str_padding_offset[i] = 0;
       }
@@ -72,7 +73,7 @@ namespace tensorflow {
     }
 
     std::vector<int32> no_stride(stride_.size(), 1);
-    ConvKDHelper<IndexT, GIndexT, ValueT, KeyT, T> conv_function(  &in_ind, 
+    ConvKDHelper<IndexT, GIndexT, ValueT, KeyT, T, IndiceT> conv_function(  &in_ind, 
                                                                   &in_vals, 
                                                                   &adapted_grads_ind, 
                                                                   &grads,
@@ -97,7 +98,7 @@ namespace tensorflow {
     }
   }
 
-  template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GIndexT, typename GradT, typename T> void
+  template <typename IndexT, typename ValueT, typename ShapeT, typename FIndexT, typename FValueT, typename FShapeT, typename GIndexT, typename GradT, typename T, typename IndiceT> void
   sparseCuboidConvKDInputGrad(   const IndexT& in_ind, 
                         const ValueT& in_vals, 
                         const ShapeT& in_sh, 
@@ -109,11 +110,11 @@ namespace tensorflow {
                         const ShapeT& grads_sh,
                         const std::vector<int32>& stride_,
                         const string& padding,
-                        const int64 dim,
+                        const IndiceT dim,
                         std::vector<T>& back_props) 
   {
     //sparse back propagation (only backpropergate errors to features or filter weights, which exist (unequal zero)):
-    typedef std::vector<int64> KeyT;
+    typedef std::vector<IndiceT> KeyT;
 
     // 1. reverse strides and effects of padding to make grad (output layer) and in_vals (input layer) comparable
     KeyT filter_offset(f_sh.dimension(0), 0);
@@ -126,7 +127,7 @@ namespace tensorflow {
     }
     //reverse effects of tensorflows (SAME) padding rule on grads
     std::vector<int> str_padding_offset(in_ind.dimension(1), 0);
-    for(int64 i = 0; i < str_padding_offset.size(); ++i){
+    for(IndiceT i = 0; i < str_padding_offset.size(); ++i){
       if(int(in_sh(i)) % stride_[i] == 1){
         str_padding_offset[i] = 0;
       }
@@ -165,7 +166,7 @@ namespace tensorflow {
     }
 
     std::vector<int32> no_stride(stride_.size(), 1);
-    ConvKDHelper<FIndexT, GIndexT, ValueT, KeyT, T> conv_function(&adapted_grads_ind, 
+    ConvKDHelper<FIndexT, GIndexT, ValueT, KeyT, T, IndiceT> conv_function(&adapted_grads_ind, 
                                                                   &grads, 
                                                                   &adapted_f_ind, 
                                                                   &f_vals,

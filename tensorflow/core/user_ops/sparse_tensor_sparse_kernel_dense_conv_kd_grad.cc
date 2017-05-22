@@ -21,15 +21,16 @@
 //TODO: How do I use REGISTER_OP with parameter T?
 REGISTER_OP("SparseTensorSparseKernelDenseConvKDFilterGrad")
   .Attr("T: realnumbertype")
-  .Input("in_indices: int64")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
   .Input("in_values: T")
-  .Input("in_shape: int64")
-  .Input("filter_indices: int64")
+  .Input("in_shape: Tindices")
+  .Input("filter_indices: Tindices")
   .Input("filter_values: T")
-  .Input("filter_shape: int64")
-  .Input("gradients_indices: int64")
+  .Input("filter_shape: Tindices")
+  .Input("gradients_indices: Tindices")
   .Input("gradients: T")
-  .Input("gradients_shape: int64")
+  .Input("gradients_shape: Tindices")
   .Output("backprops: T")
   .Attr("strides: list(int)")
   .Attr("padding: string = 'SAME'")
@@ -38,15 +39,16 @@ REGISTER_OP("SparseTensorSparseKernelDenseConvKDFilterGrad")
 
 REGISTER_OP("SparseTensorSparseKernelDenseConvKDInputGrad")
   .Attr("T: realnumbertype")
-  .Input("in_indices: int64")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
   .Input("in_values: T")
-  .Input("in_shape: int64")
-  .Input("filter_indices: int64")
+  .Input("in_shape: Tindices")
+  .Input("filter_indices: Tindices")
   .Input("filter_values: T")
-  .Input("filter_shape: int64")
-  .Input("gradients_indices: int64")
+  .Input("filter_shape: Tindices")
+  .Input("gradients_indices: Tindices")
   .Input("gradients: T")
-  .Input("gradients_shape: int64")
+  .Input("gradients_shape: Tindices")
   .Output("backprops: T")
   .Attr("strides: list(int)")
   .Attr("padding: string = 'SAME'")
@@ -55,15 +57,16 @@ REGISTER_OP("SparseTensorSparseKernelDenseConvKDInputGrad")
 
 REGISTER_OP("SparseTensorSparseKernelDenseConvKDGradV2")
   .Attr("T: realnumbertype")
-  .Input("in_indices: int64")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
   .Input("in_values: T")
-  .Input("in_shape: int64")
-  .Input("filter_indices: int64")
+  .Input("in_shape: Tindices")
+  .Input("filter_indices: Tindices")
   .Input("filter_values: T")
-  .Input("filter_shape: int64")
-  .Input("gradients_indices: int64")
+  .Input("filter_shape: Tindices")
+  .Input("gradients_indices: Tindices")
   .Input("gradients: T")
-  .Input("gradients_shape: int64")
+  .Input("gradients_shape: Tindices")
   .Output("backprops_input: T")
   .Output("backprops_filter: T")
   .Attr("strides: list(int)")
@@ -76,7 +79,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 using namespace tensorflow;
 
-template <typename Device, typename T>
+template <typename Device, typename T, typename Tindices>
 class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
  public:
   explicit SparseTensorSparseKernelDenseConvKDFilterGrad(OpKernelConstruction* context) : OpKernel(context) {
@@ -101,25 +104,25 @@ class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
     OP_REQUIRES_OK(context, context->input("gradients", &gradients));
     OP_REQUIRES_OK(context, context->input("gradients_indices", &gradients_indices));
     OP_REQUIRES_OK(context, context->input("gradients_shape", &gradients_shape));
-    auto in_ind = in_indices->matrix<int64>(); //channels, depth, height, width, optionally others TODO: other cases?
+    auto in_ind = in_indices->matrix<Tindices>(); //channels, depth, height, width, optionally others TODO: other cases?
     auto in_vals = in_values->flat<T>();
-    auto in_sh = in_shape->flat<int64>();
-    auto f_ind = filter_indices->matrix<int64>(); //filters, channels, kernel_depth, kernel_height, kernel_width TODO: other cases?
+    auto in_sh = in_shape->flat<Tindices>();
+    auto f_ind = filter_indices->matrix<Tindices>(); //filters, channels, kernel_depth, kernel_height, kernel_width TODO: other cases?
     auto f_vals = filter_values->flat<T>();
-    auto f_sh = filter_shape->flat<int64>();
+    auto f_sh = filter_shape->flat<Tindices>();
     Tensor grad_indices = *gradients_indices;
-    auto grad_ind = grad_indices.matrix<int64>();
+    auto grad_ind = grad_indices.matrix<Tindices>();
     auto grads = gradients->flat<T>();
-    auto grad_sh = gradients_shape->flat<int64>();
+    auto grad_sh = gradients_shape->flat<Tindices>();
 
     // Create an output tensor
 
     std::vector<T> backprops; //stores the values for the output tensor
-    std::vector<int64> out_shape;
+    std::vector<Tindices> out_shape;
     sparseCuboidConvKDFilterGrad(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, grad_ind, grads, grad_sh, stride_, padding, filter_dim, backprops);
     
     Tensor *sparse_values = NULL;
-    TensorShape out_val_shape = {(int64) f_vals.size()};
+    TensorShape out_val_shape = {(Tindices) f_vals.size()};
     OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &sparse_values));
     auto out_vals = sparse_values->flat<T>();
 
@@ -132,11 +135,11 @@ class SparseTensorSparseKernelDenseConvKDFilterGrad : public OpKernel {
 
  private:
   std::vector<int32> stride_;
-  int32 filter_dim;
+  Tindices filter_dim;
   std::string padding;
 };
 
-template <typename Device, typename T>
+template <typename Device, typename T, typename Tindices>
 class SparseTensorSparseKernelDenseConvKDInputGrad : public OpKernel {
  public:
   explicit SparseTensorSparseKernelDenseConvKDInputGrad(OpKernelConstruction* context) : OpKernel(context) {
@@ -161,26 +164,26 @@ class SparseTensorSparseKernelDenseConvKDInputGrad : public OpKernel {
     OP_REQUIRES_OK(context, context->input("gradients", &gradients));
     OP_REQUIRES_OK(context, context->input("gradients_indices", &gradients_indices));
     OP_REQUIRES_OK(context, context->input("gradients_shape", &gradients_shape));
-    auto in_ind = in_indices->matrix<int64>(); //batch, depth, height, width, channels, optionally others TODO: other cases?
+    auto in_ind = in_indices->matrix<Tindices>(); //batch, depth, height, width, channels, optionally others TODO: other cases?
     auto in_vals = in_values->flat<T>();
-    auto in_sh = in_shape->flat<int64>();
+    auto in_sh = in_shape->flat<Tindices>();
     Tensor filter_ind = *filter_indices;
-    auto f_ind = filter_ind.matrix<int64>(); //kernel_depth, kernel_height, kernel_width, in_channels, out_channels TODO: other cases?
+    auto f_ind = filter_ind.matrix<Tindices>(); //kernel_depth, kernel_height, kernel_width, in_channels, out_channels TODO: other cases?
     auto f_vals = filter_values->flat<T>();
-    auto f_sh = filter_shape->flat<int64>();
+    auto f_sh = filter_shape->flat<Tindices>();
     Tensor grad_indices = *gradients_indices;
-    auto grad_ind = grad_indices.matrix<int64>();
+    auto grad_ind = grad_indices.matrix<Tindices>();
     auto grads = gradients->flat<T>();
-    auto grad_sh = gradients_shape->flat<int64>();
+    auto grad_sh = gradients_shape->flat<Tindices>();
 
     // Create an output tensor
 
     std::vector<T> backprops; //stores the values for the output tensor
-    std::vector<int64> out_shape;
+    std::vector<Tindices> out_shape;
     sparseCuboidConvKDInputGrad(in_ind, in_vals, in_sh, f_ind, f_vals, f_sh, grad_ind, grads, grad_sh, stride_, padding, filter_dim, backprops);
     
     Tensor *sparse_values = NULL;
-    TensorShape out_val_shape = {(int64) in_vals.size()};
+    TensorShape out_val_shape = {(Tindices) in_vals.size()};
     OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &sparse_values));
     auto out_vals = sparse_values->flat<T>();
 
@@ -193,12 +196,12 @@ class SparseTensorSparseKernelDenseConvKDInputGrad : public OpKernel {
 
  private:
   std::vector<int32> stride_;
-  int32 filter_dim;
+  Tindices filter_dim;
   std::string padding;
 };
 
 
-template <typename Device, typename T>
+template <typename Device, typename T, typename Tindices>
 class SparseTensorSparseKernelDenseConvKDGradV2 : public OpKernel {
  public:
   explicit SparseTensorSparseKernelDenseConvKDGradV2(OpKernelConstruction* context) : OpKernel(context) {
@@ -223,21 +226,21 @@ class SparseTensorSparseKernelDenseConvKDGradV2 : public OpKernel {
     OP_REQUIRES_OK(context, context->input("gradients", &gradients));
     OP_REQUIRES_OK(context, context->input("gradients_indices", &gradients_indices));
     OP_REQUIRES_OK(context, context->input("gradients_shape", &gradients_shape));
-    auto in_ind = in_indices->matrix<int64>(); //batch, depth, height, width, channels, optionally others TODO: other cases?
+    auto in_ind = in_indices->matrix<Tindices>(); //batch, depth, height, width, channels, optionally others TODO: other cases?
     auto in_vals = in_values->flat<T>();
-    auto in_sh = in_shape->flat<int64>();
-    auto f_ind = filter_indices->matrix<int64>(); //kernel_depth, kernel_height, kernel_width, in_channels, out_channels TODO: other cases?
+    auto in_sh = in_shape->flat<Tindices>();
+    auto f_ind = filter_indices->matrix<Tindices>(); //kernel_depth, kernel_height, kernel_width, in_channels, out_channels TODO: other cases?
     auto f_vals = filter_values->flat<T>();
-    auto f_sh = filter_shape->flat<int64>();
-    auto grad_ind = gradients_indices->matrix<int64>();
+    auto f_sh = filter_shape->flat<Tindices>();
+    auto grad_ind = gradients_indices->matrix<Tindices>();
     auto grads = gradients->flat<T>();
-    auto grad_sh = gradients_shape->flat<int64>();
+    auto grad_sh = gradients_shape->flat<Tindices>();
 
 
     // Create an output tensor
     Tensor *sparse_bp_fl = NULL, *sparse_bp_in = NULL;
-    TensorShape out_in_shape = {(int64) in_vals.size()};
-    TensorShape out_fl_shape = {(int64) f_vals.size()};
+    TensorShape out_in_shape = {(Tindices) in_vals.size()};
+    TensorShape out_fl_shape = {(Tindices) f_vals.size()};
     OP_REQUIRES_OK(context, context->allocate_output("backprops_input", out_in_shape, &sparse_bp_in));
     OP_REQUIRES_OK(context, context->allocate_output("backprops_filter", out_fl_shape, &sparse_bp_fl));
     auto out_in_vals = sparse_bp_in->flat<T>();
@@ -249,23 +252,29 @@ class SparseTensorSparseKernelDenseConvKDGradV2 : public OpKernel {
 
  private:
   std::vector<int32> stride_;
-  int32 filter_dim;
+  Tindices filter_dim;
   std::string padding;
 };
 
-#define REGISTER_CPU(type)                                   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDFilterGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
-  SparseTensorSparseKernelDenseConvKDFilterGrad<CPUDevice, type>); \
+#define REGISTER_CPU_TYPE(type, indices_type)                                   \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDFilterGrad").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindices"), \
+  SparseTensorSparseKernelDenseConvKDFilterGrad<CPUDevice, type, indices_type>); \
   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDInputGrad").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
-  SparseTensorSparseKernelDenseConvKDInputGrad<CPUDevice, type>); \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDInputGrad").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindice    s"), \
+  SparseTensorSparseKernelDenseConvKDInputGrad<CPUDevice, type, indices_type>); \
   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDGradV2").Device(DEVICE_CPU).TypeConstraint<type>("T"), \
-  SparseTensorSparseKernelDenseConvKDGradV2<CPUDevice, type>); \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDGradV2").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindice    s"), \
+  SparseTensorSparseKernelDenseConvKDGradV2<CPUDevice, type, indices_type>); \
 
-REGISTER_CPU(float);
-//REGISTER_CPU(double);
-//REGISTER_CPU(int32);
-//REGISTER_CPU(complex64);
-//REGISTER_CPU(complex128);
-#undef REGISTER_CPU
+#define REGISTER_CPU_ALL(type) \
+  REGISTER_CPU_TYPE(type, int64); \
+  REGISTER_CPU_TYPE(type, int32);
+
+REGISTER_CPU_ALL(float);
+REGISTER_CPU_ALL(double);
+REGISTER_CPU_ALL(int32);
+//REGISTER_CPU_ALL(complex64);
+//REGISTER_CPU_ALL(complex128);
+
+#undef REGISTER_CPU_ALL
+#undef REGISTER_CPU_TYPE
