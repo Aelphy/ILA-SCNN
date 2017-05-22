@@ -30,7 +30,6 @@ tf_custom_op_library_flags(
               "sparse_tensor_pooling_grad.cc",
               "sparse_tensor_pooling.h",
               "direct_sparse_to_dense_op.cc",
-              "direct_sparse_to_dense_op_grad.cc",
               "sparse_tensor_filter_zero_entries.cc",
             ],
 )

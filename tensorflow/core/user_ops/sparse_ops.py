@@ -118,6 +118,5 @@ def _SparseTensorMaxPoolingGrad(op, *grads):
 def _DirectSparseToDenseGrad(op, grad):
   return [None,
           None,
-          sparse_nn_ops.direct_sparse_to_dense_grad(op.inputs[0],
-                                         grad),
+          tf.gather_nd(grad, op.inputs[0]),
           None]
