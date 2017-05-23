@@ -6,12 +6,12 @@ from read_modelnet_models import ModelnetReader
 from eval_confusion_matrix import ConfusionMatrixEval
 
 data_location = '/home/thackel/Desktop/ModelNet10'
-model_location = '/tmp/modelnet10_848'
+model_location = '/home/thackel/cnn_models/modelnet10_8x_14'
 dim = 3 
 approx = True
 res = 8 
 rho_data = 1. / res 
-batch_size = 32
+batch_size = 43
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
 num_classes = 10

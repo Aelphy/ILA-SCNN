@@ -260,10 +260,10 @@ class SparseTensorSparseKernelDenseConvKDGradV2 : public OpKernel {
   REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDFilterGrad").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindices"), \
   SparseTensorSparseKernelDenseConvKDFilterGrad<CPUDevice, type, indices_type>); \
   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDInputGrad").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindice    s"), \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDInputGrad").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindices"), \
   SparseTensorSparseKernelDenseConvKDInputGrad<CPUDevice, type, indices_type>); \
   \
-  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDGradV2").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindice    s"), \
+  REGISTER_KERNEL_BUILDER(Name("SparseTensorSparseKernelDenseConvKDGradV2").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indices_type>("Tindices"), \
   SparseTensorSparseKernelDenseConvKDGradV2<CPUDevice, type, indices_type>); \
 
 #define REGISTER_CPU_ALL(type) \

@@ -33,7 +33,7 @@ def create_dense_and_sparse_conv_layer(filter_in_sizes, rho_filter, strides, pad
     var_list.append(f_ind_var)
     f_w_var = tf.Variable(filter1_weights, trainable=True, name="filter_weights")
     var_list.append(f_w_var)
-    f_sh_var = tf.Variable(filter1_sh, trainable=True, name="filter_shape")
+    f_sh_var = tf.Variable(filter1_sh, trainable=True, name="filter_shape", dtype=tf.int64)
     var_list.append(f_sh_var)
     dense_weights = tf.Variable(sp.sparse_to_dense(filter1_ind, filter1_weights, filter1_sh), trainable=True, name="dense_weights")
     var_list.append(dense_weights)
@@ -49,7 +49,7 @@ def create_sparse_conv_layer(filter_in_sizes, rho_filter, strides, padding, appr
     var_list.append(f_ind_var)
     f_w_var = tf.Variable(filter1_weights, trainable=True, name="filter_weights")
     var_list.append(f_w_var)
-    f_sh_var = tf.Variable(filter1_sh, trainable=True, name="filter_shape")
+    f_sh_var = tf.Variable(filter1_sh, trainable=True, name="filter_shape", dtype=tf.int64)
     var_list.append(f_sh_var)
     s5 = sc_module.sparse_tensor_sparse_kernel_dense_conv_kd(sparse_data.indices, sparse_data.values, sparse_data.dense_shape, f_ind_var, f_w_var, f_sh_var, strides, padding, dim, approx);
     return s5

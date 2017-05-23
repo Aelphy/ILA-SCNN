@@ -9,8 +9,8 @@ class ModelnetReader():
     self.path = path
     self.res = res
     self.grid_size = grid_size
-    self.categories = ["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"]
-    #self.categories = ["desk", "dresser"]
+    #self.categories = ["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"]
+    self.categories = ["desk", "dresser"]
     self.train_dir = "/train"
     self.test_dir = "/test"
     self.train = train
@@ -28,8 +28,8 @@ class ModelnetReader():
   def init(self):
     self.samples = []
     for i in range(0, len(self.categories)):
-      class_label = [0] * len(self.categories)
-      #class_label = [0] * 10
+      #class_label = [0] * len(self.categories)
+      class_label = [0] * 10
       class_label[i] = 1
       if self.train:
         append = "/" + self.categories[i] + self.train_dir
