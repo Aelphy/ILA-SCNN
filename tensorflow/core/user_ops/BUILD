@@ -31,6 +31,7 @@ tf_custom_op_library_flags(
               "sparse_tensor_pooling.h",
               "direct_sparse_to_dense_op.cc",
               "sparse_tensor_filter_zero_entries.cc",
+              "evaluate_confusion_matrix.cc",
             ],
 )
 
