@@ -17,8 +17,6 @@ REGISTER_OP("EvaluateConfusionMatrix")
 
 #include "tensorflow/core/framework/op_kernel.h"
 
-
-
 using namespace tensorflow;
 
 typedef Eigen::ThreadPoolDevice CPUDevice;
@@ -41,9 +39,9 @@ class EvaluateConfusionMatrix : public OpKernel {
     TensorShape overall_accuracy_shape = {1};
     OP_REQUIRES_OK(context, context->allocate_output("iou", iou_shape, &iou));
     OP_REQUIRES_OK(context, context->allocate_output("average_iou", average_iou_shape, &average_iou));
-    OP_REQUIRES_OK(context, context->allocate_output("averall_accuracy", overall_accuracy_shape, &overall_accuracy));
+    OP_REQUIRES_OK(context, context->allocate_output("overall_accuracy", overall_accuracy_shape, &overall_accuracy));
 
-    auto iou_ = iou->matrix<float>(); //channels, depth, height, width, optionally others TODO: other cases?
+    auto iou_ = iou->flat<float>(); //channels, depth, height, width, optionally others TODO: other cases?
     auto aiou_ = average_iou->flat<float>();
     auto oa_ = overall_accuracy->flat<float>();
     std::vector<float> sum_x(conf.dimension(0), 0);
@@ -61,7 +59,7 @@ class EvaluateConfusionMatrix : public OpKernel {
 
     float all_iou = 0;
     for(size_t i = 0; i < conf.dimension(0); ++i){
-      iou_(i) = sum_x[i] + sum_y[i] - conf(i,i);
+      iou_(i) = conf(i,i) / (sum_x[i] + sum_y[i] - conf(i,i));
       all_iou += iou_(i);
     }
 
