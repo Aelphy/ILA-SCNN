@@ -122,6 +122,7 @@ cc_library(
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
+        "//tensorflow/core:lib_proto_parsing",
         "//tensorflow/core:protos_all_cc",
     ] + if_cuda([
         "//tensorflow/core:cuda",
@@ -144,13 +145,24 @@ cc_library(
     hdrs = ["virtual_placer.h"],
     visibility = ["//visibility:public"],
     deps = [
-        ":utils",
         "//tensorflow/core:framework",
-        "//tensorflow/core:framework_lite",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/grappler:devices",
         "//tensorflow/core/grappler/clusters:cluster",
+    ],
+)
+
+cc_test(
+    name = "virtual_placer_test",
+    srcs = ["virtual_placer_test.cc"],
+    deps = [
+        ":virtual_placer",
+        "//tensorflow/core:core_cpu",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core/grappler/clusters:virtual_cluster",
     ],
 )
 
@@ -160,9 +172,14 @@ cc_library(
     hdrs = ["virtual_scheduler.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":graph_properties",
+        ":utils",
+        ":virtual_placer",
+        "//tensorflow/core:framework",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/grappler:grappler_item",
         "//tensorflow/core/grappler:utils",
+        "//tensorflow/core/grappler/clusters:utils",
         "//tensorflow/core/grappler/costs:cost_estimator",
     ],
 )
@@ -226,7 +243,6 @@ cc_library(
         ":utils",
         ":virtual_placer",
         ":virtual_scheduler",
-        "//tensorflow/core:core_cpu",
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
