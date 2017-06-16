@@ -12,7 +12,7 @@ dim = 3
 approx = False
 res = 8 
 rho_data = 1. / res 
-batch_size = 43
+batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
 reader = ModelnetReader(data_location, res, 0, batch_size, train=False)

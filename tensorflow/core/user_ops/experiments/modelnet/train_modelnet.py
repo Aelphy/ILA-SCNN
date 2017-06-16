@@ -25,19 +25,20 @@ from read_modelnet_models import ModelnetReader
 #just a quick test, no nice code
 
 data_location = '/home/thackel/Desktop/ModelNet10'
-pretrained_model = '/home/thackel/cnn_models/modelnet10_856'
+pretrained_model = ''
 model_location = '/home/thackel/cnn_models/modelnet10_8'
-learning_rate = 0.01
+learning_rate = 0.0001
 dim = 3
 approx = True
 res = 8
-rho_data = 1. / res
+rho_data = 0.0001
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 pooling_sizes = [1,2,2,2,1]
-batch_label_sizes = [batch_size, 10]
+reader = ModelnetReader(data_location, res, 0, batch_size)
+num_classes = reader.getNumClasses()
+batch_label_sizes = [batch_size, num_classes]
 max_epochs = 1000
-
 
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
 
@@ -49,7 +50,7 @@ var_list = []
 #initialize graph
 
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
-sd_loss = models.model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, approx = approx)
+sd_loss = models.model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = True, train_labels = dense_labels, num_classes = num_classes, approx = approx)
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
 sd_grads = sd_train_op.compute_gradients(sd_loss)

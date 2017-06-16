@@ -5,12 +5,15 @@ import threading
 import math
 
 class ModelnetReader():
-  def __init__(self, path, res, grid_size, batch_size, train=True, save = False):
+  def __init__(self, path, res, grid_size, batch_size, train=True, save = False, categories = None, preprocess = False, num_rotations = 30):
     self.path = path
     self.res = res
     self.grid_size = grid_size
-    #self.categories = ["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"]
-    self.categories = ["desk", "dresser"]
+    if categories == None:
+      #self.categories = ["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"]
+      self.categories = ["desk", "dresser"]
+    else:
+      self.categories = categories
     self.train_dir = "/train"
     self.test_dir = "/test"
     self.train = train
@@ -20,16 +23,34 @@ class ModelnetReader():
     self.save = save
     random.seed()
     self.thread = threading.Thread(target=self.run)
+    self.preprocess = preprocess
+    if self.preprocess:
+      self.init()
+      self.start()
+      for sample in  self.samples:
+        print("sample: ", sample[0])
+        sample_indices = []
+        sample_vals = []
+        for i in range(0, num_rotations):
+          angle = 2. * math.pi / num_rotations * i
+          [inds, vals] = self.getData(self.path  + sample[0], angle)
+          sample_indices.append(inds)
+          sample_vals.append(vals)
+          np.savetxt(self.path  + sample[0] + "_prep_val_" + str(i), vals, fmt='%f')
+          np.savetxt(self.path  + sample[0] + "_prep_ind_" + str(i), inds, fmt='%i')
+
   
   def start(self):
     self.thread.start()
     return self.thread
+  
+  def getNumClasses(self):
+    return len(self.categories)
 
   def init(self):
     self.samples = []
     for i in range(0, len(self.categories)):
-      #class_label = [0] * len(self.categories)
-      class_label = [0] * 10
+      class_label = [0] * len(self.categories)
       class_label[i] = 1
       if self.train:
         append = "/" + self.categories[i] + self.train_dir
@@ -67,8 +88,9 @@ class ModelnetReader():
     self.thread = threading.Thread(target=self.run)
     return [data, has_data]
     
-  def randomRotation2D(self, points):
-    angle = random.uniform(0, math.pi)
+  def randomRotation2D(self, points, angle = None):
+    if angle == None:
+      angle = random.uniform(0, math.pi)
     for point in points:
       x = point[0]
       y = point[1]
@@ -78,10 +100,10 @@ class ModelnetReader():
       points[1] = y * c + x * s
     return points
 
-  def getData(self, data_path, batch = 0):
+  def getData(self, data_path, batch = 0, angle = None):
     points = np.loadtxt(data_path)
     if self.train:
-      points = self.randomRotation2D(points)
+      points = self.randomRotation2D(points, angle)
     [indices, values] = self.toVoxelGrid(points, batch)
     return [indices, values]
 

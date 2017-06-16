@@ -21,7 +21,7 @@ import sparse_ops
 from tensorflow.python import debug as tf_debug
 import sparse_layer_definition as ld
 
-def model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = False, train_labels = None, num_classes = 10, approx = True):
+def model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = False, train_labels = None, num_classes = 10, approx = True, scope = ""):
   rho_filter = 1
   strides = [1,1,1,1,1]
   padding = "SAME"
@@ -31,22 +31,46 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, var_list, train = False, tr
   total_size = 1
   for i in range(1, len(tensor_in_sizes)): #skip batch size
     total_size = total_size * tensor_in_sizes[i]
-  sc1 = ld.layer_to_sparse_tensor(ld.create_sparse_conv_layer([3,3,3,1,8], rho_filter, strides, padding, approx, dim, var_list, sparse_data, name = "sc1"))
+  sc1 = ld.layer_to_sparse_tensor(ld.create_sparse_conv_layer([3,3,3,1,8], rho_filter, strides, padding, approx, dim, var_list, sparse_data, name = scope + "sc1"))
   s_out = sc1
   sd = ld.create_direct_sparse_to_dense(s_out)
   sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
-  if train:
+  if False:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
   else:
     conv_out = sd_flat
   fc512 = tf.layers.dense(conv_out, 1024)
   fc10 = tf.layers.dense(fc512, num_classes)
-  if train:
-    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
-  else:
-    sd_out = tf.nn.softmax(logits=fc10)
-  return sd_out
+  #if train:
+  sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
+  #else:
+  p_sd_out = tf.nn.softmax(logits=fc10)
+  return [sd_out, p_sd_out]
 
+def dense_model_modelnet10_8(dense_data, tensor_in_sizes, var_list, train = False, train_labels = None, num_classes = 10, approx = True):
+  rho_filter = 1
+  strides = [1,1,1,1,1]
+  padding = "SAME"
+  dim = 3
+  pooling_sizes = [1,2,2,2,1]
+  batch_size = tensor_in_sizes[0]
+  total_size = 1
+  for i in range(1, len(tensor_in_sizes)): #skip batch size
+    total_size = total_size * tensor_in_sizes[i]
+  sc1 = ld.create_dense_conv_layer([3,3,3,1,8], rho_filter, strides, padding, approx, dim, var_list, dense_data, name = "dc1")
+  sd = sc1
+  sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
+  if False:
+    conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
+  else:
+    conv_out = sd_flat
+  fc512 = tf.layers.dense(conv_out, 1024)
+  fc10 = tf.layers.dense(fc512, num_classes)
+  #if train:
+  sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
+  #else:
+  p_sd_out = tf.nn.softmax(logits=fc10)
+  return [sd_out, p_sd_out]
 
 def model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = False, train_labels = None, approx = True):
   rho_filter = 1
@@ -79,7 +103,7 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = False, 
   fc512 = tf.layers.dense(conv_out, 512)
   fc10 = tf.layers.dense(fc512, 10)
   if train:
-    sd_out = tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss")
+    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
   else:
     sd_out = tf.nn.softmax(logits=fc10)
   return sd_out

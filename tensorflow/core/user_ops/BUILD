@@ -33,6 +33,10 @@ tf_custom_op_library_flags(
               "sparse_tensor_filter_zero_entries.cc",
               "evaluate_confusion_matrix.cc",
             ],
+
+    gpu_srcs = [
+    
+    ],
 )
 
 py_library(
