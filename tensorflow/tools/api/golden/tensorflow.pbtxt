@@ -9,10 +9,6 @@ tf_module {
     mtype: "<class \'google.protobuf.pyext.cpp_message.GeneratedProtocolMessageType\'>"
   }
   member {
-    name: "AutoParallelOptions"
-    mtype: "<class \'google.protobuf.pyext.cpp_message.GeneratedProtocolMessageType\'>"
-  }
-  member {
     name: "COMPILER_VERSION"
     mtype: "<type \'str\'>"
   }
@@ -113,7 +109,15 @@ tf_module {
     mtype: "<type \'type\'>"
   }
   member {
+    name: "LMDBReader"
+    mtype: "<type \'type\'>"
+  }
+  member {
     name: "LogMessage"
+    mtype: "<class \'google.protobuf.pyext.cpp_message.GeneratedProtocolMessageType\'>"
+  }
+  member {
+    name: "MetaGraphDef"
     mtype: "<class \'google.protobuf.pyext.cpp_message.GeneratedProtocolMessageType\'>"
   }
   member {
@@ -163,10 +167,6 @@ tf_module {
   member {
     name: "RegisterGradient"
     mtype: "<type \'type\'>"
-  }
-  member {
-    name: "RewriterConfig"
-    mtype: "<class \'google.protobuf.pyext.cpp_message.GeneratedProtocolMessageType\'>"
   }
   member {
     name: "RunMetadata"
@@ -255,6 +255,10 @@ tf_module {
   member {
     name: "bfloat16"
     mtype: "<class \'tensorflow.python.framework.dtypes.DType\'>"
+  }
+  member {
+    name: "bitwise"
+    mtype: "<type \'module\'>"
   }
   member {
     name: "bool"
@@ -765,6 +769,10 @@ tf_module {
     argspec: "args=[\'x\', \'name\'], varargs=None, keywords=None, defaults=[\'None\'], "
   }
   member_method {
+    name: "cosh"
+    argspec: "args=[\'x\', \'name\'], varargs=None, keywords=None, defaults=[\'None\'], "
+  }
+  member_method {
     name: "count_nonzero"
     argspec: "args=[\'input_tensor\', \'axis\', \'keep_dims\', \'dtype\', \'name\', \'reduction_indices\'], varargs=None, keywords=None, defaults=[\'None\', \'False\', \"<dtype: \'int64\'>\", \'None\', \'None\'], "
   }
@@ -898,27 +906,27 @@ tf_module {
   }
   member_method {
     name: "fake_quant_with_min_max_args"
-    argspec: "args=[\'inputs\', \'min\', \'max\', \'num_bits\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\', \'None\'], "
+    argspec: "args=[\'inputs\', \'min\', \'max\', \'num_bits\', \'narrow_range\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\', \'None\', \'None\'], "
   }
   member_method {
     name: "fake_quant_with_min_max_args_gradient"
-    argspec: "args=[\'gradients\', \'inputs\', \'min\', \'max\', \'num_bits\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\', \'None\'], "
+    argspec: "args=[\'gradients\', \'inputs\', \'min\', \'max\', \'num_bits\', \'narrow_range\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\', \'None\', \'None\'], "
   }
   member_method {
     name: "fake_quant_with_min_max_vars"
-    argspec: "args=[\'inputs\', \'min\', \'max\', \'num_bits\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\'], "
+    argspec: "args=[\'inputs\', \'min\', \'max\', \'num_bits\', \'narrow_range\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\'], "
   }
   member_method {
     name: "fake_quant_with_min_max_vars_gradient"
-    argspec: "args=[\'gradients\', \'inputs\', \'min\', \'max\', \'num_bits\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\'], "
+    argspec: "args=[\'gradients\', \'inputs\', \'min\', \'max\', \'num_bits\', \'narrow_range\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\'], "
   }
   member_method {
     name: "fake_quant_with_min_max_vars_per_channel"
-    argspec: "args=[\'inputs\', \'min\', \'max\', \'num_bits\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\'], "
+    argspec: "args=[\'inputs\', \'min\', \'max\', \'num_bits\', \'narrow_range\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\'], "
   }
   member_method {
     name: "fake_quant_with_min_max_vars_per_channel_gradient"
-    argspec: "args=[\'gradients\', \'inputs\', \'min\', \'max\', \'num_bits\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\'], "
+    argspec: "args=[\'gradients\', \'inputs\', \'min\', \'max\', \'num_bits\', \'narrow_range\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'None\'], "
   }
   member_method {
     name: "fft"
@@ -1197,8 +1205,16 @@ tf_module {
     argspec: "args=[\'x\', \'y\', \'name\'], varargs=None, keywords=None, defaults=[\'LogicalXor\'], "
   }
   member_method {
+    name: "make_ndarray"
+    argspec: "args=[\'tensor\'], varargs=None, keywords=None, defaults=None"
+  }
+  member_method {
     name: "make_template"
     argspec: "args=[\'name_\', \'func_\', \'create_scope_now_\', \'unique_name_\', \'custom_getter_\'], varargs=None, keywords=kwargs, defaults=[\'False\', \'None\', \'None\'], "
+  }
+  member_method {
+    name: "make_tensor_proto"
+    argspec: "args=[\'values\', \'dtype\', \'shape\', \'verify_shape\'], varargs=None, keywords=None, defaults=[\'None\', \'None\', \'False\'], "
   }
   member_method {
     name: "map_fn"
@@ -1629,6 +1645,10 @@ tf_module {
     argspec: "args=[\'x\', \'name\'], varargs=None, keywords=None, defaults=[\'None\'], "
   }
   member_method {
+    name: "sinh"
+    argspec: "args=[\'x\', \'name\'], varargs=None, keywords=None, defaults=[\'None\'], "
+  }
+  member_method {
     name: "size"
     argspec: "args=[\'input\', \'name\', \'out_type\'], varargs=None, keywords=None, defaults=[\'None\', \"<dtype: \'int32\'>\"], "
   }
@@ -1683,6 +1703,14 @@ tf_module {
   member_method {
     name: "sparse_placeholder"
     argspec: "args=[\'dtype\', \'shape\', \'name\'], varargs=None, keywords=None, defaults=[\'None\', \'None\'], "
+  }
+  member_method {
+    name: "sparse_reduce_max"
+    argspec: "args=[\'sp_input\', \'axis\', \'keep_dims\', \'reduction_axes\'], varargs=None, keywords=None, defaults=[\'None\', \'False\', \'None\'], "
+  }
+  member_method {
+    name: "sparse_reduce_max_sparse"
+    argspec: "args=[\'sp_input\', \'axis\', \'keep_dims\', \'reduction_axes\'], varargs=None, keywords=None, defaults=[\'None\', \'False\', \'None\'], "
   }
   member_method {
     name: "sparse_reduce_sum"

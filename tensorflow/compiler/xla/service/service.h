@@ -248,7 +248,7 @@ class Service : public ServiceInterface {
 
   // The constructor is private. Use the NewService factory to create new
   // service objects.
-  Service(std::unique_ptr<Backend> backend,
+  Service(const ServiceOptions& options, std::unique_ptr<Backend> backend,
           std::unique_ptr<Backend> compute_constant_backend);
 
   static StatusOr<std::unique_ptr<Backend>> CreateComputeConstantBackend();
@@ -319,8 +319,7 @@ class Service : public ServiceInterface {
           std::vector<perftools::gputools::DeviceMemoryBase>>
           arguments,
       Backend* backend,
-      tensorflow::gtl::ArraySlice<perftools::gputools::StreamExecutor*>
-          executors,
+      tensorflow::gtl::ArraySlice<DeviceHandle> device_handles,
       tensorflow::gtl::ArraySlice<string> result_tags);
 
   // Returns an HLO dumper for use in the compiler (it refers to flags
@@ -346,23 +345,17 @@ class Service : public ServiceInterface {
   tensorflow::Status ValidateResultShapeWithLayout(
       const Shape& shape_with_layout, const Shape& result_shape) const;
 
-  // Convenience wrapper for calling Executable::ExecuteOnStream. Sets up a
-  // timer for the execution, sets up HLO profiling if enabled, and fills in the
-  // given ExecutionProfile if non-null. The given execute_func should be a
-  // function which calls the desired ExecuteOnStream overload with the supplied
-  // arguments. The ExecuteOnStream overloads return different types so this
-  // method is templated on return-type of the execute function.
-  template <typename ReturnT>
-  static ReturnT ExecuteOnStreamWrapper(
-      Executable* executable, const ServiceExecutableRunOptions* run_options,
-      ExecutionProfile* profile, Backend* backend,
-      std::function<ReturnT(Executable* executable,
-                            const ServiceExecutableRunOptions* run_options,
-                            HloExecutionProfile* hlo_execution_profile)>
-          execute_func) {
-    return executable->ExecuteOnStreamWrapper(run_options, profile,
-                                              execute_func);
-  }
+  // Returns the stream executors assigned to the replicas represented by the
+  // given device handle. Each device_handle is a virtual replicated device that
+  // represents a set of physical devices for the replicas.
+  StatusOr<std::vector<perftools::gputools::StreamExecutor*>> Replicas(
+      const Backend& backend, const DeviceHandle& device_handle) const;
+
+  // Returns the device handle that represents the replicated device for a
+  // single computation that is not model-parallelized.
+  DeviceHandle SingleComputationDeviceHandle() const;
+
+  ServiceOptions options_;
 
   // Tracks computations built via the API.
   ComputationTracker computation_tracker_;

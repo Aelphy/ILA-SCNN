@@ -71,7 +71,6 @@ using tensorflow::NodeBuilder;
 using tensorflow::OpDef;
 using tensorflow::OpRegistry;
 using tensorflow::PartialTensorShape;
-using tensorflow::Reset;
 using tensorflow::RunMetadata;
 using tensorflow::RunOptions;
 using tensorflow::Session;
@@ -330,7 +329,7 @@ TF_DeprecatedSession* TF_NewDeprecatedSession(const TF_SessionOptions* opt,
     return new TF_DeprecatedSession({session});
   } else {
     DCHECK_EQ(nullptr, session);
-    return NULL;
+    return nullptr;
   }
 }
 
@@ -504,7 +503,7 @@ static void TF_Run_Setup(int noutputs, TF_Tensor** c_outputs,
                          TF_Status* status) {
   status->status = Status::OK();
   for (int i = 0; i < noutputs; ++i) {
-    c_outputs[i] = NULL;
+    c_outputs[i] = nullptr;
   }
 }
 
@@ -629,7 +628,7 @@ void TF_PRunSetup(TF_DeprecatedSession* s,
                   // Target nodes
                   const char** c_target_oper_names, int ntargets,
                   const char** handle, TF_Status* status) {
-  status->status = Status::OK();
+  *handle = nullptr;
 
   std::vector<tensorflow::string> input_names(ninputs);
   std::vector<tensorflow::string> output_names(noutputs);
@@ -644,16 +643,12 @@ void TF_PRunSetup(TF_DeprecatedSession* s,
     target_oper_names[i] = c_target_oper_names[i];
   }
   tensorflow::string new_handle;
-  Status result;
-  result = s->session->PRunSetup(input_names, output_names, target_oper_names,
-                                 &new_handle);
-  if (result.ok()) {
+  status->status = s->session->PRunSetup(input_names, output_names,
+                                         target_oper_names, &new_handle);
+  if (status->status.ok()) {
     char* buf = new char[new_handle.size() + 1];
     memcpy(buf, new_handle.c_str(), new_handle.size() + 1);
     *handle = buf;
-  } else {
-    *handle = nullptr;
-    status->status = result;
   }
 }
 
@@ -806,6 +801,7 @@ void TF_GraphSetTensorShape(TF_Graph* graph, TF_Output output,
   }
 
   std::vector<tensorflow::shape_inference::DimensionHandle> dim_vec;
+  dim_vec.reserve(num_dims);
   for (int i = 0; i < num_dims; ++i) {
     dim_vec.push_back(ic->MakeDim(dims[i]));
   }
@@ -2158,7 +2154,7 @@ TF_Session* TF_NewSession(TF_Graph* graph, const TF_SessionOptions* opt,
     return new TF_Session(session, graph);
   } else {
     DCHECK_EQ(nullptr, session);
-    return NULL;
+    return nullptr;
   }
 }
 
@@ -2254,7 +2250,7 @@ static bool ExtendSessionGraphHelper(TF_Session* session, TF_Status* status) {
     const auto num_nodes = graph.num_node_ids();
     if (session->last_num_graph_nodes < num_nodes) {
       GraphDef graph_def;
-      graph_def.mutable_versions()->CopyFrom(graph.versions());
+      *graph_def.mutable_versions() = graph.versions();
       // Fill graph_def with nodes with ids in the range
       // [session->last_num_graph_nodes, num_nodes), that is the nodes
       // added since the last TF_SessionRun() call.
@@ -2326,6 +2322,8 @@ void TF_SessionPRunSetup(TF_Session* session, const TF_Output* inputs,
                          int ninputs, const TF_Output* outputs, int noutputs,
                          const TF_Operation* const* target_opers, int ntargets,
                          const char** handle, TF_Status* status) {
+  *handle = nullptr;
+
   if (!ExtendSessionGraphHelper(session, status)) {
     return;
   }
