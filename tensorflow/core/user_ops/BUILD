@@ -20,7 +20,9 @@ tf_custom_op_library(
             ],
 
     gpu_srcs = [ 
-              "sparse_tensor_sparse_kernel_dense_conv_kd_gpu.cu.cc",
+              "direct_sparse_conv_kd_gpu.h",
+              "direct_sparse_conv_kd_gpu.cu.cc",
+              "direct_sparse_conv_kd.cc",
     ],  
 )
 
