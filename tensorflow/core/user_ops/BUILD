@@ -17,12 +17,12 @@ tf_custom_op_library(
     name = "sparse_tensor_dense_conv_kd_.so",
 
     srcs =  [
+              "direct_sparse_conv_kd.cc",
             ],
 
     gpu_srcs = [ 
               "direct_sparse_conv_kd_gpu.h",
               "direct_sparse_conv_kd_gpu.cu.cc",
-              "direct_sparse_conv_kd.cc",
     ],  
 )
 

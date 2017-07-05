@@ -23,7 +23,7 @@
 
 
 
-REGISTER_OP("DirectSparseConvKD")
+REGISTER_OP("DirectSparseApproxConvKD")
   .Attr("T: realnumbertype")
   .Attr("Tindices: {int32, int64}")
   .Input("in_indices: Tindices")
@@ -52,14 +52,14 @@ class DirectSparseConvKD : public OpKernel {
  explicit DirectSparseConvKD(OpKernelConstruction* context) : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("strides", &stride_));
     OP_REQUIRES_OK(context, context->GetAttr("filter_dim", &filter_dim));
-    OP_REQUIRES(context, stride_.size() == 5,
+    OP_REQUIRES(context, stride_.size() >= 4,
                 errors::InvalidArgument("Sliding window strides field must "
-                                        "specify 5 dimensions"));
+                                        "at least specify 4 dimensions"));
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
   }
 
   void Compute(OpKernelContext* context) override {
-    //functor requires kernel context since output dimensions are not known befor computing results
+    //functor requires kernel context since output shape is not known befor computing results
     FunctorT()(context, stride_, padding, filter_dim);
   }
 
@@ -71,7 +71,7 @@ class DirectSparseConvKD : public OpKernel {
 
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type)      \
-  REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKD").Device(DEVICE_CPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseApproxConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
                           DirectSparseConvKD<indice_type, functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type> >);
 
 #define REGISTER_GPU_ALL(type) \

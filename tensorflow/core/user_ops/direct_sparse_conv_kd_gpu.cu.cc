@@ -125,7 +125,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   OP_REQUIRES_OK(context, context->input("filter_indices", &filter_indices));
   OP_REQUIRES_OK(context, context->input("filter_values", &filter_values));
   OP_REQUIRES_OK(context, context->input("filter_shape", &filter_shape));
-  DeviceT d = context->eigen_device<Device>();
+  const DeviceT d = context->eigen_device<DeviceT>();
 
   /*
   const int data_entry_count = i_ind.dimension(0);
@@ -180,13 +180,31 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &sparse_values));
   OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &sparse_shape));
   */
+  
+  // Create an output tensor
+  Tensor *sparse_values = NULL, *sparse_indices = NULL, *sparse_shape = NULL;
+  TensorShape out_ind_shape = {1, 1};
+  TensorShape out_val_shape = {1};
+  TensorShape out_sh_shape = {1};
+  OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &sparse_indices));
+  OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &sparse_values));
+  OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &sparse_shape));
+  
 
 }
 }  // end namespace functor
 
 // Instantiate the GPU implementation for float.
-//template struct functor::ApproxDirectSparseConvFunctor<float, int, 4>;
 
-}  // end namespace tensorflow
+template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, int, int>;
+#define INIT_GPU_TYPE(type, indice_type)      \
+ template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type>;
+#define INIT_GPU_ALL(type) \
+  INIT_GPU_TYPE(type, int64); \
+  INIT_GPU_TYPE(type, int32);
 
+INIT_GPU_ALL(float);
+#undef INIT_GPU_TYPE
+#undef INIT_GPU_ALL
+} // end namespace tensorflow
 #endif  // GOOGLE_CUDA
