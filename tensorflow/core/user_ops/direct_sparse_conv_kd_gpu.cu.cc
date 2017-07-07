@@ -6,7 +6,7 @@
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/cuda_kernel_helper.h"
 #include "direct_sparse_conv_kd_gpu.h"
-//#include "tf_cudpp_bindings_gpu.h"
+#include "tf_cudpp_bindings_gpu.h"
 
 namespace tensorflow {
 
@@ -89,6 +89,19 @@ __global__ void unique_mask(CudaLaunchConfig config, const dtype* in_ptr, dtype*
   }
 }
 
+//copy obtain unique elemets from array
+template <typename dtype, typename itype>
+__global__ void unique_array(CudaLaunchConfig config, const dtype* in_id_ptr, const itype* unique_masked_ptr, 
+              const itype* unique_count, dtype* unique_ptr){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(unique_masked_ptr[x] == 1){
+      unique_ptr[unique_count[x] - 1] = in_id_ptr[x];
+    }
+  }
+}
 
 
 template <typename dtype>
@@ -123,6 +136,9 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   auto i_sh = in_shape->flat<IndiceT>();
   auto i_ind = in_indices->matrix<IndiceT>();
   auto i_val = in_values->flat<T>();
+  auto f_sh = filter_shape->flat<IndiceT>();
+  auto f_ind = filter_indices->matrix<IndiceT>();
+  auto f_val = filter_values->flat<T>();
   
   const int data_entry_count = i_ind.dimension(0);
   const int data_dimension = i_ind.dimension(1);
@@ -148,11 +164,9 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   checkCuda(cudaMalloc(&in_ind_1d, data_entry_count * sizeof(IndiceT)));
   IndiceT *in_ind_1d_channels = 0;
   checkCuda(cudaMalloc(&in_ind_1d_channels, data_entry_count * sizeof(IndiceT)));
-
   CudaLaunchConfig config_i1d = GetCudaLaunchConfig(data_entry_count, d);
   index_KDto1D<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(config_i1d,
       i_ind.data(), i_sh.data(),  in_ind_1d, in_ind_1d_channels, data_dimension, data_entry_count);
-
   //cudaMemcpy(o_sh.data(), in_ind_1d, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   //cudaMemcpy(o_sh.data(), in_ind_1d_channels, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
 
@@ -168,7 +182,25 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   //cudaMemcpy(o_sh.data(), unique_masked, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   IndiceT *unique_count = 0;
   checkCuda(cudaMalloc(&unique_count, data_entry_count * sizeof(IndiceT)));
-  //prescan<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(unique_count, unique_masked, data_entry_count);
+  CUDPPHandle cudppHandle; //compute scan with cudpp lib
+  cudppCreate(&cudppHandle);
+  auto config = getConfiguration<IndiceT>("add", "scan");
+  CUDPPHandle scanplan = 0;
+  CUDPPResult res = cudppPlan(cudppHandle, &scanplan, config, data_entry_count, 1, 0);
+  res = cudppScan(scanplan, unique_count, unique_masked, data_entry_count);
+  if (CUDPP_SUCCESS != res){
+      printf("Error in cudppScan()\n"); //TODO: use tensorflow logging
+  }
+  cudppDestroy(cudppHandle);
+  cudaMemcpy(o_sh.data(), unique_count, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  IndiceT reduced_count = -1;
+  cudaMemcpy(&reduced_count, unique_count + data_entry_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  IndiceT* reduced_indices = 0;
+  checkCuda(cudaMalloc(&reduced_indices, reduced_count * sizeof(IndiceT)));
+  unique_array<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(config_i1d, in_ind_1d, unique_masked, unique_count, reduced_indices);
+  cudaMemcpy(o_sh.data(), reduced_indices, reduced_count* sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  //TODO: apply stride/padding
+  
   /*
   /////
   //3. prepare filter (to directly manipulate 1D keys instead of kD indices)
@@ -187,6 +219,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaFree(in_ind_1d);
   cudaFree(in_ind_1d_channels);
   cudaFree(unique_masked);
+  cudaFree(unique_count);
+  cudaFree(reduced_indices);
 
   /*
   // Create an output tensor
