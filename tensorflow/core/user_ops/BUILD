@@ -12,22 +12,8 @@ load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
 load("//tensorflow:tensorflow.bzl", "tf_py_wrap_cc")
 load("//tensorflow/core/user_ops:custom_bzl.bzl", "tf_custom_op_library_flags")
 
-
-tf_custom_op_library(
-    name = "sparse_tensor_dense_conv_kd_.so",
-
-    srcs =  [
-              "direct_sparse_conv_kd.cc",
-            ],
-
-    gpu_srcs = [ 
-              "direct_sparse_conv_kd_gpu.h",
-              "direct_sparse_conv_kd_gpu.cu.cc",
-    ],  
-)
-
 tf_custom_op_library_flags(
-    name = "sparse_tensor_dense_conv_3d.so",
+    name = "direct_sparse_conv_kd.so",
 
     srcs =  [
               "sparse_tensor_sparse_kernel_dense_conv_kd.h",
@@ -45,9 +31,17 @@ tf_custom_op_library_flags(
               "direct_sparse_to_dense_op.cc",
               "sparse_tensor_filter_zero_entries.cc",
               "evaluate_confusion_matrix.cc",
+              "direct_sparse_conv_kd.cc",
             ],
 
     gpu_srcs = [
+              "tf_cudpp_bindings_gpu.h",
+              "direct_sparse_conv_kd_gpu.h",
+              "direct_sparse_conv_kd_gpu.cu.cc"
+    ],
+
+    cflags = [
+      "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash", "-lcudpp", "-lcudpp_hash"
     ],
 )
 
