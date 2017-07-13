@@ -295,7 +295,6 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   //TODO: apply stride/padding
   //TODO: initialize search structure
   
-  
   /////
   //3. prepare filter (to directly manipulate 1D keys instead of kD indices)
   IndiceT *filter_ind_1d = 0;
@@ -337,10 +336,9 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   non_zero_mask<<<config_r1d.block_count, config_r1d.thread_per_block, 0, d.stream()>>>(config_r1d, conv_res, non_zero_masked);
   IndiceT *non_zero_count = 0;
   checkCuda(cudaMalloc(&non_zero_count, conv_out_count * sizeof(IndiceT)));
-  //compute_scan(non_zero_count, non_zero_masked, conv_out_count);
-  //IndiceT result_count = -1;
-  //cudaMemcpy(&result_count, non_zero_count + conv_out_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
-  
+  compute_scan(non_zero_count, non_zero_masked, conv_out_count);
+  IndiceT result_count = -1;
+  cudaMemcpy(&result_count, non_zero_count + conv_out_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
 
   /*
   // Create an output tensor

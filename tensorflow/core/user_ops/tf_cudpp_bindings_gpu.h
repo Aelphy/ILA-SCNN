@@ -80,6 +80,6 @@ CUDPPConfiguration getConfiguration(std::string operand = "add", std::string alg
   } 
 
   //TODO: options
-  //config.options = CUDPP_OPTION_FORWARD | CUDPP_OPTION_EXCLUSIVE;
+  config.options = CUDPP_OPTION_FORWARD | CUDPP_OPTION_EXCLUSIVE;
   return config;
 }
