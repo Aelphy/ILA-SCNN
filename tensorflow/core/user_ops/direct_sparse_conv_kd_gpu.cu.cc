@@ -103,23 +103,71 @@ __global__ void unique_array(CudaLaunchConfig config, const dtype* in_id_ptr, co
   }
 }
 
-
 template <typename dtype>
-__global__ void approxSparseDirectConv(Cuda2DLaunchConfig config, const dtype* input_ptr,
-                    dtype* output_ptr) {
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
-    if (x < 0) {  // x might overflow when testing extreme case
+__global__ void prepare_filter_weights_(CudaLaunchConfig config, const dtype* f_id_ptr, const dtype* f_sh_ptr, const dtype* in_sh_ptr,
+    dtype* out_id_ptr, const int dimension_count, const int data_entry_count, const int filter_entry_count){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
-      if (y < 0) {  // y might overflow when testing extreme case
-        break;
-      }
-      atomicAdd(&output_ptr[x], 1);
-    }
+    //index type (dtype) must! be signed
+	  dtype val = 0;
+    dtype mul = 1;
+    dtype idx = x;
+    //data format: [batch, depth, height, width, in_channels]
+    //filter format: [depth, height, width, in_channels, out_channels]
+    //manipulate depth, height width only and store in and out channels 
+    for(int i = dimension_count - 2; i > 0; --i) {
+      const int f_i = i - 1;
+      const dtype offset = (f_sh_ptr[f_i] - 1)/2;
+      idx = x * dimension_count +  f_i;  
+      val = val + mul * (f_id_ptr[idx] - offset);
+      mul = mul * in_sh_ptr[i];
+    }   
+    //const dtype channel = in_ptr[(x + 1)  * dimension_count - 1]; 
+    out_id_ptr[x] = val;
   }
 }
 
+template<typename dtype>
+__device__ void index_lookup(const dtype index, const dtype *data,  const dtype data_size, dtype* result_id){
+  //binary search
+  *result_id = 0;  
+}
+
+template <typename dtype, typename itype>
+__global__ void approxSparseDirectConv(Cuda2DLaunchConfig config, 
+   const itype* i_ind, const dtype* i_val, const itype* i_sh, itype* i_ind_1d, itype* i_ch, //input tensors
+   const itype* f_ind, const dtype* f_val, const itype* f_sh, itype* f_ind_1d, //filter tensors
+   itype* r_ind, const itype reduced_count, //search structure
+   dtype* out_conv_data,
+   const int data_entry_count, const int filter_weight_count, const int data_dimension){
+
+  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) { //index of feature map
+    if (x < 0) {  // x might overflow when testing extreme case
+      break;
+    }
+    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) { //index of filter weights
+      if (y < 0) {  // y might overflow when testing extreme case
+        break;
+      }
+      //1. check valid indice:
+      //for(int i = 1; i < data_dimension - 1; ++i){
+        //if()
+      //}
+      //2. check valid stride/padding
+      
+      //3. compute update indice
+      itype lookup_id = 0;
+      //itype lookup_id = i_ind_1d[x] + f_ind_1d[y];
+      itype update_id = 0;
+      //index_lookup(lookup_id, r_ind, reduced_count, &update_id);
+      //4. update indice
+      //const float update_val = f_val[y] * i_val[x];
+      //atomicAdd(&out_conv_data[update_id], update_val);
+    }
+  }
+}
 
 namespace functor {
 template <typename DeviceT, typename T, typename IndiceT>
@@ -142,7 +190,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   
   const int data_entry_count = i_ind.dimension(0);
   const int data_dimension = i_ind.dimension(1);
-  //const int filter_weight_count = f_ind.dimension(0);
+  const int filter_weight_count = f_ind.dimension(0);
 
   //indices must! be sorted
 
@@ -193,27 +241,39 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   }
   cudppDestroy(cudppHandle);
   cudaMemcpy(o_sh.data(), unique_count, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
-  IndiceT reduced_count = -1;
+  /*IndiceT reduced_count = -1;
   cudaMemcpy(&reduced_count, unique_count + data_entry_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   IndiceT* reduced_indices = 0;
   checkCuda(cudaMalloc(&reduced_indices, reduced_count * sizeof(IndiceT)));
   unique_array<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(config_i1d, in_ind_1d, unique_masked, unique_count, reduced_indices);
   cudaMemcpy(o_sh.data(), reduced_indices, reduced_count* sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   //TODO: apply stride/padding
+  //TODO: initialize search structure
   
-  /*
+  
   /////
   //3. prepare filter (to directly manipulate 1D keys instead of kD indices)
-  
+  IndiceT *filter_ind_1d = 0;
+  checkCuda(cudaMalloc(&filter_ind_1d, filter_weight_count * sizeof(IndiceT)));
+  CudaLaunchConfig config_f1d = GetCudaLaunchConfig(filter_weight_count, d);
+  prepare_filter_weights_<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, f_ind.data(), f_sh.data(), i_sh.data(), filter_ind_1d,  data_dimension, data_entry_count, filter_weight_count);
+  cudaMemcpy(o_sh.data(), filter_ind_1d, filter_weight_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+
   /////
   //4. perform approximated convolution
+  IndiceT out_channel_count = -1;
+  //cudaMemcpy(&out_channel_count, f_sh.data() + data_entry_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  T* conv_res = 0;
+  //checkCuda(cudaMalloc(&conv_res, out_channel_count * reduced_count * sizeof(T)));
   Cuda2DLaunchConfig config_conv = GetCuda2DLaunchConfig(data_entry_count, filter_weight_count, d);
   approxSparseDirectConv<<<config_conv.block_count, config_conv.thread_per_block, 0, d.stream()>>>(config_conv,
-      i_ind.data(), o_ind.data());
+      i_ind.data(), i_val.data(), i_sh.data(), in_ind_1d, in_ind_1d_channels,
+      f_ind.data(), f_val.data(), f_sh.data(), filter_ind_1d,
+      reduced_indices, reduced_count, conv_res,
+      data_entry_count, filter_weight_count, data_dimension);
 
   /////
   //5. remove zero entries and convert from keys to indices
-  */
 
   //# free memory
   cudaFree(in_ind_1d);
@@ -221,7 +281,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaFree(unique_masked);
   cudaFree(unique_count);
   cudaFree(reduced_indices);
-
+  cudaFree(filter_ind_1d);
+  */
   /*
   // Create an output tensor
   Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL;
@@ -237,7 +298,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
 
 // Instantiate the GPU implementation for float.
 
-template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, int, int>;
+//template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, int, int>;
 #define INIT_GPU_TYPE(type, indice_type)      \
  template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type>;
 #define INIT_GPU_ALL(type) \
