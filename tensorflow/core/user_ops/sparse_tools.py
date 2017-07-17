@@ -75,10 +75,10 @@ def createRandomSparseTensor(non_zero_percentage, shape, min_range = 1, max_rang
     ids[idx] = id1D_to_idkD(s, shape)
     idx += 1
   tensor_ind = np.array(ids, dtype=np.int64)
-
+  tensor_ind_sorted = tensor_ind[tensor_ind[:,1].argsort()]
   vals = [random.randint(1, 100 * full_range) / 100 + min_range for e in range(num_elems)]
   tensor_vals = np.array(vals, dtype=np.float32)
-  return [tensor_ind, tensor_vals, shape]
+  return [tensor_ind_sorted, tensor_vals, shape]
 
 def checkSparsity(matrix):
   flat = matrix.flatten()
