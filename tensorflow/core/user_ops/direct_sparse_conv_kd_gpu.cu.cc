@@ -108,14 +108,10 @@ __global__ void non_zero_mask(CudaLaunchConfig config, const dtype* in_ptr, ityp
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
-    if(x == 0){
+    if(in_ptr[x] != 0){
       out_ptr[x] = 1;
     } else {
-      if(in_ptr[x] != 0){
-        out_ptr[x] = 1;
-      } else {
-        out_ptr[x] = 0;
-      }
+      out_ptr[x] = 0;
     }
   }
 }
@@ -199,13 +195,24 @@ __global__ void approxSparseDirectConv(Cuda2DLaunchConfig config,
         break;
       }
       //1.a check valid indice and valid stride / padding:
+      bool is_valid = true;
       itype idx = data_dimension * x;
       itype idy = data_dimension * y;
-      for(int i = 1; i < data_dimension - 1; ++i){
-        itype id = i_ind[idx + i] + f_ind[idy + i - 1] - (f_sh[i - 1] - 1) / 2;
-        if(id < 0 || id >= out_sh[i]) break;
+      //itype lookup_id = 0;
+      //itype mul = 1;
+      for(int i = data_dimension - 2; i > 0; --i){
+        itype id = i_ind[idx + i] - f_ind[idy + i - 1] + (f_sh[i - 1] - 1) / 2;
+        //lookup_id = lookup_id + mul * id;
+        //mul = mul * out_sh[i];
+        if(id < 0 || id >= out_sh[i]){
+          is_valid = false;
+          break;
+        }
         //TODO: stride and padding
       }
+      //lookup_id = lookup_id + mul * i_ind[idx];
+
+      if(!is_valid) continue;
       //1.b: check channel filter/input
       if(i_ch[x] != f_ind[idy + data_dimension - 2]) break; 
       //2. compute update indice
@@ -295,6 +302,12 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   for(size_t i = 0; i < dout_id.size(); ++i) dout_s << dout_id[i] << " ";
   dout_s << std::endl;
 
+  dout_s << "values 1d: ";
+  std::vector<T> vout_id(data_entry_count);
+  cudaMemcpy(&vout_id[0], i_val.data(), vout_id.size() *sizeof(T), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < vout_id.size(); ++i) dout_s << vout_id[i] << " ";
+  dout_s << std::endl;
+
   /////
   //2. remove duplicates from data and apply stride/padding to obtain search structure
   t = clock();
@@ -344,6 +357,11 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   for(size_t i = 0; i < dout_r.size(); ++i) dout_s << dout_r[i] << " ";
   dout_s << std::endl;
   
+  dout_s << "filter val 1d: ";
+  std::vector<T> fout_r(filter_weight_count);
+  cudaMemcpy(&fout_r[0], f_val.data(), fout_r.size() *sizeof(T), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < fout_r.size(); ++i) dout_s << fout_r[i] << " ";
+  dout_s << std::endl;
 
   /////
   //4. compute out shape

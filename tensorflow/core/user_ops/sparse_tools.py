@@ -27,31 +27,23 @@ def sparse_to_dense(ind, val, shape):
 def idkD_to_id1D(idx, shape):
    index_1d = 0;
    mult = 1;
-   for i in range(0,len(shape)):
+   for i in reversed(range(0,len(shape))):
      index_1d += idx[i] * mult;
      mult = mult * shape[i];
    assert(np.all(id1D_to_idkD(index_1d, shape) - idx == 0))
    return index_1d
 
 def id1D_to_idkD(inid, shape):
-  fact = []
+  fact = [1] * len(shape) 
   dim = 0 
-  fact.append(1);
-  lastdim=0
-  for d in shape:
-    if dim > 0:
-      fact.append(fact[dim - 1] * lastdim)
-    lastdim = d
-    dim += 1
+  for d in reversed(range(0,len(shape) - 1)):
+    fact[d] = fact[d + 1] * shape[d + 1]
 
   r = int(inid)
-  idx = 0
-  idkd = fact
-  for d in shape:
-    denum = int(fact[dim - idx - 1])
-    idkd[dim - idx - 1] = int(float(r) / float(denum))
-    r = int(r % denum)
-    idx += 1
+  idkd = [0] * len(shape)
+  for idx in range(0, len(shape)):
+    idkd[idx] = int(float(r) / float(fact[idx]))
+    r = int(r % fact[idx])
   rt =  np.array(idkd, dtype=np.int64)
   return rt
 
@@ -69,16 +61,16 @@ def createRandomSparseTensor(non_zero_percentage, shape, min_range = 1, max_rang
     ra_ids = random.sample(range(0, total_size - 1), num_elems)
   else:
     ra_ids = range(num_elems)
+  ra_ids.sort()
   idx = 0
   ids = [1] * num_elems
   for s in ra_ids:
     ids[idx] = id1D_to_idkD(s, shape)
     idx += 1
   tensor_ind = np.array(ids, dtype=np.int64)
-  tensor_ind_sorted = tensor_ind[tensor_ind[:,1].argsort()]
   vals = [random.randint(1, 100 * full_range) / 100 + min_range for e in range(num_elems)]
   tensor_vals = np.array(vals, dtype=np.float32)
-  return [tensor_ind_sorted, tensor_vals, shape]
+  return [tensor_ind, tensor_vals, shape]
 
 def checkSparsity(matrix):
   flat = matrix.flatten()
