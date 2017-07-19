@@ -160,11 +160,10 @@ __global__ void prepare_filter_weights_(CudaLaunchConfig config, const dtype* f_
 template<typename dtype>
 __device__ void index_lookup(const dtype index, const dtype *data,  const dtype data_size, dtype* result_id){
   //binary search
-  *result_id = 0; 
   dtype upper = data_size - 1;
   dtype lower = 0;
   while(lower <= upper){
-    dtype center = lower + (upper - lower) / 2;
+    dtype center = (upper + lower) / 2;
     if(data[center] == index){
       *result_id = center;
       return;
@@ -198,33 +197,31 @@ __global__ void approxSparseDirectConv(Cuda2DLaunchConfig config,
       bool is_valid = true;
       itype idx = data_dimension * x;
       itype idy = data_dimension * y;
-      //itype lookup_id = 0;
-      //itype mul = 1;
       for(int i = data_dimension - 2; i > 0; --i){
         itype id = i_ind[idx + i] - f_ind[idy + i - 1] + (f_sh[i - 1] - 1) / 2;
-        //lookup_id = lookup_id + mul * id;
-        //mul = mul * out_sh[i];
         if(id < 0 || id >= out_sh[i]){
           is_valid = false;
           break;
         }
         //TODO: stride and padding
       }
-      //lookup_id = lookup_id + mul * i_ind[idx];
-
-      if(!is_valid) continue;
+      if(!is_valid){
+        continue;
+      }
       //1.b: check channel filter/input
-      if(i_ch[x] != f_ind[idy + data_dimension - 2]) break; 
+      if(i_ch[x] != f_ind[idy + data_dimension - 2]) continue; 
       //2. compute update indice
       itype lookup_id = i_ind_1d[x] + f_ind_1d[y];
       itype update_id = 0;
       index_lookup(lookup_id, r_ind, reduced_count, &update_id);
       //3. update indice
-      if(update_id < 0) break; //id not found in search structure -> this is an error and should not occure //TODO throw error
+      itype dbg_idx = update_id * filter_weight_count  + y;
+      if(update_id < 0){
+        continue;
+      }
       itype channel_offset = reduced_count * f_ind[idy + data_dimension - 1];
       const float update_val = f_val[y] * i_val[x];
       atomicAdd(&out_conv_data[update_id + channel_offset], update_val);
-     
     }
   }
 }
@@ -296,6 +293,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
       i_ind.data(), i_sh.data(),  in_ind_1d, in_ind_1d_channels, data_dimension, data_entry_count);
   dout_s << "t1: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
+  /*
   dout_s << "indice 1d: ";
   std::vector<IndiceT> dout_id(data_entry_count);
   cudaMemcpy(&dout_id[0], in_ind_1d, dout_id.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
@@ -307,6 +305,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaMemcpy(&vout_id[0], i_val.data(), vout_id.size() *sizeof(T), cudaMemcpyDeviceToHost);
   for(size_t i = 0; i < vout_id.size(); ++i) dout_s << vout_id[i] << " ";
   dout_s << std::endl;
+  */
 
   /////
   //2. remove duplicates from data and apply stride/padding to obtain search structure
@@ -332,13 +331,13 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   //TODO: apply stride/padding
   //TODO: initialize search structure
   
-  
+  /*
   dout_s << "reduced indice: ";
   std::vector<IndiceT> dout_ri(reduced_count);
   cudaMemcpy(&dout_ri[0], reduced_indices, dout_ri.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
   for(size_t i = 0; i < dout_ri.size(); ++i) dout_s << dout_ri[i] << " ";
   dout_s << std::endl;
-  
+  */
 
   /////
   //3. prepare filter: directly manipulate 1D keys instead of kD indices and flip filter weights to be applicable for direct convolution
@@ -350,8 +349,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
     f_ind.data(), f_sh.data(), i_sh.data(), filter_ind_1d,  data_dimension, data_entry_count, filter_weight_count);
   dout_s << "t3: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
-  
-  dout_s << "filter 1d: ";
+  /* 
+  dout_s << "filter 1d:     ";
   std::vector<IndiceT> dout_r(filter_weight_count);
   cudaMemcpy(&dout_r[0], filter_ind_1d, dout_r.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
   for(size_t i = 0; i < dout_r.size(); ++i) dout_s << dout_r[i] << " ";
@@ -362,6 +361,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaMemcpy(&fout_r[0], f_val.data(), fout_r.size() *sizeof(T), cudaMemcpyDeviceToHost);
   for(size_t i = 0; i < fout_r.size(); ++i) dout_s << fout_r[i] << " ";
   dout_s << std::endl;
+  */
 
   /////
   //4. compute out shape
@@ -373,12 +373,16 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
 
   /////
   //5. perform approximated convolution
+  /*T* dbg = 0;
+  IndiceT dbg_count = data_entry_count * filter_weight_count;
+  checkCuda(cudaMalloc(&dbg, dbg_count * sizeof(T)));
+  cudaMemset(dbg, 0, dbg_count * sizeof(T));
+  */
   t = clock();
   IndiceT out_channel_count = -1;
   cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   T* conv_res = 0;
   IndiceT conv_out_count = out_channel_count * reduced_count;
-  //if(conv_out_count <= 0) return;
   checkCuda(cudaMalloc(&conv_res, conv_out_count * sizeof(T)));
   cudaMemset(conv_res, 0, conv_out_count * sizeof(T));
   Cuda2DLaunchConfig config_conv = GetCuda2DLaunchConfig(data_entry_count, filter_weight_count, d);
@@ -389,13 +393,24 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
     data_entry_count, filter_weight_count, data_dimension);
   dout_s << "t5: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
+  /*dout_s << "dbg: " << std::endl;
+  std::vector<T> dbgout(dbg_count);
+  cudaMemcpy(&dbgout[0], dbg, dbg_count *sizeof(T), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < data_entry_count; ++i){
+    dout_s << i << ": ";
+    for(size_t j = 0; j < filter_weight_count; ++j){
+      dout_s << dbgout[i * filter_weight_count + j] << " ";
+    }
+    dout_s << std::endl;
+  }
+  dout_s << std::endl;
   
   dout_s << "conv res: ";
   std::vector<T> dout(conv_out_count);
   cudaMemcpy(&dout[0], conv_res, conv_out_count *sizeof(T), cudaMemcpyDeviceToHost);
   for(size_t i = 0; i < dout.size(); ++i) dout_s << dout[i] << " ";
   dout_s << std::endl;
-  
+  */
 
   /////
   //6. remove zero entries and convert from keys to indices
@@ -412,13 +427,13 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaMemcpy(&result_count, non_zero_count + conv_out_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   dout_s << "t6: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
-  
+  /*
   dout_s << "non zero count: ";
   std::vector<IndiceT> nout(conv_out_count);
   cudaMemcpy(&nout[0], non_zero_count, nout.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
   for(size_t i = 0; i < nout.size(); ++i) dout_s << nout[i] << " ";
   dout_s << std::endl;
-  
+  */
 
   /////
   //7. Create and fill output tensor
@@ -448,6 +463,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaFree(conv_res);
   cudaFree(non_zero_masked);
   cudaFree(non_zero_count);
+  //cudaFree(dbg);
 
   LOG(INFO) << dout_s.str();
 }
