@@ -117,11 +117,9 @@ def if_not_windows(a):
   })
 
 
-def if_x86(a):
+def if_linux_x86_64(a):
   return select({
       clean_dep("//tensorflow:linux_x86_64"): a,
-      clean_dep("//tensorflow:windows"): a,
-      clean_dep("//tensorflow:windows_msvc"): a,
       "//conditions:default": [],
   })
 
@@ -138,17 +136,21 @@ WIN_COPTS = [
     "/DTF_COMPILE_LIBRARY",
     "/DEIGEN_HAS_C99_MATH",
     "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
+    "/DEIGEN_AVOID_STL_ARRAY",
+    "/Iexternal/gemmlowp",
+    "/wd4018", # -Wno-sign-compare
+    "/U_HAS_EXCEPTIONS", "/D_HAS_EXCEPTIONS=1", "/EHsc", # -fno-exceptions
 ]
 
 # LINT.IfChange
 def tf_copts():
-  return ([
+  return (if_not_windows([
       "-DEIGEN_AVOID_STL_ARRAY",
       "-Iexternal/gemmlowp",
       "-Wno-sign-compare",
       "-fno-exceptions",
-  ] + if_cuda(["-DGOOGLE_CUDA=1"]) + if_mkl(["-DINTEL_MKL=1", "-fopenmp",]) + if_android_arm(
-      ["-mfpu=neon"]) + if_x86(["-msse3"]) + select({
+  ]) + if_cuda(["-DGOOGLE_CUDA=1"]) + if_mkl(["-DINTEL_MKL=1", "-fopenmp",]) + if_android_arm(
+      ["-mfpu=neon"]) + if_linux_x86_64(["-msse3"]) + select({
           clean_dep("//tensorflow:android"): [
               "-std=c++11",
               "-DTF_LEAN_BINARY",
@@ -167,7 +169,7 @@ def tf_opts_nortti_if_android():
       "-fno-rtti",
       "-DGOOGLE_PROTOBUF_NO_RTTI",
       "-DGOOGLE_PROTOBUF_NO_STATIC_INITIALIZER",
-  ]) + if_android_x86(["-msse4.1"])
+  ])
 
 
 # LINT.ThenChange(//tensorflow/contrib/android/cmake/CMakeLists.txt)
@@ -1021,9 +1023,9 @@ def tf_py_wrap_cc(name,
   native.cc_binary(
       name=cc_library_name,
       srcs=[module_name + ".cc"],
-      copts=(copts + [
+      copts=(copts + if_not_windows([
           "-Wno-self-assign", "-Wno-sign-compare", "-Wno-write-strings"
-      ] + tf_extension_copts()),
+      ]) + tf_extension_copts()),
       linkopts=tf_extension_linkopts() + extra_linkopts,
       linkstatic=1,
       linkshared=1,

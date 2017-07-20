@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/types.h"
 #include "tensorflow/core/lib/core/casts.h"
+#include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/types.h"
@@ -134,6 +135,24 @@ llvm::Type* ShapeToIrType(const Shape& shape, llvm::IRBuilder<>* ir_builder) {
     }
   }
   return result_type;
+}
+
+StatusOr<llvm::Value*> EncodeSelfDescribingShapeConstant(
+    const Shape& shape, int32* shape_size, llvm::IRBuilder<>* ir_builder) {
+  string encoded_shape = shape.SerializeAsString();
+  if (encoded_shape.size() > std::numeric_limits<int32>::max()) {
+    return InternalError("Encoded shape size exceeded int32 size limit.");
+  }
+  *shape_size = static_cast<int32>(encoded_shape.size());
+  return ir_builder->CreateGlobalStringPtr(llvm_ir::AsStringRef(encoded_shape));
+}
+
+StatusOr<Shape> DecodeSelfDescribingShapeConstant(const void* shape_ptr,
+                                                  int32 size_bytes) {
+  Shape shape;
+  TF_RET_CHECK(shape.ParseFromArray(shape_ptr, size_bytes));
+  TF_RETURN_IF_ERROR(ShapeUtil::ValidateShape(shape));
+  return shape;
 }
 
 namespace {
@@ -356,26 +375,9 @@ void EmitLogging(const char* tag, llvm::Value* value,
 
 void SetTbaaForInstruction(llvm::Instruction* instruction, Shape shape,
                            bool is_pointer_to) {
-  llvm::MDBuilder metadata_builder(instruction->getContext());
-  llvm::MDNode* root = metadata_builder.createTBAARoot("XLA TBAA");
-  string type_name;
-  if (is_pointer_to) {
-    type_name += "pointer-to ";
-  }
-  // Scalars do not have layout which makes it permissible to omit an explicit
-  // layout.  To make sure that equivalent scalar shapes have the same TBAA,
-  // remove the (meaningless) explicit layout if one is present.
-  if (!ShapeUtil::IsArray(shape) || ShapeUtil::IsScalar(shape)) {
-    LayoutUtil::ClearLayout(&shape);
-  } else {
-    CHECK(shape.has_layout());
-  }
-  type_name += shape.ShortDebugString();
-  llvm::MDNode* tbaa_node =
-      metadata_builder.createTBAANode(llvm_ir::AsStringRef(type_name), root);
-  instruction->setMetadata(llvm::LLVMContext::MD_tbaa,
-                           metadata_builder.createTBAAStructTagNode(
-                               tbaa_node, tbaa_node, /*Offset=*/0));
+  // TODO(b/62903316): TBAA metadata causes LLVM to miscompile generated code,
+  // most likely because the generated metadata is incorrect.  Disable TBAA
+  // metadata while we resolve this.
 }
 
 void SetAlignmentMetadataForLoad(llvm::LoadInst* load, uint64_t alignment) {

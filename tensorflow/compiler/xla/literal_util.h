@@ -68,11 +68,13 @@ class BoolVector {
   }
 
   BoolVector(const BoolVector& other) { CopyFrom(other); }
+  BoolVector(BoolVector&&) = default;
 
   BoolVector& operator=(const BoolVector& other) {
     CopyFrom(other);
     return *this;
   }
+  BoolVector& operator=(BoolVector&&) = default;
 
   void push_back(const bool& value) {
     resize(size_ + 1);
@@ -147,10 +149,12 @@ class Literal {
   Literal() {}
 
   Literal(const Literal& other) = default;
+  Literal(Literal&&) = default;
 
   explicit Literal(const LiteralProto& other) { CopyFromProto(other); }
 
   Literal& operator=(const Literal& other) = default;
+  Literal& operator=(Literal&&) = default;
 
   LiteralProto ToProto() const;
 
@@ -476,6 +480,16 @@ class Literal {
   // Returns a tuple literal composed of given literals.
   static std::unique_ptr<Literal> MakeTuple(
       tensorflow::gtl::ArraySlice<const Literal*> elements);
+
+  // As above, but intended to be invoked with move semantics; i.e.
+  //
+  //  std::vector<std::unique_ptr<Literal>> elements = ...;
+  //  auto result = Literal::MakeTupleOwned(std::move(elements));
+  //
+  // This would have been declared as an overload, but there is ambiguity
+  // in invocation between the above signature and this one.
+  static std::unique_ptr<Literal> MakeTupleOwned(
+      std::vector<std::unique_ptr<Literal>> elements);
 
   // Validates that the data payload of the literal matches the literal shape;
   // if it does not, an appropriate status is returned.

@@ -224,6 +224,12 @@ class HloInstruction {
       const Shape& shape, HloInstruction* operand, HloInstruction* scale,
       HloInstruction* offset, float epsilon, int64 feature_index);
 
+  // Creates a batch-norm-grad instruction.
+  static std::unique_ptr<HloInstruction> CreateBatchNormGrad(
+      const Shape& shape, HloInstruction* operand, HloInstruction* scale,
+      HloInstruction* mean, HloInstruction* variance,
+      HloInstruction* grad_output, float epsilon, int64 feature_index);
+
   // Creates a scatter computation that scatters the `source` array to the
   // selected indices of each window.
   static std::unique_ptr<HloInstruction> CreateSelectAndScatter(
@@ -525,11 +531,6 @@ class HloInstruction {
   // or "elementwise".
   string ToCategory() const;
 
-  // Returns the string concatenation of parent name and this instructions
-  // name. This name is guaranteed to be unique among all instructions in the
-  // HloModule.
-  string FullyQualifiedName() const;
-
   // Returns a logging instruction, if the output of this instruction is logged.
   //
   // Postcondition: retval == nullptr || retval->opcode() == HloOpcode::kTrace
@@ -553,7 +554,7 @@ class HloInstruction {
   // number added to the variance to avoid divide-by-zero error.
   //
   // Precondition: opcode() == HloOpcode::kBatchNormTraining
-  int64 epsilon() const { return epsilon_; }
+  float epsilon() const { return epsilon_; }
 
   // Returns the infeed configuration string. The infeed configuration includes
   // any metadata needed for the backend compiler (e.g., infeed buffer address)
@@ -669,7 +670,7 @@ class HloInstruction {
   // Returns the stride in the given dimension for a slice node.
   //
   // Precondition: opcode() == HloOpcode::kSlice
-  int64 slice_stride(int64 dimension) const {
+  int64 slice_strides(int64 dimension) const {
     CHECK_EQ(HloOpcode::kSlice, opcode_);
     return slice_strides_[dimension];
   }
@@ -751,6 +752,16 @@ class HloInstruction {
     return called_computations_;
   }
 
+  // Replaces all called computations based on a map function. This is needed
+  // when we clone hlo_computations and want to let the instructions to point
+  // to the newly cloned nodes.
+  void ReplaceCalledComputations(
+      std::function<HloComputation*(HloComputation*)> map_function) {
+    for (int64 i = 0; i < called_computations_.size(); ++i) {
+      called_computations_[i] = map_function(called_computations_[i]);
+    }
+  }
+
   // Returns true if this instruction performs an elementwise operation on
   // `operand_idx`-th operand. An instruction is elementwise on an operand iff,
   // after performing necessary implicit broadcast
@@ -785,9 +796,9 @@ class HloInstruction {
   std::tuple<bool, std::vector<int64>, std::vector<int64>>
   ReshapeMerelyInsertsOrDeletes1SizedDimensions() const;
 
-  // Returns the opcode string for this instruction. Compared with
-  // HloOpcodeString method, this wrapper dumps additional information
-  // such as fusion kind.
+  // Returns the opcode string for this instruction. This is the result from
+  // HloOpcodeString plus, for fusion nodes, the fusion kind, separated by a
+  // ':'.
   string ExtendedOpcodeStr() const;
 
   // Returns a string identifier for this instruction. If no string identifier

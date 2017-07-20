@@ -109,8 +109,7 @@ REGISTER_OP("RestoreV2")
       TF_RETURN_IF_ERROR(c->WithRank(c->input(1), 1, &shape1));
       TF_RETURN_IF_ERROR(c->WithRank(c->input(2), 1, &shape2));
       TF_RETURN_IF_ERROR(c->Merge(shape1, shape2, &shape0));
-      c->set_output(0, c->UnknownShape());
-      return Status::OK();
+      return UnknownShape(c);
     })
     .Doc(R"doc(
 Restores tensors from a V2 checkpoint.
@@ -840,7 +839,8 @@ REGISTER_OP("WriteFile")
       return Status::OK();
     })
     .Doc(R"doc(
-Writes contents to the file at input filename. Creates file if not existing.
+Writes contents to the file at input filename. Creates file and recursively
+creates directory if not existing.
 
 filename: scalar. The name of the file to which we write the contents.
 contents: scalar. The content to be written to the output file.

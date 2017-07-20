@@ -166,12 +166,6 @@ Service::CreateComputeConstantBackend() {
   return NotFound("CPU platform not found");
 }
 
-/* static */ Compiler::HloDumper Service::MakeHloDumper() {
-  return [](const HloModule& module, const string& label) {
-    return Executable::DumpExecutedHlo(module, label, /*profile=*/nullptr);
-  };
-}
-
 Service::Service(const ServiceOptions& options,
                  std::unique_ptr<Backend> execute_backend,
                  std::unique_ptr<Backend> compute_constant_backend)
@@ -299,7 +293,7 @@ StatusOr<std::vector<const Allocation*>> Service::ResolveAndValidateArguments(
 StatusOr<std::unique_ptr<HloModuleConfig>> Service::CreateModuleConfig(
     const ProgramShape& program_shape,
     tensorflow::gtl::ArraySlice<const Allocation*> arguments,
-    const ExecutionOptions& execution_options, Backend* backend) {
+    const ExecutionOptions& execution_options) {
   auto module_config = MakeUnique<HloModuleConfig>(program_shape);
   auto* computation_layout = module_config->mutable_entry_computation_layout();
 
@@ -392,11 +386,9 @@ StatusOr<std::vector<std::unique_ptr<Executable>>> Service::BuildExecutables(
     modules.push_back(std::move(module));
   }
 
-  Compiler::HloDumper hlo_dumper = MakeHloDumper();
   TF_ASSIGN_OR_RETURN(
       std::vector<std::unique_ptr<Executable>> executables,
-      backend->compiler()->Compile(std::move(modules), hlo_dumper,
-                                   std::move(executors)));
+      backend->compiler()->Compile(std::move(modules), std::move(executors)));
 
   if (!other_directory_path.empty()) {
     for (size_t i = 0; i < versioned_handles.size(); ++i) {
@@ -443,15 +435,9 @@ StatusOr<std::unique_ptr<Executable>> Service::BuildExecutable(
                                           /*include_unreachable_instructions=*/
                                           !executable_for_compute_constant));
 
-  Compiler::HloDumper hlo_dumper = MakeHloDumper();
-  if (executable_for_compute_constant &&
-      !flags->xla_hlo_graph_for_compute_constant) {
-    hlo_dumper = [](const HloModule&, const string&) {};
-  }
-
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<Executable> executable,
-      backend->compiler()->Compile(std::move(module), hlo_dumper, executor));
+      backend->compiler()->Compile(std::move(module), executor));
 
   if (!other_directory_path.empty()) {
     executable->set_session_module(std::move(session_module));
@@ -692,8 +678,7 @@ tensorflow::Status Service::ExecuteParallel(const ExecuteParallelRequest* arg,
     // the program and the argument allocations.
     TF_ASSIGN_OR_RETURN(std::unique_ptr<HloModuleConfig> module_config,
                         CreateModuleConfig(*program_shape, arg_allocations,
-                                           request.execution_options(),
-                                           execute_backend_.get()));
+                                           request.execution_options()));
     VLOG(3) << "ExecuteParallel created HloModuleConfig computation layout: "
             << module_config->entry_computation_layout().ToString();
 
@@ -782,10 +767,9 @@ tensorflow::Status Service::Execute(const ExecuteRequest* arg,
       ResolveAndValidateArguments(arg->arguments(), execute_backend_.get(),
                                   execute_backend_->default_device_ordinal()));
 
-  TF_ASSIGN_OR_RETURN(
-      std::unique_ptr<HloModuleConfig> module_config,
-      CreateModuleConfig(*program_shape, arg_allocations,
-                         arg->execution_options(), execute_backend_.get()));
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<HloModuleConfig> module_config,
+                      CreateModuleConfig(*program_shape, arg_allocations,
+                                         arg->execution_options()));
 
   VLOG(3) << "Execute created HloModuleConfig computation layout: "
           << module_config->entry_computation_layout().ToString();
@@ -851,10 +835,9 @@ tensorflow::Status Service::ExecuteAsync(const ExecuteAsyncRequest* arg,
       ResolveAndValidateArguments(arg->arguments(), execute_backend_.get(),
                                   execute_backend_->default_device_ordinal()));
 
-  TF_ASSIGN_OR_RETURN(
-      std::unique_ptr<HloModuleConfig> module_config,
-      CreateModuleConfig(*program_shape, arg_allocations,
-                         arg->execution_options(), execute_backend_.get()));
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<HloModuleConfig> module_config,
+                      CreateModuleConfig(*program_shape, arg_allocations,
+                                         arg->execution_options()));
 
   VLOG(3) << "ExecuteAsync created HloModuleConfig computation layout: "
           << module_config->entry_computation_layout().ToString();
@@ -1126,8 +1109,7 @@ tensorflow::Status Service::ComputeConstant(const ComputeConstantRequest* arg,
   }
 
   TF_ASSIGN_OR_RETURN(std::unique_ptr<HloModuleConfig> module_config,
-                      CreateModuleConfig(program_shape, {}, execution_options,
-                                         compute_constant_backend_.get()));
+                      CreateModuleConfig(program_shape, {}, execution_options));
 
   TF_ASSIGN_OR_RETURN(
       std::shared_ptr<Executable> executable,
@@ -1187,11 +1169,14 @@ tensorflow::Status Service::GetComputationStats(
   VersionedComputationHandle versioned_handle =
       user_computation->GetVersionedHandle();
 
+  HloModuleConfig config;
+  config.set_debug_options(arg->debug_options());
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<HloModule> module,
-      computation_tracker_.BuildHloModule(versioned_handle, HloModuleConfig()));
+      computation_tracker_.BuildHloModule(versioned_handle, config));
 
-  MakeHloDumper()(*module, "computation statistics subject");
+  hlo_graph_dumper::MaybeDumpHloModule(*module,
+                                       "computation statistics subject");
 
   // Run HLO analysis to get the computation statistics.
   HloCostAnalysis analysis(
@@ -1205,17 +1190,6 @@ tensorflow::Status Service::GetComputationStats(
   stats.set_transcendental_count(analysis.transcendental_count());
   *result->mutable_stats() = stats;
   return tensorflow::Status::OK();
-}
-
-tensorflow::Status Service::CheckRunsInClientProcess(
-    const string& method_name) const {
-  if (runs_in_client_process_) {
-    return tensorflow::Status::OK();
-  } else {
-    return FailedPrecondition(
-        "%s only supported if service runs in the same process as the client",
-        method_name.c_str());
-  }
 }
 
 template <typename RequestT, typename ResponseT>
@@ -1239,6 +1213,10 @@ tensorflow::Status Service::Op(const OpRequest* arg, OpResponse* result) {
     case OpRequest::kBatchNormTrainingRequest:
       handle_status = computation->AddBatchNormTrainingInstruction(
           arg->batch_norm_training_request());
+      break;
+    case OpRequest::kBatchNormGradRequest:
+      handle_status = computation->AddBatchNormGradInstruction(
+          arg->batch_norm_grad_request());
       break;
     case OpRequest::kBinaryOpRequest:
       handle_status =

@@ -62,7 +62,17 @@ Literal::StrideConfig::StrideConfig(
 std::unique_ptr<Literal> Literal::CreateFromShape(const Shape& shape) {
   auto literal = MakeUnique<Literal>();
   *literal->mutable_shape() = shape;
-  literal->Reserve(ShapeUtil::ElementsIn(literal->shape()));
+  if (ShapeUtil::IsTuple(shape)) {
+    int64 num_elements = ShapeUtil::TupleElementCount(shape);
+    literal->tuple_literals_.resize(num_elements);
+    for (int i = 0; i < num_elements; ++i) {
+      std::unique_ptr<Literal> elem =
+          CreateFromShape(ShapeUtil::GetTupleElementShape(shape, i));
+      literal->tuple_literals_[i] = std::move(*elem);
+    }
+  } else {
+    literal->Reserve(ShapeUtil::ElementsIn(literal->shape()));
+  }
   return literal;
 }
 
@@ -621,6 +631,18 @@ string Literal::ToString() const {
   return literal;
 }
 
+/* static */ std::unique_ptr<Literal> Literal::MakeTupleOwned(
+    std::vector<std::unique_ptr<Literal>> elements) {
+  auto literal = MakeUnique<Literal>();
+  std::vector<Shape> shape;
+  for (auto& tuple_element : elements) {
+    shape.push_back(tuple_element->shape());
+    literal->add_tuple_literals()->Swap(tuple_element.get());
+  }
+  *literal->mutable_shape() = ShapeUtil::MakeTupleShape(shape);
+  return literal;
+}
+
 const void* Literal::InternalData() const {
   return const_cast<const void*>(
       const_cast<Literal*>(this)->MutableInternalData());
@@ -993,7 +1015,7 @@ tensorflow::gtl::MutableArraySlice<half> Literal::GetMutableArraySlice<half>() {
   //        support in protobuf
   auto values = mutable_f16s();
   return tensorflow::gtl::MutableArraySlice<half>(
-      reinterpret_cast<half*>(&(*values)[0]), values->size() / sizeof(half));
+      reinterpret_cast<half*>(&(*values)[0]), values->size());
 }
 
 template <>
