@@ -40,6 +40,10 @@ tf_custom_op_library_flags(
               "direct_sparse_conv_kd_gpu.cu.cc"
     ],
 
+    deps = [
+              "@cub_archive//:cub",
+    ],
+
     cflags = [
       "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash", "-lcudpp", "-lcudpp_hash",
     ],
