@@ -22,7 +22,22 @@
   */
 
 
-
+/*REGISTER_OP("DirectSparseConvKD")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
+  .Input("in_values: T")
+  .Input("in_shape: Tindices")
+  .Input("filter_indices: Tindices")
+  .Input("filter_values: T")
+  .Input("filter_shape: Tindices")
+  .Output("out_indices: Tindices")
+  .Output("out_values: T")
+  .Output("out_shape: Tindices")
+  .Attr("strides: list(int)")
+  .Attr("padding: string")
+  .Attr("filter_dim: int = 3");
+*/
 REGISTER_OP("DirectSparseApproxConvKD")
   .Attr("T: realnumbertype")
   .Attr("Tindices: {int32, int64}")
@@ -72,7 +87,9 @@ class DirectSparseConvKD : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseApproxConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseConvKD<indice_type, functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type> >);
+                          DirectSparseConvKD<indice_type, functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type> >);    //           \
+//  REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+//                          DirectSparseConvKD<indice_type, functor::DirectSparseConvFunctor<GPUDevice, type, indice_type> >);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \

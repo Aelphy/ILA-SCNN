@@ -10,11 +10,15 @@
 namespace tensorflow {
 typedef Eigen::GpuDevice GPUDevice;
 
-namespace functor {
-template <typename DeviceT, typename T, typename IndiceT>
-struct ApproxDirectSparseConvFunctor {
+  namespace functor {
+    template <typename DeviceT, typename T, typename IndiceT>
+    struct ApproxDirectSparseConvFunctor {
+      void operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, const IndiceT& filter_dim) const;
+    };
 
-  void operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, const IndiceT& filter_dim) const;
-};
-}
-}
+    //template <typename DeviceT, typename T, typename IndiceT>
+    //struct DirectSparseConvFunctor {
+    //  void operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, const IndiceT& filter_dim) const;
+    //};
+  } //namespace functor
+} //namespace tensorflow

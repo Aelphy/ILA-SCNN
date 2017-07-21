@@ -51,10 +51,9 @@ def createRandomSparseTensor(non_zero_percentage, shape, min_range = 1, max_rang
   full_range = max_range - min_range
   random.seed(a=None)
   total_size = 1
-  dim = 0
+  dim = len(shape)
   for s in shape:
     total_size *= s
-    dim += 1
   num_elems = int(non_zero_percentage * float(total_size))
   ra_ids = []
   if non_zero_percentage < 1:
