@@ -37,7 +37,8 @@ tf_custom_op_library_flags(
     gpu_srcs = [
               "tf_cudpp_bindings_gpu.h",
               "direct_sparse_conv_kd_gpu.h",
-              "direct_sparse_conv_kd_gpu.cu.cc"
+              "direct_sparse_conv_kd_gpu.cu.cc",
+              "direct_sparse_cuda_helpers_gpu.h",
     ],
 
     deps = [
