@@ -340,8 +340,6 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaDeviceSynchronize();
   dout_s << "t2: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
-  HashConfig<IndiceT> hc;
-  initialize_table(context, d, in_ind_1d, i_val.data(), (IndiceT) data_entry_count, hc);
 
   //TODO: apply stride/padding
   //TODO: initialize search structure
@@ -370,6 +368,10 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   /////
   //3. prepare filter: directly manipulate 1D keys instead of kD indices and flip filter weights to be applicable for direct convolution
   t = clock();
+  HashConfig hc;
+  initialize_table(context, d, in_ind_1d, i_val.data(), (IndiceT) data_entry_count, hc);
+
+
   IndiceT *filter_ind_1d = 0;
   checkCuda(cudaMalloc(&filter_ind_1d, filter_weight_count * sizeof(IndiceT)));
   CudaLaunchConfig config_f1d = GetCudaLaunchConfig(filter_weight_count, d);
