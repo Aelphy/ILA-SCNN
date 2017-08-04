@@ -113,12 +113,12 @@ __global__ void precompute_bucket_count(CudaLaunchConfig config,
 
 template <typename dtype>
 __global__ void check_bucket_count(CudaLaunchConfig config, 
-                  dtype* result, const dtype* bucket_count, const HashConfig hc){
+                  dtype* result, const dtype* bucket_count, const float max_bucket_density, const HashConfig hc){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
-    if(bucket_count[x] >= hc.bucket_size){
+    if(bucket_count[x] >= hc.bucket_size * max_bucket_density){
       *result = 1;
     }
   }
@@ -137,6 +137,17 @@ __global__ void init_buckets(CudaLaunchConfig config,
   }
 }
 
+template <typename dtype, typename itype>
+__device__ __forceinline__ void querry_hash_value(dtype *outcome, const itype* hash_table, const dtype* hash_values, const itype* querry, const HashConfig hc){
+  itype id;
+  querry_hash_table(&id, hash_table, querry, hc);
+  if(id < 0){
+    *outcome = -1;
+  } else {
+    *outcome = hash_values[id];
+  }
+}
+
 template <typename dtype>
 __device__ __forceinline__ void querry_hash_table(dtype *outcome, const dtype* hash_table, const dtype* querry, const HashConfig hc){
   dtype h(0), h1(0), h2(0), h3(0);
@@ -145,21 +156,20 @@ __device__ __forceinline__ void querry_hash_table(dtype *outcome, const dtype* h
   hash_function(&h, &val, hc.c0_0, hc.c0_i, hc.bucket_count);
   const int offset = h * hc.bucket_size;
 
-	hash_function(&h1, &val, hc.c1_0, hc.c1_i, hc.bucket_size);
+  const int mod = floorf(hc.bucket_size / 3.);
+	hash_function(&h1, &val, hc.c1_0, hc.c1_i, mod);
   if(hash_table[h1 + offset] == *querry){
     *outcome = h1 + offset;
     return;
   }
-	hash_function(&h2, &val, hc.c2_0, hc.c2_i, hc.bucket_size);
-	h2 = h2 /*+ hc.bucket_count*/;
-  if(hash_table[h2 + offset] == *querry){
-    *outcome = h2 + offset;
+	hash_function(&h2, &val, hc.c2_0, hc.c2_i, mod);
+  if(hash_table[h2 + offset + mod] == *querry){
+    *outcome = h2 + offset + mod;
     return;
   }
-	hash_function(&h3, &val, hc.c3_0, hc.c3_i, hc.bucket_size);
-	h3 = h3 /*+ 2 * hc.bucket_count*/;
-  if(hash_table[h3 + offset] == *querry){
-    *outcome = h3 + offset;
+	hash_function(&h3, &val, hc.c3_0, hc.c3_i, mod);
+  if(hash_table[h3 + offset + 2 * mod] == *querry){
+    *outcome = h3 + offset + 2 * mod;
     return;
   }
   *outcome = invalid_result;
@@ -195,6 +205,36 @@ __global__ void check_hash_table(CudaLaunchConfig config,
   }
 }
 
+template <typename dtype, typename itype>
+__global__ void fill_values2(CudaLaunchConfig config, 
+                  dtype* hash_values, const itype* hash_table, const itype* in_keys, const HashConfig hc){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    itype hid(-1);
+    querry_hash_table(&hid, hash_table, &in_keys[x], hc);
+    if(hid >= 0){
+      hash_values[hid] = x;
+    }
+  }
+}
+
+template <typename dtype, typename itype>
+__global__ void check_hash_table2(CudaLaunchConfig config, 
+                  itype* result, const itype* hash_table, const dtype* hash_values, const itype* in_keys, const HashConfig hc){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    itype hid(-1);
+    querry_hash_table(&hid, hash_table, &in_keys[x], hc);
+    if(hash_values[hid] != x){
+      *result = 1;
+    }
+  }
+}
+
 //cuckoo rehashing
 template <typename dtype>
 __global__ void rehash_buckets(CudaLaunchConfig config, 
@@ -222,9 +262,12 @@ __global__ void rehash_buckets(CudaLaunchConfig config,
     }
   }
   if(data_idx >= 0){ //data exists at entry
-    hash_function(&h1, &data_idx, hc.c1_0, hc.c1_i, hc.bucket_size);
-    hash_function(&h2, &data_idx, hc.c2_0, hc.c2_i, hc.bucket_size);
-    hash_function(&h3, &data_idx, hc.c3_0, hc.c3_i, hc.bucket_size);
+    const int mod = floorf(hc.bucket_size / 3.);
+    hash_function(&h1, &data_idx, hc.c1_0, hc.c1_i, mod);
+    hash_function(&h2, &data_idx, hc.c2_0, hc.c2_i, mod);
+    h2 = h2 + mod;
+    hash_function(&h3, &data_idx, hc.c3_0, hc.c3_i, mod);
+    h3 = h3 + 2 * mod;
   }
   int in_subtable = invalid_subtable;
   __syncthreads();
@@ -279,15 +322,17 @@ __global__ void rehash_buckets(CudaLaunchConfig config,
 
 //not minimal yet, is minimal needed?
 template <typename Device, typename dtype, typename itype>
-int initialize_table(OpKernelContext* ctx, Device d, const itype* in_keys, const dtype* in_vals, 
+int initialize_table(OpKernelContext* ctx, Device d, itype** hash_table_, dtype** hash_values_, const itype* in_keys, const dtype* in_vals, 
     const itype data_count, HashConfig& hc, const itype bucket_size = 1024)
 {
   if(d.sharedMemPerBlock() / std::max(sizeof(dtype), sizeof(itype)) / 2 < bucket_size) return -1; //error, not enough shared memory, select smaller number of keys
   if(bucket_size > d.maxCudaThreadsPerBlock()) return -2; 
 
-  hc.bucket_count =  ceil(data_count / (0.33 * bucket_size)); //on average 70% filled buckets
+  const float average_bucket_density = 0.7;
+  const float max_bucket_density = 1 - (1 - average_bucket_density) / 2;
+  hc.bucket_count =  ceil(data_count / (0.7 * bucket_size)); //on average 70% filled buckets
   hc.bucket_size = bucket_size;
-  hc.cuckoo_max_iterations = 50;
+  hc.cuckoo_max_iterations = 100;
   itype *bucket_count = 0;
   checkCuda(cudaMalloc(&bucket_count, hc.bucket_count * sizeof(itype)));
   itype *bucket_offset = 0;
@@ -299,9 +344,11 @@ int initialize_table(OpKernelContext* ctx, Device d, const itype* in_keys, const
   itype *kernel_result = 0;
   checkCuda(cudaMalloc(&kernel_result, sizeof(itype)));
   itype *hash_table = 0;
-  checkCuda(cudaMalloc(&hash_table, hc.bucket_count * hc.bucket_size * sizeof(itype)));
+  checkCuda(cudaMalloc(hash_table_, hc.bucket_count * hc.bucket_size * sizeof(itype)));
+  hash_table = *hash_table_;
   dtype *hash_values = 0;
-  checkCuda(cudaMalloc(&hash_values, hc.bucket_count * hc.bucket_size * sizeof(dtype)));
+  checkCuda(cudaMalloc(hash_values_, hc.bucket_count * hc.bucket_size * sizeof(dtype)));
+  hash_values = *hash_values_;
 
   CudaLaunchConfig cfg = GetCudaLaunchConfig(data_count, d);
   CudaLaunchConfig cfg2 = GetCudaLaunchConfig(hc.bucket_count, d);
@@ -324,7 +371,7 @@ int initialize_table(OpKernelContext* ctx, Device d, const itype* in_keys, const
     cudaMemset(kernel_result, 0, sizeof(itype));
     precompute_bucket_count<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, bucket_count, bucket_offset, bucket_id, in_keys, hc);
     cudaDeviceSynchronize();
-    check_bucket_count<<<cfg2.block_count, cfg2.thread_per_block, 0, d.stream()>>>(cfg2, kernel_result, bucket_count, hc);
+    check_bucket_count<<<cfg2.block_count, cfg2.thread_per_block, 0, d.stream()>>>(cfg2, kernel_result, bucket_count, max_bucket_density, hc);
     cudaMemcpy(&result_kernel, kernel_result, sizeof(itype), cudaMemcpyDeviceToHost);
     if(result_kernel == 1) continue;
   	//compute_scan(ctx, d, bucket_start, bucket_count, hc.bucket_count, false);
@@ -337,43 +384,15 @@ int initialize_table(OpKernelContext* ctx, Device d, const itype* in_keys, const
     hc.c3_i = rand() ^ 0x337a;
     init_buckets<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, hash_table, bucket_id, bucket_offset, in_keys, hc);
     cudaMemset(kernel_result, 0, sizeof(itype));
-
-  typedef itype dbg_type1;
-  dout_s << "idhash: " << std::endl;
-	std::vector<dbg_type1> dout_i(1 * hc.bucket_count * hc.bucket_size);
-	cudaMemcpy(&dout_i[0], hash_table, dout_i.size() *sizeof(dbg_type1), cudaMemcpyDeviceToHost);
-	for(size_t i = 0; i < dout_i.size(); ++i) dout_s << dout_i[i] - 1 << " ";
-	dout_s << std::endl;
-  LOG(INFO) << cfg3.block_count << " " << cfg3.thread_per_block << std::endl;
-
     rehash_buckets<<<cfg3.block_count, cfg3.thread_per_block, 0, d.stream()>>>(cfg3, kernel_result, hash_table, hc);
     cudaMemcpy(&result_kernel, kernel_result, sizeof(itype), cudaMemcpyDeviceToHost);
-
-  dout_s << "id1d: " << std::endl;
-	std::vector<dbg_type1> dout_i2(1 * hc.bucket_count * hc.bucket_size);
-	cudaMemcpy(&dout_i2[0], hash_table, dout_i2.size() *sizeof(dbg_type1), cudaMemcpyDeviceToHost);
-	for(size_t i = 0; i < dout_i2.size(); ++i) dout_s << dout_i2[i] << " ";
-	dout_s << std::endl;
-  //LOG(INFO) << dout_s.str() << std::endl;
-  dout_s.clear();
   }
 
   //fill hash table with values
   cudaDeviceSynchronize();
-  fill_values<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, hash_values, hash_table, in_keys, in_vals, hc);
-  LOG(INFO) << data_count << std::endl;
+  fill_values2<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, hash_values, hash_table, in_keys, hc);
   cudaDeviceSynchronize();
-
-  typedef dtype dbg_type2;
-  dout_s << "v1d: " << std::endl;
-	std::vector<dbg_type2> dout_v(1 * hc.bucket_count * hc.bucket_size);
-	cudaMemcpy(&dout_v[0], hash_values, dout_v.size() *sizeof(dbg_type2), cudaMemcpyDeviceToHost);
-	for(size_t i = 0; i < dout_v.size(); ++i) dout_s << dout_v[i] << " ";
-	dout_s << std::endl;
-  //LOG(INFO) << dout_s.str() << std::endl;
-
-
-  check_hash_table<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, kernel_result, hash_table, hash_values, in_keys, in_vals, hc);
+  check_hash_table2<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, kernel_result, hash_table, hash_values, in_keys, hc);
   cudaMemcpy(&result_kernel, kernel_result, sizeof(itype), cudaMemcpyDeviceToHost);
   LOG(INFO) << "result: " << result_kernel << std::endl;
   
@@ -382,8 +401,8 @@ int initialize_table(OpKernelContext* ctx, Device d, const itype* in_keys, const
   cudaFree(bucket_id);
   cudaFree(bucket_start);
   cudaFree(kernel_result);
-  cudaFree(hash_table);
-  cudaFree(hash_values);
+  //cudaFree(hash_table);
+  //cudaFree(hash_values);
   return 0;
 }
 
