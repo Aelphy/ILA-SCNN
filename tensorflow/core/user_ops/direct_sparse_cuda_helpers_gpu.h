@@ -14,8 +14,7 @@
 
 namespace tensorflow {
 
-inline
-cudaError_t checkCuda(cudaError_t result)
+inline cudaError_t checkCuda(cudaError_t result)
 { 
     if (result != cudaSuccess) {
       LOG(ERROR) << "CUDA Runtime Error: " << cudaGetErrorString(result) << std::endl;

@@ -289,8 +289,6 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   const int data_entry_count = i_ind.dimension(0);
   const int data_dimension = i_ind.dimension(1);
   const int filter_weight_count = f_ind.dimension(0);
-
-  
   const auto smpb = d.sharedMemPerBlock();
 
   std::stringstream dout_s;
@@ -339,10 +337,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaDeviceSynchronize();
   dout_s << "t2: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
-
   //TODO: apply stride/padding
   //TODO: initialize search structure
-
   t = clock();
   HashConfig hc;
   IndiceT *hash_table = 0, *hash_values = 0;
@@ -360,10 +356,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaDeviceSynchronize();
   dout_s << "t3: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
-
   /////
   //4. compute out shape
-  
   //TODO
   IndiceT *out_sh = 0;
   checkCuda(cudaMalloc(&out_sh, data_dimension * sizeof(IndiceT)));
@@ -404,7 +398,6 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaDeviceSynchronize();
   dout_s << "t6: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
   
-
   /////
   //7. Create and fill output tensor
   t = clock();
@@ -424,7 +417,6 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaMemcpy(o_sh.data(), out_sh, data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaDeviceSynchronize();
   dout_s << "t7: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
-
 
   //# free memory
   t = clock();
