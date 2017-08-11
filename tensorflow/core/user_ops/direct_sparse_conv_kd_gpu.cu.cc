@@ -122,6 +122,47 @@ __global__ void unique_array(CudaLaunchConfig config, const dtype* __restrict__ 
   }
 }
 
+//copy obtain unique elemets from array
+template <typename dtype, typename itype>
+__global__ void get_segment_start(CudaLaunchConfig config, itype* data_offset, const dtype* masked_indices, const dtype* unique_count){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if (x < 0) { //x might overflow when testing extreme case
+      break;
+    }
+    if(masked_indices[x] > 0){
+      int oid = unique_count[x] - 1; 
+      data_offset[oid] = x;
+    }
+  }
+}
+
+//copy obtain unique elemets from array
+template <typename dtype, typename itype>
+__global__ void get_segment_end(CudaLaunchConfig config, itype* offset, const itype* __restrict__ segment_start, const dtype* __restrict__ count, const int filter_weight_count){
+  auto max_size = count[filter_weight_count - 1] - 1;
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) { //x might overflow when testing extreme case
+      break;
+    }
+    if(x == max_size){
+      offset[x] = filter_weight_count;
+    } else if(x < max_size){
+      offset[x] = segment_start[x + 1];
+    }
+  }
+}
+
+//apply sorting
+template <typename dtype, typename itype>
+__global__ void apply_sorted_indices(CudaLaunchConfig config, dtype* sorted, const dtype* __restrict__ unsorted, const itype* __restrict__ corresponds){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) { //x might overflow when testing extreme case
+      break;
+    }
+    sorted[x] = unsorted[corresponds[x]];
+  }
+}
+
 //exact binary search
 template<typename dtype>
 __device__ __forceinline__ void index_lookup(const dtype index, const dtype *data, const dtype data_start,  const dtype data_end,
@@ -146,45 +187,54 @@ dtype* result_id, dtype* lower_limit = NULL, dtype* upper_limit = NULL){
   *result_id = -1;
 }
 
-//precompute upper and lower search bounds for input key
-template <typename dtype>
-__global__ void precompute_search_bounds(CudaLaunchConfig config, 
-                  const dtype* __restrict__ in_sh_ptr, const dtype* __restrict__ f_sh_ptr, 
-                  const dtype* initial_id, const dtype* __restrict__ index_1d, const dtype* __restrict__ in_ind_1d,
-                  const int data_dimension, const int reduced_count,
-                  dtype* min_bound, dtype* max_bound){
-  dtype val = 0;
-  dtype mul = 1;
-  for(int i = data_dimension - 2; i > 0; --i){
-    const int f_i = i - 1;
-    const dtype offset = (f_sh_ptr[f_i] - 1) / 2;
-    val = val + mul * offset;
-    mul = mul * in_sh_ptr[i];
-  }
-  dtype fstep = val;
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
-    if (x < 0) {  //x might overflow when testing extreme case
-      break;
+template <typename dtype, typename itype>
+__global__ void approxSparseDirectConv(CudaLaunchConfig config, 
+   const itype* __restrict__ i_ind, const dtype* __restrict__ i_val, const itype* __restrict__ i_sh, const itype* __restrict__ i_ind_1d, const itype* __restrict__ i_ch, //input tensors
+   const itype* __restrict__ f_ind, const dtype* __restrict__ f_val, const itype* __restrict__ f_sh, const itype* __restrict__ f_ind_1d, const itype* __restrict__ f_id, //filter tensors
+   const itype* __restrict__ r_ind, const itype reduced_count, //search structure for binary search
+   dtype* __restrict__ out_conv_data, const itype* __restrict__ out_sh,
+   const int data_entry_count, const int filter_weight_count, const int data_dimension){
+
+  //compute data
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) { //index of feature map
+     if(x < 0){
+       break;
+     }
+     if(x >= data_entry_count){
+       break;
+     }
+    for(itype y = 0; y < filter_weight_count; ++y){
+      //1.a: check channel filter/input
+      //itype idy = data_dimension * f_id[y];
+      itype idy = data_dimension * y;
+      if(i_ch[x] != f_ind[idy + data_dimension - 2]) continue; 
+      //1.b check valid indice and valid stride / padding:
+      bool is_valid = true;
+      itype idx = data_dimension * x;
+      for(int i = data_dimension - 2; i > 0; --i){
+        itype id = i_ind[idx + i] - f_ind[idy + i - 1] + (f_sh[i - 1] - 1) / 2;
+        if(id < 0 || id >= out_sh[i]){
+          is_valid = false;
+          break;
+        }
+        //TODO: stride and padding
+      }
+      if(!is_valid){
+        continue;
+      }
+      //2. compute update indice
+      itype lookup_id = i_ind_1d[x] + f_ind_1d[y];
+      itype update_id = 0;
+      index_lookup(lookup_id, r_ind, (itype) 0, (itype) reduced_count - 1, &update_id); //Binary search
+      //querry_hash_value(&update_id, hash_table, hash_values, &lookup_id, hc); //search in hash table
+      //3. update indice
+      if(update_id < 0){
+        continue;
+      }
+      itype channel_offset = reduced_count * f_ind[idy + data_dimension - 1];
+      const float update_val = f_val[y] * i_val[x];
+      atomicAdd(&out_conv_data[update_id + channel_offset], update_val);
     }
-    bool success = false;
-    dtype idx = max(initial_id[x] - 1, (dtype) 0);
-    dtype init_val = in_ind_1d[x];
-    dtype result_id(-1), lower_limit(0), upper_limit(0);
-    index_lookup((dtype) init_val +  fstep, index_1d, (dtype) 0, (dtype) reduced_count - 1, &result_id, &lower_limit, &upper_limit);
-    if(result_id == -1){
-      max_bound[x] = min(upper_limit + 3, (dtype) reduced_count - 1);
-    } else {
-      max_bound[x] = min(result_id + 3, (dtype) reduced_count - 1);
-    }
-    index_lookup((dtype) init_val - fstep, index_1d, (dtype) 0, (dtype) reduced_count - 1, &result_id, &lower_limit, &upper_limit);
-    if(result_id == -1){
-      min_bound[x] = max((dtype) 0, lower_limit - 3);
-    } else {
-      min_bound[x] = max(result_id - 3, (dtype) 0);
-    }
-    //TODO: check condition (what's wrong?)
-    min_bound[x] = 0;
-    max_bound[x] = reduced_count - 1;
   }
 }
 
@@ -192,7 +242,7 @@ __global__ void precompute_search_bounds(CudaLaunchConfig config,
 template <typename dtype>
 __global__ void prepare_filter_weights_(CudaLaunchConfig config, 
                   const dtype* __restrict__ f_id_ptr, const dtype* __restrict__ f_sh_ptr, const dtype* __restrict__ in_sh_ptr,  
-                  dtype* __restrict__ out_id_ptr, const int dimension_count, const int data_entry_count, const int filter_entry_count){
+                  dtype* out_id_ptr, dtype* out_ch_ptr, dtype* in_channel, dtype* index, const int dimension_count, const int data_entry_count, const int filter_entry_count){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
     if (x < 0) {  //x might overflow when testing extreme case
       break;
@@ -213,57 +263,9 @@ __global__ void prepare_filter_weights_(CudaLaunchConfig config,
     }   
     //const dtype channel = in_ptr[(x + 1)  * dimension_count - 1]; 
     out_id_ptr[x] = val;
-  }
-}
-
-template <typename dtype, typename itype>
-__global__ void approxSparseDirectConv(CudaLaunchConfig config, 
-   const itype* __restrict__ i_ind, const dtype* __restrict__ i_val, const itype* __restrict__ i_sh, const itype* __restrict__ i_ind_1d, const itype* __restrict__ i_ch, //input tensors
-   const itype* __restrict__ f_ind, const dtype* __restrict__ f_val, const itype* __restrict__ f_sh, const itype* __restrict__ f_ind_1d, //filter tensors
-   //const itype* __restrict__ r_ind, const itype reduced_count, const itype* __restrict__ upper_search_bound, const itype* __restrict__ lower_search_bound, //search structure for binary search
-   const itype* hash_table, const itype* hash_values, const itype reduced_count, const HashConfig hc,
-   dtype* __restrict__ out_conv_data, const itype* __restrict__ out_sh,
-   const int data_entry_count, const int filter_weight_count, const int data_dimension){
-
-  //compute data
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) { //index of feature map
-     if(x < 0){
-       break;
-     }
-     if(x >= data_entry_count){
-       break;
-     }
-    for(itype y = 0; y < filter_weight_count; ++y){
-      //1.a: check channel filter/input
-      itype idy = data_dimension * y;
-      if(i_ch[x] != f_ind[idy + data_dimension - 2]) continue; 
-      //1.b check valid indice and valid stride / padding:
-      bool is_valid = true;
-      itype idx = data_dimension * x;
-      for(int i = data_dimension - 2; i > 0; --i){
-        itype id = i_ind[idx + i] - f_ind[idy + i - 1] + (f_sh[i - 1] - 1) / 2;
-        if(id < 0 || id >= out_sh[i]){
-          is_valid = false;
-          break;
-        }
-        //TODO: stride and padding
-      }
-      if(!is_valid){
-        continue;
-      }
-      //2. compute update indice
-      itype lookup_id = i_ind_1d[x] + f_ind_1d[y];
-      itype update_id = 0;
-      //index_lookup(lookup_id, r_ind, lower_search_bound[x], upper_search_bound[x], &update_id); //Binary search
-      querry_hash_value(&update_id, hash_table, hash_values, &lookup_id, hc); //search in hash table
-      //3. update indice
-      if(update_id < 0){
-        continue;
-      }
-      itype channel_offset = reduced_count * f_ind[idy + data_dimension - 1];
-      const float update_val = f_val[y] * i_val[x];
-      atomicAdd(&out_conv_data[update_id + channel_offset], update_val);
-    }
+    out_ch_ptr[x] = f_id_ptr[x * dimension_count + dimension_count - 1];
+    in_channel[x] = f_id_ptr[x * dimension_count + dimension_count - 2];
+    index[x] = x;
   }
 }
 
@@ -312,15 +314,11 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   /////
   //2. remove duplicates from data and apply stride/padding to obtain search structure
   t = clock();
-  IndiceT *upper_search_limit = 0;
-  //checkCuda(cudaMalloc(&upper_search_limit, data_entry_count * sizeof(IndiceT)));
-  IndiceT *lower_search_limit = 0;
-  //checkCuda(cudaMalloc(&lower_search_limit, data_entry_count * sizeof(IndiceT)));
   IndiceT *unique_masked = 0;
-  checkCuda(cudaMalloc(&unique_masked, data_entry_count * sizeof(IndiceT)));
+  checkCuda(cudaMalloc(&unique_masked, std::max(filter_weight_count, data_entry_count) * sizeof(IndiceT)));
   unique_mask<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(config_i1d, in_ind_1d, unique_masked);
   IndiceT *unique_count = 0;
-  checkCuda(cudaMalloc(&unique_count, data_entry_count * sizeof(IndiceT)));
+  checkCuda(cudaMalloc(&unique_count, std::max(filter_weight_count, data_entry_count) * sizeof(IndiceT)));
   CudaLaunchConfig config_1 = GetCudaLaunchConfig(1, d);
   compute_scan(context, d, unique_count, unique_masked, data_entry_count);
   IndiceT reduced_count = -1;
@@ -332,30 +330,145 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   unique_array<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(config_i1d, in_ind_1d, unique_masked, unique_count, 
     reduced_indices, reduced_correspondences);
   cudaDeviceSynchronize();
-  //precompute_search_bounds<<<config_i1d.block_count, config_i1d.thread_per_block, 0, d.stream()>>>(config_i1d, i_sh.data(), f_sh.data(), unique_count, 
   //  reduced_indices, in_ind_1d, data_dimension, data_entry_count, lower_search_limit, upper_search_limit);
   cudaDeviceSynchronize();
   dout_s << "t2: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
   //TODO: apply stride/padding
   //TODO: initialize search structure
-  t = clock();
-  HashConfig hc;
-  IndiceT *hash_table = 0, *hash_values = 0;
-  initialize_table(context, d, &hash_table, &hash_values, reduced_indices, reduced_indices, (IndiceT) reduced_count, hc);
-  dout_s << "t_hash: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
   
   /////
   //3. prepare filter: directly manipulate 1D keys instead of kD indices and flip filter weights to be applicable for direct convolution
   t = clock();
   IndiceT *filter_ind_1d = 0;
   checkCuda(cudaMalloc(&filter_ind_1d, filter_weight_count * sizeof(IndiceT)));
+  IndiceT *filter_out_channel = 0;
+  checkCuda(cudaMalloc(&filter_out_channel, filter_weight_count * sizeof(IndiceT)));
+  IndiceT *filter_in_channel = 0;
+  checkCuda(cudaMalloc(&filter_in_channel, filter_weight_count * sizeof(IndiceT)));
+  IndiceT *filter_id = 0;
+  checkCuda(cudaMalloc(&filter_id, filter_weight_count * sizeof(IndiceT)));
   CudaLaunchConfig config_f1d = GetCudaLaunchConfig(filter_weight_count, d);
   prepare_filter_weights_<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, 
-    f_ind.data(), f_sh.data(), i_sh.data(), filter_ind_1d,  data_dimension, reduced_count, filter_weight_count);
+    f_ind.data(), f_sh.data(), i_sh.data(), filter_ind_1d, filter_out_channel, filter_in_channel, filter_id, data_dimension, reduced_count, filter_weight_count);
   cudaDeviceSynchronize();
+
+  dout_s << "filter cout unsorted: ";
+  std::vector<IndiceT> dout_sco(filter_weight_count);
+  cudaMemcpy(&dout_sco[0], filter_out_channel, dout_sco.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_sco.size(); ++i) dout_s << dout_sco[i] << " ";
+  dout_s << std::endl;
+
+  dout_s << "filter cin unsorted: ";
+  std::vector<IndiceT> dout_sci(filter_weight_count);
+  cudaMemcpy(&dout_sci[0], filter_in_channel, dout_sci.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_sci.size(); ++i) dout_s << dout_sci[i] << " ";
+  dout_s << std::endl;
+ 
+ 
+  //sort filter w.r.t. output and input channels
+  IndiceT* new_filter_indice = 0;
+  IndiceT* filter_sorted_out = 0;
+  IndiceT* filter_sorted_in = 0;
+  IndiceT* filter_sorted_tmp_c_in = 0;
+  IndiceT filter_segment_count = 0;
+  int* filter_segments_start = 0;
+  int* filter_segments_end = 0;
+  checkCuda(cudaMalloc(&new_filter_indice, filter_weight_count * sizeof(IndiceT)));
+  checkCuda(cudaMalloc(&filter_sorted_out, filter_weight_count * sizeof(IndiceT)));
+  checkCuda(cudaMalloc(&filter_sorted_in, filter_weight_count * sizeof(IndiceT)));
+  checkCuda(cudaMalloc(&filter_sorted_tmp_c_in, filter_weight_count * sizeof(IndiceT)));
+  compute_sort(context, d, filter_out_channel, filter_sorted_out, filter_id, new_filter_indice, filter_weight_count);
+  unique_mask<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_sorted_out, unique_masked); 
+  compute_scan(context, d, unique_count, unique_masked, filter_weight_count);
+  cudaMemcpy(&filter_segment_count, unique_count + filter_weight_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  cudaDeviceSynchronize();
+  checkCuda(cudaMalloc(&filter_segments_start, filter_weight_count * sizeof(int)));
+  checkCuda(cudaMalloc(&filter_segments_end, filter_weight_count * sizeof(int)));
+  cudaDeviceSynchronize();
+  get_segment_start<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_segments_start, unique_masked, unique_count);
+  cudaDeviceSynchronize();
+  get_segment_end<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_segments_end, filter_segments_start, unique_count, filter_weight_count);
+  cudaDeviceSynchronize();
+  apply_sorted_indices<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_sorted_tmp_c_in, filter_in_channel, new_filter_indice);
+  cudaDeviceSynchronize();
+  compute_segmented_sort(context, d, filter_sorted_tmp_c_in, filter_sorted_in, new_filter_indice, filter_id, filter_weight_count, filter_segment_count, filter_segments_start, filter_segments_end);
+  cudaDeviceSynchronize();
+  //apply_sorted_indices<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_out_channel, filter_in_channel, filter_id);
+  T* filter_sorted_weights = 0;
+  checkCuda(cudaMalloc(&filter_sorted_weights, filter_weight_count * sizeof(T)));
+  IndiceT* filter_sorted_ind_1d = 0;
+  checkCuda(cudaMalloc(&filter_sorted_ind_1d, filter_weight_count * sizeof(IndiceT)));
+  apply_sorted_indices<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_sorted_weights, f_val.data(), filter_id);
+  apply_sorted_indices<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, filter_sorted_ind_1d, filter_ind_1d, filter_id);
   dout_s << "t3: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
+  dout_s << "filter id sorted: ";
+  std::vector<IndiceT> dout_sc(filter_weight_count);
+  cudaMemcpy(&dout_sc[0], filter_sorted_ind_1d, dout_sc.size() * sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_sc.size(); ++i) dout_s << dout_sc[i] << " ";
+  dout_s << std::endl;
+ 
+  dout_s << "filter id unsorted sorted: ";
+  std::vector<IndiceT> dout_i(filter_weight_count);
+  cudaMemcpy(&dout_i[0], filter_ind_1d, dout_i.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_i.size(); ++i) dout_s << dout_i[i] << " ";
+  dout_s << std::endl;
+  
+  dout_s << "filter values sorted: ";
+  std::vector<T> dout_inv(filter_weight_count);
+  cudaMemcpy(&dout_inv[0], filter_sorted_weights, dout_inv.size() *sizeof(T), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_inv.size(); ++i) dout_s << dout_inv[i] << " ";
+  dout_s << std::endl;
+  
+  dout_s << "filter values unsorted: ";
+  std::vector<T> dout_id(filter_weight_count);
+  cudaMemcpy(&dout_id[0], f_val.data(), dout_id.size() *sizeof(T), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_id.size(); ++i) dout_s << dout_id[i] << " ";
+  dout_s << std::endl;
+  
+  dout_s << "filter sorted cout: ";
+  std::vector<IndiceT> dout_invo(filter_weight_count);
+  cudaMemcpy(&dout_invo[0], filter_sorted_out, dout_invo.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_invo.size(); ++i) dout_s << dout_invo[i] << " ";
+  dout_s << std::endl;
+  
+  dout_s << "filter sorted cin: ";
+  std::vector<IndiceT> dout_idi(filter_weight_count);
+  cudaMemcpy(&dout_idi[0], filter_sorted_in, dout_idi.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_idi.size(); ++i) dout_s << dout_idi[i] << " ";
+  dout_s << std::endl;
+
+  dout_s << "tmp sorted ids: ";
+  std::vector<IndiceT> dout_iditd(filter_weight_count);
+  cudaMemcpy(&dout_iditd[0], new_filter_indice, dout_iditd.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_iditd.size(); ++i) dout_s << dout_iditd[i] << " ";
+  dout_s << std::endl;
+
+  dout_s << "tmp sorted cin: ";
+  std::vector<IndiceT> dout_idit(filter_weight_count);
+  cudaMemcpy(&dout_idit[0], filter_sorted_tmp_c_in, dout_idit.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_idit.size(); ++i) dout_s << dout_idit[i] << " ";
+  dout_s << std::endl;
+
+  dout_s << "filter id: ";
+  std::vector<IndiceT> dout_idid(filter_weight_count);
+  cudaMemcpy(&dout_idid[0], filter_id, dout_idid.size() *sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_idid.size(); ++i) dout_s << dout_idid[i] << " ";
+  dout_s << std::endl;
+
+  dout_s << "segments start: " << filter_segment_count << std::endl;
+  std::vector<int> dout_si(filter_segment_count);
+  cudaMemcpy(&dout_si[0], filter_segments_start, dout_si.size() *sizeof(int), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_si.size(); ++i) dout_s << dout_si[i] << " ";
+  dout_s << std::endl;
+  
+  dout_s << "segments end: ";
+  std::vector<int> dout_so(filter_segment_count);
+  cudaMemcpy(&dout_so[0], filter_segments_end, dout_so.size() *sizeof(int), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dout_so.size(); ++i) dout_s << dout_so[i] << " ";
+  dout_s << std::endl;
+  
   /////
   //4. compute out shape
   //TODO
@@ -375,9 +488,9 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   CudaLaunchConfig config_conv = GetCudaLaunchConfig(data_entry_count, d);
   approxSparseDirectConv<<<config_conv.block_count, config_conv.thread_per_block, 0, d.stream()>>>(config_conv,
     i_ind.data(), i_val.data(), i_sh.data(), in_ind_1d, in_ind_1d_channels,
-    f_ind.data(), f_val.data(), f_sh.data(), filter_ind_1d,
-    //reduced_indices, reduced_count, upper_search_limit, lower_search_limit, //binary search
-    hash_table, hash_values, reduced_count, hc, //hash table lookup
+    f_ind.data(), f_val.data(), f_sh.data(), filter_ind_1d, filter_id,
+    //f_ind.data(), filter_sorted_weights, f_sh.data(), filter_sorted_ind_1d, filter_id,
+    reduced_indices, reduced_count, //binary search
     conv_res, out_sh,
     data_entry_count, filter_weight_count, data_dimension);
   cudaDeviceSynchronize();
@@ -393,7 +506,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   IndiceT *non_zero_count = 0;
   checkCuda(cudaMalloc(&non_zero_count, conv_out_count * sizeof(IndiceT)));
   compute_scan(context, d, non_zero_count, non_zero_masked, conv_out_count);
-  IndiceT result_count = -1;
+  IndiceT result_count = 0;
   cudaMemcpy(&result_count, non_zero_count + conv_out_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   cudaDeviceSynchronize();
   dout_s << "t6: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
@@ -402,6 +515,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   //7. Create and fill output tensor
   t = clock();
   Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL;
+  if(result_count < 0 || result_count > conv_out_count) result_count = 0; //TODO: debug this case should not happen
   TensorShape out_ind_shape = {(IndiceT) result_count, (IndiceT) data_dimension};
   TensorShape out_val_shape = {(IndiceT) result_count};
   TensorShape out_sh_shape = {(IndiceT) data_dimension};
@@ -424,17 +538,22 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaFree(in_ind_1d);
   cudaFree(unique_masked);
   cudaFree(unique_count);
-  cudaFree(upper_search_limit);
-  cudaFree(lower_search_limit);
   cudaFree(reduced_indices);
   cudaFree(reduced_correspondences);
+  cudaFree(filter_segments_start);
+  cudaFree(filter_segments_end);
   cudaFree(filter_ind_1d);
+  cudaFree(filter_id);
+  cudaFree(filter_out_channel);
+  cudaFree(filter_in_channel);
+  cudaFree(filter_sorted_tmp_c_in);
+  cudaFree(new_filter_indice);
+  cudaFree(filter_sorted_out);
+  cudaFree(filter_sorted_in);
   cudaFree(out_sh);
   cudaFree(conv_res);
   cudaFree(non_zero_masked);
   cudaFree(non_zero_count);
-  cudaFree(hash_table);
-  cudaFree(hash_values);
   dout_s << "t8: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
 
   cudaDeviceSynchronize();
