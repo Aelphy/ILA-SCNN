@@ -32,7 +32,7 @@ __global__ void index_KDto1D(CudaLaunchConfig config, const dtype* __restrict__ 
 //TODO: merge device and global function
 //Compress [batch, x, y, ..., channel] indices into a [1D] key while keeping the data sorted.
 template <typename dtype>
-__device__ void index_KDto1D_(const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+__device__ __forceinline__ void index_KDto1D_(const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
                     dtype* out_ind_ptr, const int dimension_count){
   dtype val = 0;
   dtype mul = 1;
@@ -47,7 +47,7 @@ __device__ void index_KDto1D_(const dtype* __restrict__ in_ptr, const dtype* __r
 
 //decompress 1D key + channel into K dimensional indices
 template <typename dtype>
-__device__ void index_1DtoKD(const int x_in, const int x_out, const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+__device__ __forceinline__ void index_1DtoKD(const int x_in, const int x_out, const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
                     dtype* __restrict__ out_ind_ptr, const int dimension_count){
   dtype idx_out = x_out * dimension_count;
   //1. compressed 1d key, except channel
@@ -209,40 +209,6 @@ dtype* result_id, dtype* lower_limit = NULL, dtype* upper_limit = NULL){
   *result_id = -1;
 }
 
-//Compress [batch, x, y, ...] indices into a [1D] key while voxelization
-template <typename dtype>
-__global__ void compute_voxel_id1D(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
-                    dtype* out_ind_ptr, dtype* out_id_ptr, const int dimension_count, const int entry_count, const int hypercube_size, bool ignore_channel = true){
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
-    if (x < 0 || x >= entry_count) {  //x might overflow when testing extreme case
-      break;
-    }
-    dtype val = 0;
-    dtype mul = 1;
-    dtype idx = x;
-    for(int i = dimension_count - 1; i >=0; --i) { //reorder dimensions to [dim1, ..., dimx, batch, channel] and compress
-      int ii = i;
-      if(i == dimension_count - 1){
-        idx = (x + 1) * dimension_count - 1;
-        if(!ignore_channel) val = val + mul * in_ptr[idx];
-        mul = mul * in_shape_ptr[dimension_count - 1];
-      } else if(i == dimension_count - 2){
-        idx = x * dimension_count;
-        val = val + mul * in_ptr[idx];
-        mul = mul * in_shape_ptr[0];
-      } else {
-        ii = i + 1;
-        idx = x * dimension_count + ii;
-        val = val + mul * floor(float(in_ptr[idx]) / hypercube_size);
-        mul = mul * in_shape_ptr[ii];
-      }
-    }
-    out_ind_ptr[x] = val;
-    out_id_ptr[x] = x;
-  }
-}
-
-
 //copy obtain unique elemets from array
 template <typename dtype, typename itype>
 __global__ void compute_block_start(CudaLaunchConfig config,  const itype* __restrict__ unique_masked_ptr, 
@@ -289,59 +255,6 @@ __global__ void prepare_filter_weights_(CudaLaunchConfig config,
     index[x] = x;
   }
 }
-
-/*template <typename dtype, typename itype>
-__global__ void approxSparseDirectConv(CudaLaunchConfig config, 
-   const itype* __restrict__ i_ind, const dtype* __restrict__ i_val, const itype* __restrict__ i_sh, const itype* __restrict__ i_ind_1d, const itype* __restrict__ i_ch, //input tensors
-   const itype* __restrict__ f_ind, const dtype* __restrict__ f_val, const itype* __restrict__ f_sh, const itype* __restrict__ f_ind_1d, const itype* __restrict__ f_id, //filter tensors
-   const itype* __restrict__ r_ind, const itype reduced_count, //search structure for binary search
-   dtype* __restrict__ out_conv_data, const itype* __restrict__ out_sh,
-   const int data_entry_count, const int filter_weight_count, const int data_dimension){
-
-  //compute data
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) { //index of feature map
-     if(x < 0){
-       break;
-     }
-     if(x >= data_entry_count){
-       break;
-     }
-    for(itype y = 0; y < filter_weight_count; ++y){
-      //1.a: check channel filter/input
-      itype idy = data_dimension * f_id[y];
-      //itype idy = data_dimension * y;
-      if(i_ch[x] != f_ind[idy + data_dimension - 2]) continue; 
-      //1.b check valid indice and valid stride / padding:
-      bool is_valid = true;
-      itype idx = data_dimension * x;
-      for(int i = data_dimension - 2; i > 0; --i){
-        itype id = i_ind[idx + i] - f_ind[idy + i - 1] + (f_sh[i - 1] - 1) / 2;
-        if(id < 0 || id >= out_sh[i]){
-          is_valid = false;
-          break;
-        }
-        //TODO: stride and padding
-      }
-      if(!is_valid){
-        continue;
-      }
-      //2. compute update indice
-      itype lookup_id = i_ind_1d[x] + f_ind_1d[y];
-      itype update_id = 0;
-      index_lookup(lookup_id, r_ind, (itype) 0, (itype) reduced_count - 1, &update_id); //Binary search
-      //querry_hash_value(&update_id, hash_table, hash_values, &lookup_id, hc); //search in hash table
-      //3. update indice
-      if(update_id < 0){
-        continue;
-      }
-      itype channel_offset = reduced_count * f_ind[idy + data_dimension - 1];
-      const float update_val = f_val[y] * i_val[x];
-      atomicAdd(&out_conv_data[update_id + channel_offset], update_val);
-    }
-  }
-}
-*/
-
 
 template<typename DeviceT, typename T, typename IndiceT> inline void
 preprocess_filter(OpKernelContext* context, DeviceT d, const IndiceT* f_ids_kd, const T* f_vals, const IndiceT* f_shape, const IndiceT* i_shape,  int data_dimension, int filter_weight_count,
@@ -408,6 +321,70 @@ preprocess_filter(OpKernelContext* context, DeviceT d, const IndiceT* f_ids_kd, 
   cudaFree(filter_sorted_in);
 }
 
+//Compress [batch, x, y, ...] indices into a [1D] key while voxelization
+template <typename dtype>
+__global__ void compute_voxel_id1D(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* out_ind_ptr, dtype* out_id_ptr, const int dimension_count, const int entry_count, const int hypercube_size, bool ignore_channel = true){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0 || x >= entry_count) {  //x might overflow when testing extreme case
+      break;
+    }
+    dtype val = 0;
+    dtype mul = 1;
+    dtype idx = x;
+    for(int i = dimension_count - 1; i >=0; --i) { //reorder dimensions to [dim1, ..., dimx, batch, channel] and compress
+      int ii = i;
+      if(i == dimension_count - 1){
+        idx = (x + 1) * dimension_count - 1;
+        if(!ignore_channel) val = val + mul * in_ptr[idx];
+        mul = mul * in_shape_ptr[dimension_count - 1];
+      } else if(i == dimension_count - 2){
+        idx = x * dimension_count;
+        val = val + mul * in_ptr[idx];
+        mul = mul * in_shape_ptr[0];
+      } else {
+        ii = i + 1;
+        idx = x * dimension_count + ii;
+        val = val + mul * floor(float(in_ptr[idx]) / hypercube_size);
+        mul = mul * in_shape_ptr[ii] / hypercube_size;
+      }
+    }
+    out_ind_ptr[x] = val;
+    out_id_ptr[x] = x;
+  }
+}
+
+//decompress id of compressed sparse blocks (does not revert scaling of [dim1, ..., dimx])
+template <typename dtype>
+__device__ __forceinline__ void decompress_block_id(const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* __restrict__ out_ind_ptr, const int dimension_count, const int hypercube_size){
+  //1. compressed 1d key, except channel
+  dtype *fact = new dtype[dimension_count];
+  dtype *ids = new dtype[dimension_count]; //reorder dimensions to [dim1, ..., dimx, batch, channel]
+  dtype *scale = new dtype[dimension_count]; //reorder dimensions to [dim1, ..., dimx, batch, channel]
+  for(int i = 0; i < dimension_count - 2; ++i){ 
+    ids[i] = i + 1;
+    scale[i] = hypercube_size;
+  }
+  //TODO: Check order of indices of scale and ids
+  ids[dimension_count - 2] = 0;
+  scale[dimension_count - 2] = 1;
+  ids[dimension_count - 1] = dimension_count - 1;
+  scale[dimension_count - 1] = 1;
+  fact[dimension_count - 1] = 1;
+  for(int i = dimension_count - 2; i >= 0; i = i - 1){
+    fact[i] = fact[i + 1] / scale[i + 1] * in_shape_ptr[ids[i + 1]];
+  }
+  dtype r = in_index_1d;
+  for(int i = 0; i < dimension_count; ++i){
+    out_ind_ptr[ids[i]] = r / fact[i] * scale[i];
+    r = r % fact[i];
+  }
+  delete[] fact;
+  delete[] ids;
+  delete[] scale;
+}
+
 template<typename DeviceT, typename T, typename IndiceT> inline void
 coo_to_blocks(  OpKernelContext* context, DeviceT d, const IndiceT* in_ids_kd, const T* in_vals, const IndiceT* in_shape, IndiceT** block_ids_1d, T** block_vals,
                   IndiceT** block_pointer, IndiceT** block_pointer_ids, int dimension_count, int data_entry_count, int hypercube_size, int& block_count)
@@ -439,7 +416,9 @@ coo_to_blocks(  OpKernelContext* context, DeviceT d, const IndiceT* in_ids_kd, c
   IndiceT block_count_ = 0;
   cudaMemcpy(&block_count_, unique_count + data_entry_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   block_count = block_count_;
-  checkCuda(cudaMalloc(block_pointer, block_count_ * sizeof(IndiceT)));
+  checkCuda(cudaMalloc(block_pointer, (block_count_ + 1) * sizeof(IndiceT)));
+  IndiceT dec = data_entry_count;
+  cudaMemcpy(&(*block_pointer)[block_count_], &dec, sizeof(IndiceT), cudaMemcpyHostToDevice);
   checkCuda(cudaMalloc(block_pointer_ids, block_count_ * sizeof(IndiceT)));
   compute_block_start<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, unique_mask, unique_count, sorted_voxel_ids, *block_pointer, *block_pointer_ids);
   cudaDeviceSynchronize();
@@ -473,136 +452,118 @@ coo_to_blocks(  OpKernelContext* context, DeviceT d, const IndiceT* in_ids_kd, c
   cudaFree(sorted_id);
 }
 
-//decompress id of compressed sparse blocks (does not revert scaling of [dim1, ..., dimx])
 template <typename dtype>
-__device__ void decompress_block_id(const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
-                    dtype* __restrict__ out_ind_ptr, const int dimension_count, const int hypercube_size){
-  //1. compressed 1d key, except channel
-  dtype *fact = new dtype[dimension_count];
-  dtype *ids = new dtype[dimension_count]; //reorder dimensions to [dim1, ..., dimx, batch, channel]
-  dtype *scale = new dtype[dimension_count]; //reorder dimensions to [dim1, ..., dimx, batch, channel]
-  for(int i = 0; i < dimension_count - 2; ++i){ 
-    ids[i] = i + 1;
-    scale[i] = hypercube_size;
-  }
-  //TODO: Check order of indices of scale and ids
-  ids[dimension_count - 2] = 0;
-  scale[dimension_count - 2] = 1;
-  ids[dimension_count - 1] = dimension_count - 1;
-  scale[dimension_count - 1] = 1;
-  fact[dimension_count - 1] = 1;
-  for(int i = dimension_count - 2; i >= 0; i = i - 1){
-    fact[i] = fact[i + 1] * in_shape_ptr[ids[i + 1]];
-  }
-  dtype r = in_index_1d;
-  for(int i = 0; i < dimension_count; ++i){
-    out_ind_ptr[ids[i]] = r / fact[i] * scale[i];
-    r = r % fact[i];
-  }
-  delete[] fact;
-  delete[] ids;
-  delete[] scale;
-}
-
-//copy obtain unique elemets from array
-template <typename dtype>
-__global__ void compute_dense_block_id(CudaLaunchConfig config,  const dtype* sparse_block_id, dtype* dense_block_id){
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
-    if(x < 0){  //x might overflow when testing extreme case
-      break;
-    }
-    dense_block_id[sparse_block_id[x]] = x + 1; // + 1 to avoid ambiguities with index 0 and non existing blocks
-  }
-}
-
-template<typename DeviceT, typename T, typename IndiceT> inline void
-compute_dense_blocks(DeviceT d, const IndiceT* in_shape, const IndiceT* block_pointer, const IndiceT* block_pointer_ids, IndiceT** dense_block_corr, 
-  const int dimension_count, const int data_entry_count, const int hypercube_size, const int block_count)
+__device__ __forceinline__ void map_index_1d_to_buffer_id(const dtype in_id, const dtype* __restrict__ in_shape_ptr,
+                                                          const dtype* out_id, const int hypercube_size)
 {
-  std::vector<IndiceT> cpu_shape(dimension_count);
-  cudaMemcpy(&cpu_shape, in_shape, dimension_count * sizeof(IndiceT), cudaMemcpyDeviceToHost);
-  int dim = 1;
-  for(size_t i = 0; i < dimension_count - 1; ++i){
-    dim = (dim * cpu_shape[i + 1] + hypercube_size - 1) / hypercube_size; //batch, x,y,z, ... (no channel) rounded up
-  }
-  checkCuda(cudaMalloc(dense_block_corr, dim * sizeof(IndiceT)));
-  cudaMemset(*dense_block_corr, 0, dim * sizeof(IndiceT));
-  CudaLaunchConfig config = GetCudaLaunchConfig(block_count, d);
-  compute_dense_block_id<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, block_pointer_ids, *dense_block_corr);
+  //TODO
+}
+
+template <typename dtype>
+__device__ __forceinline__ void map_shared_to_channel_buffer(const dtype in_id, const int hypercube_size,
+                                                          const dtype* out_id, const dtype* __restrict__ in_shape_ptr)
+{
+  //TODO
 }
 
 template <typename dtype, typename itype>
 __global__ void approxSparseDirectConv(CudaLaunchConfig config,
    const itype* __restrict__ in_block_ids, const dtype* __restrict__ in_block_vals, const itype* __restrict__ in_block_pointer, 
-   const itype* __restrict__ in_block_pointer_ids, const itype* __restrict__ in_shape_ptr, 
+   const itype* __restrict__ in_shape_ptr, const int block_start_, 
    const itype* __restrict__ filter_ind_1d, const dtype* __restrict__ filter_weights, const itype* __restrict__ filter_shape, const int* __restrict__ filter_segments_start, 
-   const int* __restrict__ filter_segments_end, const int filter_segment_count,
-   dtype* __restrict__ cout_conv_data, const itype* __restrict__ out_sh,
+   const int* __restrict__ filter_segments_end, const int filter_segment_count, const int filter_start, const int filter_end,
+   const itype* __restrict__ out_sh, dtype* dense_channel_buffer,
    int data_entry_count, int filter_weight_count, int data_dimension, int hypercube_size)
 {
-   __shared__ dtype accumulated_result[6125]; //TODO: dynamic allocation
-  //1. get pointer offset:
-  itype block_id = in_block_pointer_ids[blockIdx.x];
-  itype* block_id_decompressed = new itype[data_dimension];
-  decompress_block_id(block_id, in_shape_ptr, block_id_decompressed, data_dimension, hypercube_size);
-  itype accumulated_offset = 0;
-  index_KDto1D_(block_id_decompressed, in_shape_ptr, &accumulated_offset, data_dimension);
+  __shared__ dtype accumulated_result[3072]; //TODO: dynamic allocation
+  const int block_id = blockIdx.x + block_start_; //TODO check block_start_
+  const int block_start = in_block_pointer[block_id];
+  const int block_end = in_block_pointer[block_id + 1];
+  const int filter_weight_start = filter_start;
+  const int filter_weights_end = filter_end;
+  const int ch_filter_weight_count = filter_weights_end - filter_weight_start;
+  const int input_data_count = block_end - block_start;
+  const int operation_count = ch_filter_weight_count * input_data_count;
 
-  //2. define neigbourhood (input halo) //TODO: parallelize && precompute
-  itype neighbourhood_count = pow(data_dimension - 2, 3);
-  itype* neighboring_blocks = new itype[neighbourhood_count];
-  itype* mean_blocks = new itype[neighbourhood_count];
-  for(size_t i = 0; i < neighbourhood_count; ++i){
-    neighboring_blocks[i] = i;
+  for(int x = threadIdx.x; x < operation_count; x += blockDim.x){
+    //TODO: check indexing of loop
+    const int did = x % filter_weight_count;
+    const int fid = (x - did) /  filter_weight_count;
+    const int block_data_id = did + block_start;
+    const int filter_data_id = fid + filter_weight_start;
+    const dtype fv = filter_weights[filter_data_id];
+    const itype fi = filter_ind_1d[filter_data_id];
+    const dtype iv = in_block_vals[block_data_id];
+    const itype ii = in_block_ids[block_data_id];
+    const itype out_i = fi + ii;
+    const dtype out_v = fv * iv;
+    itype acc_id;
+    map_index_1d_to_buffer_id(out_i, in_shape_ptr, &acc_id, hypercube_size);
+    //TODO: map out_i to accumulated_result; decompose out_i to find index in accumulated result
+    atomicAdd(&accumulated_result[acc_id], out_v);
   }
-  itype* neighbourhood_shape = new itype[data_dimension];
-  for(int i = 0; i < data_dimension - 2; ++i){
-    neighbourhood_shape[i] = 3;
+  __syncthreads();
+  //check if entries are valid (inside tensor shape) and write valid entries to global memory buffer
+  //TODO
+  for(int x = threadIdx.x; x < pow(hypercube_size, data_dimension - 2); x += blockDim.x){
+    itype local_id = x;
+    if(accumulated_result[local_id] == 0) continue;
+    itype global_acc_id;
+    //TODO: check if index is in bounds of out shape
+    map_shared_to_channel_buffer(local_id, hypercube_size, &global_acc_id, in_shape_ptr);
+    atomicAdd(&dense_channel_buffer[global_acc_id], accumulated_result[local_id]);
   }
-  for(int i = data_dimension - 2; i < data_dimension; ++i){
-    neighbourhood_shape[i] = 1;
-  }
-  for(int i = 0; i < neighbourhood_count; ++i){
-    itype* neighbour_decompressed = new itype[data_dimension];
-    index_1DtoKD(0, 0, neighboring_blocks[i], neighbourhood_shape, neighbour_decompressed, data_dimension);
-    for(int j = 0; j < data_dimension; ++j){
-      neighbour_decompressed[j] = neighbour_decompressed[j] - (neighbourhood_shape[i] - 1) / 2; //zero centering
-    }
-    //compress (like in_block_pointer_ids)
-    itype val = 0;
-    itype mul = 1;
-    itype idx = 0;
-    for(int j = data_dimension - 1; j >=0; --j) { //reorder dimensions to [dim1, ..., dimx, batch, channel] and compress
-      if(j == data_dimension - 1){
-        idx = data_dimension - 1;
-        mul = mul * in_shape_ptr[data_dimension - 1];
-      } else if(j == data_dimension - 2){
-        val = val + mul * neighbour_decompressed[j];
-        mul = mul * in_shape_ptr[0];
-      } else {
-        idx = j + 1;
-        val = val + mul * floor(float(neighbour_decompressed[j]) / hypercube_size);
-        mul = mul * in_shape_ptr[idx];
-      }
-    }
-    neighboring_blocks[i] = block_id + val;
-    delete[] neighbour_decompressed;
-  }
-  
-  //3. find start and end of channels in blocks (neighbors and this)
-  
-  //4. find start and end of channels in filter
-
-  //5. perform convolution in shared memory
-
-  //6. if output allocated: write result to output
-
-  delete[] block_id_decompressed;
-  delete[] neighboring_blocks;
-  delete[] mean_blocks;
-  delete[] neighbourhood_shape;
 }
 
+//generate dense lookup table for blocks in each batch and channel
+template <typename dtype>
+__global__ void compute_input_block_index(CudaLaunchConfig config, dtype* in_block_id, dtype* in_block_ptr, int* out_index_ptr, const int number_blocks, const int number_batches,
+const int number_channels){
+  //initialize values to 0
+  dtype op_count = number_batches * number_channels;
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(x < op_count){
+      out_index_ptr[x] = op_count; //not defined
+    }
+
+  }
+  __syncthreads();
+  //find existing correspondences
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(x >= number_blocks) continue;
+    //TODO get channel and batch from in_block_ptr[in_block_id[x]]; //each block covers exactly one channel and belongs to one batch!
+    int channel = 0; //TODO
+    int batch = 0; //TODO
+    atomicMin(&out_index_ptr[batch * number_channels + channel], x);
+  }
+  __syncthreads();
+  //fix non existing correspondences
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    //TODO: better parallelization
+    if(out_index_ptr[x] == op_count){
+      bool fixed = false;
+      for(int i = x + 1; i < op_count; ++i){ //linear search to the end until valid entry is found or number_blocks
+        if(out_index_ptr[i] != op_count){
+          out_index_ptr[x] = out_index_ptr[i];
+          fixed = true;
+          break;
+        }
+      }
+      if(!fixed){
+        out_index_ptr[x] = number_blocks;
+      }
+    }
+  }
+}
 
 namespace functor {
 template <typename DeviceT, typename T, typename IndiceT>
@@ -616,6 +577,10 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   OP_REQUIRES_OK(context, context->input("filter_values", &filter_values));
   OP_REQUIRES_OK(context, context->input("filter_shape", &filter_shape));
   const DeviceT d = context->eigen_device<DeviceT>();
+  int device_version = d.majorDeviceVersion();
+  if(device_version < 6){
+    LOG(WARNING) << "compute capability to low; requires 6.0 or higher for fast sparse convolution" << std::endl; //atomics for shared memory, max blocks per sm, etc...
+  }
   auto i_sh = in_shape->flat<IndiceT>();
   auto i_ind = in_indices->matrix<IndiceT>();
   auto i_val = in_values->flat<T>();
@@ -626,24 +591,37 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   const int data_dimension = i_ind.dimension(1);
   const int filter_weight_count = f_ind.dimension(0);
   const int smpb = d.sharedMemPerBlock();
+  const int mtpb = d.maxCudaThreadsPerBlock();
+  IndiceT out_channel_count = -1;
+  cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  std::vector<IndiceT> cpu_in_shape(data_dimension);
+  cudaMemcpy(&cpu_in_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  IndiceT channel_dense_size = 1;
+  for(size_t i = 1; i < data_dimension - 2; ++i){
+    channel_dense_size = (channel_dense_size * cpu_in_shape[i + 1]); //x,y,z, ... (no channel and no batch) rounded up
+  }
+  const int batch_count = cpu_in_shape[0];
+  const int in_channel_count = cpu_in_shape[data_dimension - 1];
 
   std::stringstream dout_s;
   //indices must! be sorted
   clock_t t;
   
-  //preprocessing step (1) has to be performed only for one layer in the neural network! Also step 2 can be precomputed and shouldn't affect runtime of nn
+  //preprocessing step (1) has to be performed only for one layer in the neural network! Also step (2) can be precomputed and shouldn't affect runtime of nn
   
   /////
   //1. Convert Coordinate List Format to sparse block format and compress k dimensional indices to 1d
   t = clock();
   int block_count = 0;
-  const int hypercube_size = floor(pow(float(smpb / sizeof(T) / 2), 1. / filter_dim)); //compute block size: assumptions: i) all dimensions have the same size (not necessarly true); ii) two blocks per sm
+  int filter_size = 3;
+  const int hypercube_size = floor(pow(float(smpb / sizeof(T) / 4), 1. / filter_dim)) - (filter_size - 1); //compute block size: assumptions: i) all dimensions have the same size (not necessarly true); ii) two blocks per sm
   if(hypercube_size <= 0) return; //TODO: THROW ERROR
   IndiceT *in_block_ids = 0, *in_block_pointer = 0, *in_block_pointer_ids = 0;
   T *in_block_vals = 0;
   coo_to_blocks(context, d, i_ind.data(), i_val.data(), i_sh.data(), &in_block_ids, &in_block_vals, &in_block_pointer, &in_block_pointer_ids, data_dimension, data_entry_count, hypercube_size, block_count);
   LOG(INFO) << "Edge length: " << hypercube_size << " Shared memory per block: " << smpb << " sizeof T " << sizeof(T) << std::endl;
   dout_s << "t1: " << float(clock() - t) / CLOCKS_PER_SEC << std::endl;
+  LOG(INFO) << dout_s.str(); dout_s.str("");
 
   /////
   //2. prepare filter: directly manipulate 1D keys instead of kD indices and flip filter weights to be applicable for direct convolution and sort filter w.r.t. output and input channels
@@ -654,11 +632,14 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   IndiceT* filter_sorted_ind_1d = 0;
   preprocess_filter(context, d, f_ind.data(), f_val.data(), f_sh.data(), i_sh.data(), data_dimension, filter_weight_count, &filter_segments_start, &filter_segments_end, &filter_sorted_weights, &filter_sorted_ind_1d, filter_segment_count_);
   dout_s << "t2: " << float(clock() - t) / CLOCKS_PER_SEC << std::endl;
+  LOG(INFO) << dout_s.str(); dout_s.str("");
 
   /////
-  //3. generate dense lookup table for sparse block pointer ids to define a neighborhood
-  IndiceT* dense_block_ids = 0;
-  compute_dense_blocks<DeviceT, T, IndiceT>(d, i_sh.data(), in_block_pointer, in_block_pointer_ids, &dense_block_ids, data_dimension, data_entry_count, hypercube_size, block_count);
+  //3. get mapping of blocks / channels (input) and input channels / output channels (filter)
+  t = clock();
+  dout_s << "t2: " << float(clock() - t) / CLOCKS_PER_SEC << std::endl;
+  int* filter_channel_mapping = 0;
+  int* input_block_mapping = 0;
 
   /////
   //4. compute out shape
@@ -670,20 +651,33 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   /////
   //5. perform first convolution to know sparse output shape
   t = clock();
-  IndiceT out_channel_count = -1;
-  cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
-  T* conv_res = 0;
+  T* channel_buffer = 0;
+  checkCuda(cudaMalloc(&channel_buffer, channel_dense_size * sizeof(T))); //allocate dense memory for one channel
   IndiceT conv_out_count = out_channel_count * 1;
-  checkCuda(cudaMalloc(&conv_res, conv_out_count * sizeof(T)));
-  cudaMemset(conv_res, 0, conv_out_count * sizeof(T));
-  CudaLaunchConfig config_conv = GetCudaLaunchConfig(data_entry_count, d);
-  approxSparseDirectConv<<<config_conv.block_count, config_conv.thread_per_block, 0, d.stream()>>>(config_conv,
-    in_block_ids, in_block_vals, in_block_pointer, in_block_pointer_ids, i_sh.data(),
-    filter_sorted_ind_1d, filter_sorted_weights, f_sh.data(), filter_segments_start, filter_segments_end, filter_segment_count_, 
-    conv_res, out_sh,  data_entry_count, filter_weight_count, data_dimension, hypercube_size);
-  cudaDeviceSynchronize();
+  CudaLaunchConfig config_conv = GetCudaLaunchConfig(0, d);
+  for(int i = 0; i < batch_count; ++i){
+    for(int j = 0; j < out_channel_count; ++j){
+      int block_start = 0; //TODO;
+      int block_end = 0; //TODO
+      cudaDeviceSynchronize();
+      cudaMemset(channel_buffer, 0, conv_out_count * sizeof(T));  //stores the dense result of the computed output channel in buffer
+      for(int k = 0; k < in_channel_count; ++k){
+        int filter_start = 0; //TODO
+        int filter_end = 0; //TODO
+        config_conv.thread_per_block = 0; //TODO: set number threads and blocks
+        config_conv.block_count = block_end - block_start; //TODO
+        approxSparseDirectConv<<<config_conv.block_count, config_conv.thread_per_block, 0, d.stream()>>>(config_conv,
+          in_block_ids, in_block_vals, in_block_pointer, i_sh.data(), block_start,
+          filter_sorted_ind_1d, filter_sorted_weights, f_sh.data(), filter_segments_start, filter_segments_end, filter_segment_count_, filter_start, filter_end,
+          out_sh, channel_buffer, data_entry_count, filter_weight_count, data_dimension, hypercube_size);
+      }
+      cudaDeviceSynchronize(); 
+      //TODO: Get result for channel; overwrite global dense accumulation buffer with 0 and continue with next channel
+    }
+  }
   dout_s << "t4: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
   auto result_count = conv_out_count;
+  LOG(INFO) << dout_s.str(); dout_s.str("");
 
   /////
   //6. Create output tensor and fill it in a second run of convolution
@@ -710,8 +704,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
   cudaFree(filter_segments_end);
   cudaFree(filter_sorted_ind_1d);
   cudaFree(filter_sorted_weights);
+  cudaFree(channel_buffer);
   cudaFree(out_sh);
-  cudaFree(conv_res);
   cudaFree(in_block_ids);
   cudaFree(in_block_pointer);
   cudaFree(in_block_pointer_ids);
@@ -730,7 +724,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT>::operator()(OpKernelCont
 //template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, int, int>;
 #define INIT_GPU_TYPE(type, indice_type) \
  template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type>;
-#define INIT_GPU_ALL(type) \
+#define INIT_GPU_ALL(type)    \
   INIT_GPU_TYPE(type, int64); \
   INIT_GPU_TYPE(type, int32);
 
