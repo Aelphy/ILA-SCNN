@@ -265,7 +265,7 @@ __global__ void check_hash_table2(CudaLaunchConfig config,
   }
 }
 
-//cuckoo rehashing
+//mixed rehashing
 template <typename dtype>
 __global__ void rehash_buckets(CudaLaunchConfig config, 
                   dtype *result, dtype* hash_table, const HashConfig hc){
