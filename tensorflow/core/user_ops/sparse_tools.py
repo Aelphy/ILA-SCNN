@@ -17,6 +17,14 @@ def dense_to_sparse(dense, shape):
   assert(np.all(sparse_to_dense(indice, values, shape).flat() - dense.flat == 0))
   return [indice, values, sh]
 
+def sparse1d_to_dense(ind, val, shape):
+  dense = np.zeros(shape, dtype=np.float32)
+  for idx1d in range(0, len(ind)):
+    idxkd = id1D_to_idkD(ind[idx1d], shape)
+    ind_helper = [slice(None)]*len(idxkd)
+    dense[tuple(idxkd)] = val[idx1d]
+  return dense
+
 def sparse_to_dense(ind, val, shape):
   dense = np.zeros(shape, dtype=np.float32)
   for idx in range(0, len(ind)):
