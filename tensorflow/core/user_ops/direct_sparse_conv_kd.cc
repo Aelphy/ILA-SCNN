@@ -85,15 +85,19 @@ class DirectSparseConvKD : public OpKernel {
 };
 
 #if GOOGLE_CUDA
-#define REGISTER_GPU_TYPE(type, indice_type)      \
+#define REGISTER_GPU_TYPE(type, indice_type, dim)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseApproxConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseConvKD<indice_type, functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type> >);    //           \
+                          DirectSparseConvKD<indice_type, functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type, dim> >);    //           \
 //  REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
 //                          DirectSparseConvKD<indice_type, functor::DirectSparseConvFunctor<GPUDevice, type, indice_type> >);
 
+
+#define REGISTER_GPU_TYPE_(type, indice_type) \
+  REGISTER_GPU_TYPE(type, indice_type, 5);
+
 #define REGISTER_GPU_ALL(type) \
-  REGISTER_GPU_TYPE(type, int64); \
-  REGISTER_GPU_TYPE(type, int32);
+  REGISTER_GPU_TYPE_(type, int64); \
+  REGISTER_GPU_TYPE_(type, int32);
 
 
 REGISTER_GPU_ALL(float);
@@ -102,6 +106,7 @@ REGISTER_GPU_ALL(float);
 //REGISTER_GPU_ALL(complex64);
 //REGISTER_GPU_ALL(complex128);
 #undef REGISTER_GPU_TYPE
+#undef REGISTER_GPU_TYPE_
 #undef REGISTER_GPU_ALL
 #endif //GOOGLE_CUDA
 
