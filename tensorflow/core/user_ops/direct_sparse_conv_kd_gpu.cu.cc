@@ -612,7 +612,7 @@ approxSparseDirectConv(CudaLaunchConfig config, const itype* __restrict__ in_blo
   int data_entry_count, int filter_weight_count, int hypercube_size, int filter_max_dim) //TODO: delete filter_segments_end, filter_segments_start, filter_segment_count, data_entry_count, filter_weight_count,
 {
   //1. define variables needed for convolution (overhead)
-  const int sm_size = 3072;
+  const int sm_size = 768;
   __shared__ dtype accumulated_result[sm_size]; //TODO: dynamic allocation
   for(int x = threadIdx.x; x < sm_size; x += blockDim.x){
     accumulated_result[x] = 0;
@@ -770,7 +770,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
   const int batch_count = cpu_in_shape[0];
   const int in_channel_count = cpu_in_shape[data_dimension - 1];
   const int filter_size = 3; //TODO
-  const int hypercube_size_ = floor(pow(float(smpb / sizeof(T) / 4), 1. / (data_dimension - 2))) - (filter_size - 1); //compute block size: assumptions: i) all dimensions have the same size (not necessarly true); ii) two blocks per sm
+  const int hypercube_size_ = floor(pow(float(smpb / sizeof(T) / 16), 1. / (data_dimension - 2))) - (filter_size - 1); //compute block size: assumptions: i) all dimensions have the same size (not necessarly true); ii) two blocks per sm
   const int hypercube_size = min(hypercube_size_, max_dim); //TODO: remove after debugging
   const int dense_block_count = pow(hypercube_size, data_dimension - 2);
   const int dense_filter_block_count = pow(filter_size, data_dimension - 2); //TODO
@@ -778,6 +778,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
   std::stringstream dout_s;
   //indices must! be sorted
   clock_t t;
+
   
   //preprocessing step (1) has to be performed only for one layer in the neural network! Also step (2) can be precomputed and shouldn't affect runtime of nn
   
@@ -844,13 +845,14 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
   CudaLaunchConfig config_buffer = GetCudaLaunchConfig(channel_dense_size, d);
   float bytes_per_block =  pow(hypercube_size, data_dimension - 2) * sizeof(T);
   float blocks_per_sm_2 = floor(smpb / bytes_per_block);
-  int conv_threads_per_block = floor(mtpb / min(blocks_per_sm_2, max_blocks_per_sm / 2.f)); //TODO: round to 32 basis (warp size)
+  int conv_threads_per_block = floor(mtpb / min(blocks_per_sm_2, float(max_blocks_per_sm))) * 2; //TODO: round to 32 basis (warp size), TOOD: check devide by 2
+  LOG(INFO) << "blocks per sm " << blocks_per_sm_2 << " threads per block: " << conv_threads_per_block << std::endl;
   for(int i = 0; i < batch_count; ++i){
     for(int j = 0; j < out_channel_count; ++j){
       cudaStream_t streams[in_channel_count]; //TODO: get non blocking streams to work with tensorflow
       cudaMemset(channel_buffer, 0, channel_dense_size * sizeof(T)); //stores the dense result of the computed output channel in buffer
       for(int k = 0; k < in_channel_count; ++k){
-        cudaStreamCreate(&streams[k]);
+        cudaStreamCreateWithFlags(&streams[k], cudaStreamNonBlocking);
         int block_start = cpu_input_block_mapping[i * in_channel_count + k];
         int block_end = cpu_input_block_mapping[i * in_channel_count + k + 1];
         int filter_start = cpu_filter_channel_mapping[j * in_channel_count + k];
@@ -914,7 +916,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
       cudaStream_t streams[in_channel_count]; //TODO: get non blocking streams to work with tensorflow
       cudaMemset(channel_buffer, 0, channel_dense_size * sizeof(T)); //stores the dense result of the computed output channel in buffer
       for(int k = 0; k < in_channel_count; ++k){
-        cudaStreamCreate(&streams[k]);
+        cudaStreamCreateWithFlags(&streams[k], cudaStreamNonBlocking);
         int block_start = cpu_input_block_mapping[i * in_channel_count + k];
         int block_end = cpu_input_block_mapping[i * in_channel_count + k + 1];
         int filter_start = cpu_filter_channel_mapping[j * in_channel_count + k];

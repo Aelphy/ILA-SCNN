@@ -32,7 +32,7 @@ def tf_custom_op_library_flags(name, srcs=[], gpu_srcs=[], deps=[], cflags=[]):
     native.cc_library(
         name=basename + "_gpu",
         srcs=gpu_srcs,
-        copts=_cuda_copts_(),
+        copts=_cuda_copts_() +  ["-Xptxas='-v'", "--default stream per-thread"],
         deps=deps + if_cuda(cuda_deps))
     cuda_deps.extend([":" + basename + "_gpu"])
 
