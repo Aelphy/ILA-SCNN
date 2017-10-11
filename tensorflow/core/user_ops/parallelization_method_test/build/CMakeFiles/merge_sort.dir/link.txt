@@ -1,0 +1,1 @@
+/usr/bin/c++    -Wall -Wextra -Wno-long-long -fopenmp   CMakeFiles/merge_sort.dir/merge_sort.cpp.o  -o merge_sort -rdynamic 

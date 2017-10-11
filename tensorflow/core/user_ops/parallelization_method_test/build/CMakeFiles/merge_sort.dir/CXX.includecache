@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/thackel/src/tensorflow/tensorflow/core/user_ops/parallelization_method_test/merge_sort.cpp
+iostream
+-
+vector
+-
+deque
+-
+cmath
+-
+

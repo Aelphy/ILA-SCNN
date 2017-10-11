@@ -1,0 +1,1 @@
+/usr/bin/c++    -Wall -Wextra -Wno-long-long -fopenmp   CMakeFiles/kd_map.dir/kd_map.cpp.o  -o kd_map -rdynamic -lboost_system -lboost_thread -lpthread libtime.a -lcityhash -lcityhash 

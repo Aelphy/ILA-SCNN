@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/thackel/src/tensorflow/tensorflow/core/user_ops/parallelization_method_test/time/time.cpp
+time/time.h
+/home/thackel/src/tensorflow/tensorflow/core/user_ops/parallelization_method_test/time/time/time.h
+sys/time.h
+-
+unistd.h
+-
+iostream
+-
+
+/home/thackel/src/tensorflow/tensorflow/core/user_ops/parallelization_method_test/time/time/time.h
+
