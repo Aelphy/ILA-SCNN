@@ -708,65 +708,6 @@ kdSparseDirectConv(CudaLaunchConfig config, const itype* __restrict__ in_block_i
   }
 }
 
-template <typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_256_THREADS_PER_BLOCK, MIN_8_BLOCKS_PER_MP)
-sparseDirectConv(CudaLaunchConfig config, const itype* __restrict__ in_block_ids, const dtype* __restrict__ in_block_vals, const itype* __restrict__ in_block_pointer, 
-  const itype* __restrict__ in_block_pointer_id, const itype* __restrict__ in_shape_ptr, const int* input_block_mapping, 
-  const itype* __restrict__ filter_ind_1d, const dtype* __restrict__ filter_weights, const itype* __restrict__ filter_shape, const int* filter_channel_mapping,
-  const itype* __restrict__ out_sh, dtype* dense_channel_buffer,
-  int data_entry_count, int filter_weight_count, int hypercube_size, int filter_max_dim, int batch, int in_channel_count, int out_channel) //TODO: delete filter_segments_end, filter_segments_start, filter_segment_count, data_entry_count, filter_weight_count,
-{
-  //1. define variables needed for convolution (overhead)
-  const int sm_size = 768;
-  __shared__ dtype accumulated_result[sm_size]; //TODO: dynamic allocation
-  int filter_start, filter_end, block_start_;
-  conv_init_parameters(&filter_start, &filter_end, &block_start_, blockIdx.x, input_block_mapping, filter_channel_mapping, accumulated_result, batch, in_channel_count, out_channel);
-  const int block_id = block_start_;
-  const int block_start = in_block_pointer[block_id];
-  const int block_end = in_block_pointer[block_id + 1];
-  const int filter_weight_start = filter_start;
-  const int filter_weights_end = filter_end;
-  const int ch_filter_weight_count = filter_weights_end - filter_weight_start;
-  const int input_data_count = block_end - block_start;
-  const int operation_count = ch_filter_weight_count * input_data_count;
-  if(operation_count == 0){
-    return;
-  }
-  itype data_index_kd[data_dimension - 2];
-  itype filter_index_kd[data_dimension - 2];
-  itype block_start_array[data_dimension - 2];
-  for(int x = threadIdx.x; x < sm_size; x += blockDim.x){
-    accumulated_result[x] = 0;
-  }
-  decompress_block_id<itype, data_dimension>(in_block_pointer_id[block_id], in_shape_ptr, block_start_array, true); //TODO: better approach for decompression possible? (outside of convolution without need for big data buffer)?
-  __syncthreads();
-  //2. perform convolution with kd indices
-  for(int x = threadIdx.x; x < operation_count; x += blockDim.x){
-    const int fid = x % ch_filter_weight_count;
-    const int did = (x - fid) /  ch_filter_weight_count;
-    index_1DtoKD_reduced<itype, data_dimension>(0, in_block_ids[did + block_start], in_shape_ptr, data_index_kd);
-    index_1DtoKD_reduced<itype, data_dimension>(0, filter_ind_1d[fid + filter_weight_start], in_shape_ptr, filter_index_kd); //TODO: better approach for decompression possible? (outside of convolution without need for big data buffer)?
-    const int block_data_id1d = did + block_start;
-    const int filter_data_id1d = fid + filter_weight_start;
-    const dtype fv = filter_weights[filter_data_id1d];
-    const dtype iv = in_block_vals[block_data_id1d];
-    const dtype out_v = fv * iv;
-    itype acc_id;
-    map_index_kd_to_shared_id<itype, data_dimension>(data_index_kd, filter_index_kd, block_start_array, filter_shape, &acc_id, hypercube_size);
-    atomicAdd(&(accumulated_result[acc_id]), out_v);
-  }
-  __syncthreads();
-  //3. check if entries are valid (inside tensor shape) and write valid entries to global memory buffer
-  for(int x = threadIdx.x; x < pow(hypercube_size + filter_max_dim - 1, data_dimension - 2); x += blockDim.x){
-    itype local_id = x;
-    if(accumulated_result[local_id] == 0) continue; //TODO: thread divergence: find better approach with less idle threads
-    itype global_acc_id;
-    map_shared_to_channel_buffer<itype, data_dimension>(local_id, block_start_array, filter_shape, in_shape_ptr, &global_acc_id, hypercube_size);
-    if(global_acc_id >= 0){ //invalid ids are set to 0
-      atomicAdd(&(dense_channel_buffer[global_acc_id]), accumulated_result[local_id]);
-    }
-  }
-}
-
 template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
 count_non_zeros_buffer(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, int* out_var /*initialized to zero*/, int batch_id, int channel_id, int out_channel_count){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
@@ -836,6 +777,61 @@ write_conv_res(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, int
       itype out_id_1d;
       index_KDto1D_<itype, data_dimension>(idx_all, out_shape_ptr, &out_id_1d);
       out_id[idx_out] =  out_id_1d;
+    }
+  }
+}
+
+
+template <typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_256_THREADS_PER_BLOCK, MIN_8_BLOCKS_PER_MP)
+gmSparseDirectConv(CudaLaunchConfig config, const itype* __restrict__ in_block_ids, const dtype* __restrict__ in_block_vals, const itype* __restrict__ in_block_pointer,   const itype* __restrict__ in_block_pointer_id, const itype* __restrict__ in_shape_ptr, const int* input_block_mapping, 
+  const itype* __restrict__ filter_ind_1d, const dtype* __restrict__ filter_weights, const itype* __restrict__ filter_shape_ptr, const int* filter_channel_mapping, const itype* __restrict__ out_sh, dtype* dense_channel_buffer,
+  const itype* __restrict__ filter_ids_kd, const itype* __restrict__ input_ids_kd, const itype* __restrict__ block_ids_kd,
+  int data_entry_count, int filter_weight_count, int hypercube_size_, int filter_max_dim, int batch, int block_id_start, int block_id_end, int data_start, int data_end, int filter_start, int filter_end) //TODO: delete filter_segments_end, filter_segments_start, filter_segment_count, data_entry_count, filter_weight_count,
+{
+  //1. define variables needed for convolution (overhead)
+  const int block_start = in_block_ptr[block_id_start];
+  const int block_end = in_block_ptr[block_id_end];
+  const int filter_weight_start = filter_start;
+  const int filter_weights_end = filter_end;
+  const int ch_filter_weight_count = filter_weights_end - filter_weight_start;
+  const int input_data_count = block_end - block_start;
+  const int operation_count = ch_filter_weight_count * input_data_count;
+  //load data to registers
+  itype filter_shape[data_dimension];
+  itype input_shape[data_dimension];
+  for(int i = 0; i < data_dimension; ++i){
+    filter_shape[i] = filter_shape_ptr[i];
+  }
+  itype block_start_array[data_dimension - 2];
+  for(int i = 0; i < data_dimension; ++i){
+    input_shape[i] = in_shape_ptr[i];
+  }
+  itype out_id[data_dimension - 2];
+  //2. perform convolution with kd indices
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    const int fid = x % ch_filter_weight_count;
+    const int did = (x - fid) /  ch_filter_weight_count;
+    const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];
+    const itype* filter_index_kd = &filter_ids_kd[(fid + filter_weight_start) * (data_dimension - 2)];
+    const int block_data_id1d = did + block_start;
+    const int filter_data_id1d = fid + filter_weight_start;
+    const dtype fv = filter_weights[filter_data_id1d];
+    const dtype iv = in_block_vals[block_data_id1d];
+    const dtype out_v = fv * iv;
+    itype acc_id = 0;
+    bool is_valid = true;
+    int mul = 1;
+    for(int i = 0; i < data_dimension - 2; ++i){
+      out_id[i] = data_index_kd[i] - filter_index_kd[i] + filter_shape[i] / 2;
+      if(out_id[i] < 0 || out_id >= input_shape[i]){
+        is_valid = false;
+        break;
+      }
+      mul = mul * input_shape[i];
+      acc_id += out_id[i] * mul;
+    }
+    if(is_valid){
+      atomicAdd(&(dense_channel_buffer[acc_id]), out_v);
     }
   }
 }
