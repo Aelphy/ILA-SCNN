@@ -50,9 +50,11 @@ REGISTER_OP("DirectSparseApproxConvKD")
   .Output("out_indices: Tindices")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
+  .Output("data_count: int32")
   .Attr("strides: list(int)")
   .Attr("padding: string")
-  .Attr("filter_dim: int = 3");
+  .Attr("filter_dim: int = 3")
+  .Attr("max_density: float = 1");
 
 
 #include "tensorflow/core/framework/op_kernel.h"
@@ -71,17 +73,19 @@ class DirectSparseConvKD : public OpKernel {
                 errors::InvalidArgument("Sliding window strides field must "
                                         "at least specify 4 dimensions"));
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
+    OP_REQUIRES_OK(context, context->GetAttr("max_density", &max_density));
   }
 
   void Compute(OpKernelContext* context) override {
     //functor requires kernel context since output shape is not known befor computing results
-    FunctorT()(context, stride_, padding, filter_dim);
+    FunctorT()(context, stride_, padding, max_density);
   }
 
  private:
   std::vector<int32> stride_;
   Tindices filter_dim;
   std::string padding;
+  float max_density;
 };
 
 #if GOOGLE_CUDA
