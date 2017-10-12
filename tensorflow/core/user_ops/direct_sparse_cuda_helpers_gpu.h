@@ -26,20 +26,6 @@ inline cudaError_t checkCuda(cudaError_t result)
 }
 
 
-template<typename dtype>
-__device__ dtype CAtomicAdd(dtype* address, dtype val){
-	return atomicAdd(address, val);
-}
-
-__device__ double CAtomicAdd(int64* address, int64 val)
-{
-  typedef unsigned long long int uint64_cu;
-  uint64_cu* address_ = (uint64_cu*) address;
-  uint64_cu val_ = (uint64_cu) val;
-  return atomicAdd(address_, val_);
-}
-
-
 template<typename Device, typename T, typename V>
 bool compute_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys, T* d_out_keys, const  V* d_in_values, V* d_out_values, int num_items){
   size_t temp_storage_bytes = 0;

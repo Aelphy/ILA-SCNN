@@ -32,13 +32,15 @@ tf_custom_op_library_flags(
               "sparse_tensor_filter_zero_entries.cc",
               "evaluate_confusion_matrix.cc",
               "direct_sparse_conv_kd.cc",
+              "direct_sparse_conversions.cc",
             ],
 
     gpu_srcs = [
-              "tf_cudpp_bindings_gpu.h",
+              "direct_sparse_cuda_helpers_gpu.h",
               "direct_sparse_conv_kd_gpu.h",
               "direct_sparse_conv_kd_gpu.cu.cc",
-              "direct_sparse_cuda_helpers_gpu.h",
+              "direct_sparse_conversions_gpu.h",
+              "direct_sparse_conversions_gpu.cu.cc",
     ],
 
     deps = [
