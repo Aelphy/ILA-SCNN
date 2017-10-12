@@ -824,6 +824,60 @@ gen_sorted_index(CudaLaunchConfig config, dtype* out_buffer){
   }
 }
 
+template <typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+gmSparseDirectConv(CudaLaunchConfig config, const dtype* __restrict__ in_block_vals, const itype* __restrict__ in_block_pointer,   const itype* __restrict__ in_block_pointer_id, const itype* __restrict__ in_shape_ptr, const int* input_block_mapping, 
+  const dtype* __restrict__ filter_weights, const itype* __restrict__ filter_shape_ptr, const itype* __restrict__ out_sh, dtype* dense_channel_buffer,
+  const itype* __restrict__ filter_ids_kd, const itype* __restrict__ input_ids_kd, int batch, int block_id_start, int block_id_end, int filter_start, int filter_end) //TODO: delete filter_segments_end, filter_segments_start, filter_segment_count, data_entry_count, filter_weight_count,
+{
+  //1. define variables needed for convolution (overhead)
+  const int block_start = in_block_pointer[block_id_start];
+  const int block_end = in_block_pointer[block_id_end];
+  const int filter_weight_start = filter_start;
+  const int filter_weights_end = filter_end;
+  const int ch_filter_weight_count = filter_weights_end - filter_weight_start;
+  const int input_data_count = block_end - block_start;
+  const int operation_count = ch_filter_weight_count * input_data_count;
+  //load data to registers
+  itype filter_shape[data_dimension];
+  itype input_shape[data_dimension];
+  for(int i = 0; i < data_dimension; ++i){
+    filter_shape[i] = filter_shape_ptr[i];
+  }
+  itype block_start_array[data_dimension - 2];
+  for(int i = 0; i < data_dimension; ++i){
+    input_shape[i] = in_shape_ptr[i];
+  }
+  itype out_id[data_dimension - 2];
+  //2. perform convolution with kd indices
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    const int fid = x % ch_filter_weight_count;
+    const int did = (x - fid) /  ch_filter_weight_count;
+    const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];
+    const itype* filter_index_kd = &filter_ids_kd[(fid + filter_weight_start) * (data_dimension - 2)];
+    const int block_data_id1d = did + block_start;
+    const int filter_data_id1d = fid + filter_weight_start;
+    const dtype fv = filter_weights[filter_data_id1d];
+    const dtype iv = in_block_vals[block_data_id1d];
+    const dtype out_v = fv * iv;
+    itype acc_id = 0;
+    bool is_valid = true;
+    int mul = 1;
+    for(int i = 0; i < data_dimension - 2; ++i){
+      out_id[i] = data_index_kd[i] - filter_index_kd[i] + filter_shape[i] / 2;
+      if(out_id[i] < 0 || out_id[i] >= input_shape[i]){
+        is_valid = false;
+        break;
+      }
+      mul = mul * input_shape[i];
+      acc_id += out_id[i] * mul;
+    }
+    if(is_valid){
+      atomicAdd(&(dense_channel_buffer[acc_id]), out_v);
+    }
+  }
+}
+
+
 namespace functor {
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
 void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density) const {
@@ -874,7 +928,6 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
   //indices must! be sorted
   clock_t t;
 
-  
   //preprocessing step (1) has to be performed only for one layer in the neural network! Also step (2) can be precomputed and shouldn't affect runtime of nn
   
   /////
@@ -917,6 +970,8 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
     in_block_pointer_ids, input_block_mapping, i_sh.data(), block_count, batch_count, in_channel_count);
   std::vector<int> cpu_input_block_mapping(batch_count * in_channel_count + 1);
   cudaMemcpy(&cpu_input_block_mapping[0], input_block_mapping, (batch_count * in_channel_count + 1) * sizeof(int), cudaMemcpyDeviceToHost);
+  std::vector<IndiceT> cpu_block_pointers(block_count);
+  cudaMemcpy(&cpu_block_pointers[0], in_block_pointer, (block_count) * sizeof(IndiceT), cudaMemcpyDeviceToHost);
   dout_s << "t3: " << float(clock() - t) / CLOCKS_PER_SEC << std::endl;
   
   /////
@@ -979,6 +1034,7 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
   auto o_val = out_values->flat<T>();
   auto data_offset = data_count->flat<int>();
   gen_sorted_index<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, in_channel_ids_buffer);
+  gen_sorted_index<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, sorted_channel_ids_buffer);
   for(int i = 0; i < batch_count; ++i){
     for(int j = 0; j < out_channel_count; ++j){
       cudaStreamSynchronize(d.stream());
@@ -988,18 +1044,34 @@ void ApproxDirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operato
       config_conv.thread_per_block = conv_threads_per_block;
       config_conv.block_count = block_end - block_start;
       if(config_conv.block_count <= 0) continue;
-      kdSparseDirectConv<T, IndiceT, data_dimension><<<config_conv.block_count, config_conv.thread_per_block, 0, d.stream()>>>(config_conv,
-        in_block_ids, in_block_vals, in_block_pointer, in_block_pointer_ids, i_sh.data(), input_block_mapping,
-        filter_sorted_ind_1d, filter_sorted_weights, f_sh.data(), filter_channel_mapping,
-        out_sh, channel_buffer, filter_id_kd_ptr, in_id_kd_ptr, block_id_kd_ptr,
-        data_entry_count, filter_weight_count, hypercube_size, filter_size, i, in_channel_count, j);
+      for(int k = 0; k < in_channel_count; ++k){
+        int block_start_ = cpu_input_block_mapping[i * in_channel_count + k];
+        int block_end_ = cpu_input_block_mapping[i * in_channel_count + k + 1]; //all blocks for batch
+        int filter_start = cpu_filter_channel_mapping[j * in_channel_count + k];
+        int filter_end = cpu_filter_channel_mapping[j * in_channel_count + k + 1];
+        int data_block_count = cpu_block_pointers[block_end_] - cpu_block_pointers[block_start_];
+        int op_count = (filter_end - filter_start) * data_block_count;
+        if(op_count <= 0) continue;
+        // int filter_weight_count, int hypercube_size_, int filter_max_dim, int batch, int block_id_start, int block_id_end, int filter_start, int filter_end
+        CudaLaunchConfig config_conv_ = GetCudaLaunchConfig(op_count, d);
+        gmSparseDirectConv<T, IndiceT, data_dimension><<<config_conv_.block_count, config_conv_.thread_per_block, 0, d.stream()>>>(config_conv_,
+                 in_block_vals, in_block_pointer, in_block_pointer_ids, i_sh.data(), input_block_mapping,
+                 filter_sorted_weights, f_sh.data(),
+                 out_sh, channel_buffer, filter_id_kd_ptr, in_id_kd_ptr,
+                 i, block_start_, block_end_, filter_start, filter_end);
+      }
+      //kdSparseDirectConv<T, IndiceT, data_dimension><<<config_conv.block_count, config_conv.thread_per_block, 0, d.stream()>>>(config_conv,
+      //  in_block_ids, in_block_vals, in_block_pointer, in_block_pointer_ids, i_sh.data(), input_block_mapping,
+      //  filter_sorted_ind_1d, filter_sorted_weights, f_sh.data(), filter_channel_mapping,
+      //  out_sh, channel_buffer, filter_id_kd_ptr, in_id_kd_ptr, block_id_kd_ptr,
+      //  data_entry_count, filter_weight_count, hypercube_size, filter_size, i, in_channel_count, j);
       cudaStreamSynchronize(d.stream());
-      abs_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer);
+      //abs_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer);
       cudaStreamSynchronize(d.stream());
-      compute_sort(context, d, abs_channel_buffer, tmp_channel_buffer, in_channel_ids_buffer, sorted_channel_ids_buffer, channel_dense_size); //TODO: sort decreasing
-      cudaStreamSynchronize(d.stream());
-      write_conv_res2<T, IndiceT, data_dimension><<<config_rbuffer.block_count, config_rbuffer.thread_per_block, 0, d.stream()>>>(config_rbuffer, channel_buffer, 
-          sorted_channel_ids_buffer, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset.data());
+      //compute_sort(context, d, abs_channel_buffer, tmp_channel_buffer, in_channel_ids_buffer, sorted_channel_ids_buffer, channel_dense_size); //TODO: sort decreasing
+      //cudaStreamSynchronize(d.stream());
+      //write_conv_res2<T, IndiceT, data_dimension><<<config_rbuffer.block_count, config_rbuffer.thread_per_block, 0, d.stream()>>>(config_rbuffer, channel_buffer, 
+      //    sorted_channel_ids_buffer, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset.data());
       cudaMemcpy(data_offset.data(), result_block_count, sizeof(IndiceT), cudaMemcpyDeviceToDevice);
     }
   }
