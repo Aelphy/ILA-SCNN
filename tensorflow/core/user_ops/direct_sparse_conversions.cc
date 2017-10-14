@@ -30,9 +30,9 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 using namespace tensorflow;
 
 template <typename T, typename Tindices, template<typename, typename, typename, int> class FunctorT>
-class DirectSparseDataConversion : public OpKernel {
+class DirectSparseConversion : public OpKernel {
  public:
- explicit DirectSparseDataConversion(OpKernelConstruction* context) : OpKernel(context) {
+ explicit DirectSparseConversion(OpKernelConstruction* context) : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("dim", &dim));
   }
 
@@ -50,7 +50,9 @@ class DirectSparseDataConversion : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type, dim)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseDataConversion").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseDataConversion<type, indice_type, functor::DirectSparseDataConversionFunctor>);
+                          DirectSparseConversion<type, indice_type, functor::DirectSparseDataConversionFunctor>); //\
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseDataConversion").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseConversion<type, indice_type, functor::DirectSparseFilterConversionFunctor>);
 
 
 #define REGISTER_GPU_TYPE_(type, indice_type) \

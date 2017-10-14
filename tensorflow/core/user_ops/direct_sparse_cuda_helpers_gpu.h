@@ -13,6 +13,9 @@
 #include "tensorflow/core/framework/op_kernel.h"
 
 #define PRIME_NUMBER 1900813
+#define MAX_1024_THREADS_PER_BLOCK 1024
+#define MAX_256_THREADS_PER_BLOCK 256
+#define MIN_8_BLOCKS_PER_MP 8
 
 namespace tensorflow {
 
@@ -93,6 +96,426 @@ bool compute_scan(OpKernelContext* ctx, Device& d, T* __restrict__ out, const T*
   return true;
 }
 
+template<typename T> inline void 
+allocate_tensor(OpKernelContext* ctx, Tensor& t, T** data, int count){
+  ctx->allocate_temp(DT_INT8, TensorShape({static_cast<int64>(count * sizeof(T))}), &t); 
+  *data = (T*) t.flat<int8>().data();
+}
+
+template<typename T> void 
+debug_out(T* data, int count, std::stringstream& dout_s, std::string name = "dbg"){
+  std::vector<T> dbg_v2(count);
+  dout_s << name << std::endl;
+  cudaMemcpy(&dbg_v2[0], data, dbg_v2.size() * sizeof(T), cudaMemcpyDeviceToHost);
+  for(size_t i = 0; i < dbg_v2.size(); ++i){
+    dout_s << dbg_v2[i] << " "; 
+  }
+  dout_s << std::endl;
+}
+
+//Compress [batch, x, y, ..., channel] indices into a [1D] key while keeping the data sorted.
+template <typename dtype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+index_KDto1D(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* out_ind_ptr, const int entry_count){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }    
+    dtype val = 0; 
+    dtype mul = 1; 
+    dtype idx = x; 
+    for(int i = data_dimension - 1; i >=0; --i) { //exclude channel
+      idx = x * data_dimension +  i;
+      val = val + mul * in_ptr[idx];
+      mul = mul * in_shape_ptr[i];
+    }    
+    out_ind_ptr[x] = val; 
+  }
+}
+
+//TODO: merge device and global function
+//Compress [batch, x, y, ..., channel] indices into a [1D] key while keeping the data sorted.
+template <typename dtype, int data_dimension> __device__ __forceinline__ void 
+index_KDto1D_(const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* out_ind_ptr){
+  dtype val = 0; 
+  dtype mul = 1; 
+  dtype idx = 0; 
+  for(int i = data_dimension - 1; i >=0; --i) { //exclude channel
+    idx = i;
+    val = val + mul * in_ptr[idx];
+    mul = mul * in_shape_ptr[i];
+  }
+  out_ind_ptr[0] = val;
+}
+
+//decompress id of compressed sparse blocks (does not revert scaling of [dim1, ..., dimx])
+template <typename dtype, int data_dimension> __device__ __forceinline__ void
+decompress_block_id(const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* __restrict__ out_ind_ptr, bool reduced = false){
+  //1. compressed 1d key, except channel
+  dtype fact[data_dimension];
+  dtype ids[data_dimension]; //reorder dimensions to [dim1, ..., dimx, batch, channel]
+  for(int i = 2; i <= data_dimension - 1; ++i){
+    ids[i] = i -1;
+  }
+  //TODO: Check order of indices of scale and ids
+  ids[0] = 0;
+  ids[1] = data_dimension - 1;
+  fact[data_dimension - 1] = 1;
+  for(int i = data_dimension - 2; i >= 0; i = i - 1){
+    fact[i] = fact[i + 1] * in_shape_ptr[ids[i + 1]];
+  }
+  dtype r = in_index_1d;
+  for(int i = 0; i < data_dimension; ++i){
+    if(!reduced){
+      out_ind_ptr[ids[i]] = r / fact[i];
+    } else if(ids[i] > 0 && ids[i] < data_dimension - 1){
+      out_ind_ptr[ids[i] - 1] = r / fact[i];
+    }
+    r = r % fact[i];
+  }
+}
+
+//decompress 1D key + channel into K dimensional indices
+template <typename dtype, int data_dimension> __device__ __forceinline__ void
+index_1DtoKD(const int x_out, const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* __restrict__ out_ind_ptr){
+  dtype idx_out = x_out * data_dimension;
+  //1. compressed 1d key, except channel
+  dtype fact[data_dimension];
+  fact[data_dimension - 1] = 1;
+  for(int i = data_dimension - 2; i >= 0; i = i - 1){
+    fact[i] = fact[i + 1] * in_shape_ptr[i + 1];
+  }
+  dtype r = in_index_1d;
+  for(int i = 0; i < data_dimension; ++i){
+    out_ind_ptr[idx_out + i] = r / fact[i];
+    r = r % fact[i];
+  }
+}
+
+//TODO: merge device for decompression
+//decompress 1D key + channel into K dimensional indices
+template <typename dtype, int data_dimension> __device__ __forceinline__ void
+index_1DtoKD_reduced(const int x_out, const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* __restrict__ out_ind_ptr){
+  dtype idx_out = x_out * (data_dimension - 2);
+  //1. compressed 1d key, except channel
+  dtype fact[data_dimension];
+  fact[data_dimension - 1] = 1;
+  for(int i = data_dimension - 2; i >= 0; i = i - 1){
+    fact[i] = fact[i + 1] * in_shape_ptr[i + 1];
+  }
+  dtype r = in_index_1d;
+  r = r % fact[0];
+  for(int i = 1; i < data_dimension - 1; ++i){
+    auto f = r / fact[i];
+    out_ind_ptr[idx_out + i - 1] = f;
+    r = r % fact[i];
+  }
+}
+
+//mark unique elemets in an array with a $1$
+template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_unique_mask(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, dtype* out_ptr){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(x == 0){
+      out_ptr[x] = 1;
+    } else {
+      if(in_ptr[x] != in_ptr[x - 1]){
+        out_ptr[x] = 1;
+      } else {
+        out_ptr[x] = 0;
+      }
+    }
+  }
+}
+
+template <typename dtype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+get_array_channel(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, dtype* out_ptr, int channel_id){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    out_ptr[x] = in_ptr[x * data_dimension + channel_id];
+  }
+}
+
+//mark non-zero elemets in an array with a $1$
+template <typename dtype, typename itype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+non_zero_mask(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, itype* __restrict__ out_ptr){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(in_ptr[x] != 0){
+      out_ptr[x] = 1;
+    } else {
+      out_ptr[x] = 0;
+    }
+  }
+}
+
+//mark unique elemets in array
+template <typename dtype, typename itype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+unique_array(CudaLaunchConfig config, const dtype* __restrict__ in_id_ptr, const itype* __restrict__ unique_masked_ptr,
+              const itype* __restrict__ unique_count, dtype* unique_ptr, dtype*  unique_cor){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(unique_masked_ptr[x] == 1){
+      unique_ptr[unique_count[x] - 1] = in_id_ptr[x];
+      unique_cor[unique_count[x] - 1] = x;
+    }
+  }
+}
+
+//copy obtain unique elemets from array
+template <typename dtype, typename itype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_segment_start(CudaLaunchConfig config, itype* data_offset, const dtype* masked_indices, const dtype* unique_count){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if (x < 0) { //x might overflow when testing extreme case
+      break;
+    }
+    if(masked_indices[x] > 0){
+      int oid = unique_count[x] - 1;
+      data_offset[oid] = x;
+    }
+  }
+}
+
+//obtain start of segments
+template <typename dtype, typename itype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_segment_end(CudaLaunchConfig config, itype* offset, const itype* __restrict__ segment_start, const dtype* __restrict__ count, const int filter_weight_count){
+  auto max_size = count[filter_weight_count - 1] - 1;
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) { //x might overflow when testing extreme case
+      break;
+    }
+    if(x == max_size){
+      offset[x] = filter_weight_count;
+    } else if(x < max_size){
+      offset[x] = segment_start[x + 1];
+    }
+  }
+}
+
+//apply sorting
+template <typename dtype, typename itype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+apply_sorted_indices(CudaLaunchConfig config, dtype* sorted, const dtype* __restrict__ unsorted, const itype* __restrict__ corresponds){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) { //x might overflow when testing extreme case
+      break;
+    }
+    sorted[x] = unsorted[corresponds[x]];
+  }
+}
+
+//exact binary search
+template<typename dtype> __device__ __forceinline__ void
+index_lookup(const dtype index, const dtype *data, const dtype data_start,  const dtype data_end,
+dtype* result_id, dtype* lower_limit = NULL, dtype* upper_limit = NULL){
+  //binary search
+  dtype upper = data_end;
+  dtype lower = data_start;
+  while(lower <= upper){
+    dtype center = (upper + lower) / 2;
+    if(data[center] == index){
+      *result_id = center;
+      return;
+    }
+    if(index > data[center]){
+      lower = center + 1;
+    } else {
+      upper = center - 1;
+    }
+  }
+  if(lower_limit) *lower_limit = upper;
+  if(upper_limit) *upper_limit = lower;
+  *result_id = -1;
+}
+
+//copy obtain unique elemets from array
+template <typename dtype, typename itype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_block_start(CudaLaunchConfig config,  const itype* __restrict__ unique_masked_ptr,
+              const itype* __restrict__ unique_count, const itype* __restrict__ block_value,
+              dtype*  unique_cor, dtype* pointer_value){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(unique_masked_ptr[x] == 1){
+      unique_cor[unique_count[x] - 1] = x;
+      pointer_value[unique_count[x] - 1] = block_value[x];
+    }
+  }
+}
+
+//prepare filter weights
+template <typename dtype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+prepare_filter_weights_(CudaLaunchConfig config,
+                  const dtype* __restrict__ f_id_ptr, const dtype* __restrict__ f_sh_ptr, const dtype* __restrict__ in_sh_ptr,
+                  dtype* out_id_ptr, dtype* out_ch_ptr, dtype* in_channel, dtype* index, const int filter_entry_count){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    //index type (dtype) must! be signed
+    dtype val = 0;
+    dtype mul = 1;
+    dtype idx = x;
+    //data format: [batch, depth, height, width, in_channels]
+    //filter format: [depth, height, width, in_channels, out_channels]
+    //manipulate depth, height width only and store in and out channels 
+    for(int i = data_dimension - 2; i > 0; --i){
+      mul = mul * in_sh_ptr[i + 1];
+      const int f_i = i - 1;
+      idx = x * data_dimension +  f_i;
+      val = val + mul * (f_id_ptr[idx]); //flip filter weights
+    }
+    //const dtype channel = in_ptr[(x + 1)  * data_dimension - 1];
+    out_id_ptr[x] = val;
+    out_ch_ptr[x] = f_id_ptr[x * data_dimension + data_dimension - 1];
+    in_channel[x] = f_id_ptr[x * data_dimension + data_dimension - 2];
+    index[x] = x;
+  }
+}
+
+//TODO: check sort input data correctly (1. batch, 2. channel, 3. position)
+//generate dense lookup table for blocks in each batch and channel
+template <typename dtype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_input_block_index(CudaLaunchConfig config, dtype* in_block_prt_id, int* out_index_ptr, const dtype* in_shape_ptr, int number_blocks, int number_batches, int number_channels){
+  //initialize values to 0
+  dtype idKD[data_dimension];
+  dtype op_count = number_batches * number_channels;
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0 || x > op_count) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(x < op_count){
+      out_index_ptr[x] = number_blocks; //not defined
+    } if(x == op_count){
+      out_index_ptr[x] = number_blocks; //end of blocks
+    }
+  }
+  __syncthreads();
+  //find existing correspondences
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(x >= number_blocks) continue;
+    decompress_block_id<dtype, data_dimension>(in_block_prt_id[x], in_shape_ptr, &idKD[0]);
+    //index_1DtoKD<dtype, data_dimension>(0, in_block_id[in_block_ptr[x]], in_shape_ptr, idKD);
+    int channel = idKD[data_dimension - 1];
+    int batch = idKD[0];
+    atomicMin(&(out_index_ptr[batch * number_channels + channel]), x);
+  }
+  __syncthreads();
+  //fix non existing correspondences
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if(x < 0 || x >= op_count){  //x might overflow when testing extreme case
+      break;
+    }
+    //TODO: better parallelization
+    if(out_index_ptr[x] == number_blocks){
+      for(int i = x + 1; i <= op_count; ++i){ //linear search to the end until valid entry is found or number_blocks
+        if(out_index_ptr[i] != number_blocks){
+          out_index_ptr[x] = out_index_ptr[i];
+          break;
+        }
+      }
+    }
+  }
+}
+
+//generate dense lookup table for channels in each batch and channel
+template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_filter_channel_index(CudaLaunchConfig config, dtype* filter_in_ch, dtype* filter_out_ch, int* out_index_ptr,
+      const int in_channel_count, const int out_channel_count, const int filter_weight_count)
+{
+  int ch_dim = in_channel_count * out_channel_count;
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if(x < 0 || x > ch_dim){  //x might overflow when testing extreme case
+      break;
+    }
+    if(x < ch_dim){
+      out_index_ptr[x] = -1; //initialize
+    } else if(x == ch_dim){
+      out_index_ptr[x] = filter_weight_count;
+    }
+  }
+  __syncthreads();
+  //find existing correspondences
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(x >= filter_weight_count) break;
+    if(x == 0 || filter_in_ch[x] != filter_in_ch[x - 1] || filter_out_ch[x] != filter_out_ch[x - 1]){
+      int in_channel = filter_in_ch[x];
+      int out_channel = filter_out_ch[x];
+      out_index_ptr[out_channel * in_channel_count + in_channel] = x;
+    }
+  }
+  __syncthreads();
+  //fix non existing correspondences
+  CUDA_1D_KERNEL_LOOP(x, ch_dim) {
+    if (x < 0 || x >= ch_dim) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(out_index_ptr[x] == -1){
+      for(int i = x + 1; i <= ch_dim; ++i){ //linear search to the end until valid entry is found or number_blocks
+        if(out_index_ptr[i] != -1){
+          out_index_ptr[x] = out_index_ptr[i];
+          break;
+        }
+      }
+    }
+  }
+}
+
+//Compress [batch, x, y, ...] indices into a [1D] key while voxelization
+template <typename dtype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_voxel_id1D(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+                    dtype* out_ind_ptr, dtype* out_id_ptr, const int entry_count, const int hypercube_size, bool ignore_channel = true){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if(x < 0 || x >= entry_count){  //x might overflow when testing extreme case
+      break;
+    }
+    dtype val = 0;
+    dtype mul = 1;
+    dtype idx = x;
+    for(int i = data_dimension - 1; i >= 0; --i){ //reorder dimensions to [batch, channel, dim1, ..., dimx] and compress
+      int ii = i;
+      if(i == 1){
+        idx = (x + 1) * data_dimension - 1;
+        if(!ignore_channel) val = val + mul * in_ptr[idx];
+        mul = mul * in_shape_ptr[data_dimension - 1];
+      } else if(i == 0){
+        idx = x * data_dimension;
+        val = val + mul * in_ptr[idx];
+        mul = mul * in_shape_ptr[0];
+      } else {
+        ii = i - 1;
+        idx = x * data_dimension + ii;
+        val = val + mul * dtype(floor(float(in_ptr[idx]) / hypercube_size)) * hypercube_size; //round value to first entry of block
+        mul = mul * in_shape_ptr[ii];
+      }
+    }
+    out_ind_ptr[x] = val;
+    out_id_ptr[x] = x;
+  }
+}
+
+
+
+//Hash Table
 struct HashConfig {
   int c0_0;
   int c0_i;
@@ -106,7 +529,6 @@ struct HashConfig {
   int bucket_size;
   int cuckoo_max_iterations;
 };
-
 
 template <typename dtype>
 __device__ __forceinline__ void hash_function(dtype* out_val, const dtype* in_val, const int c_0, const int c_i, const int mod_size){
