@@ -20,8 +20,20 @@ REGISTER_OP("DirectSparseDataConversion")
   .Output("out_block_ptr: Tindices")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
+  .Output("data_count: Tindices")
   .Attr("dim: int=5");
 
+REGISTER_OP("DirectSparseFilterConversion")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("filter_indices: Tindices")
+  .Input("filter_values: T")
+  .Input("filter_shape: Tindices")
+  .Output("out_indices: Tindices")
+  .Output("out_values: T")
+  .Output("out_shape: Tindices")
+  .Output("out_channel_mapping: int32")
+  .Attr("dim: int=5");
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -50,8 +62,8 @@ class DirectSparseConversion : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type, dim)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseDataConversion").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseConversion<type, indice_type, functor::DirectSparseDataConversionFunctor>); //\
-  REGISTER_KERNEL_BUILDER(Name("DirectSparseDataConversion").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseConversion<type, indice_type, functor::DirectSparseDataConversionFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseFilterConversion").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
                           DirectSparseConversion<type, indice_type, functor::DirectSparseFilterConversionFunctor>);
 
 

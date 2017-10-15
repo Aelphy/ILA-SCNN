@@ -15,5 +15,10 @@ typedef Eigen::GpuDevice GPUDevice;
     struct DirectSparseDataConversionFunctor {
       void operator()(OpKernelContext* context) const;
     };
+    
+    template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
+    struct DirectSparseFilterConversionFunctor {
+      void operator()(OpKernelContext* context) const;
+    };
   } //namespace functor
 } //namespace tensorflow
