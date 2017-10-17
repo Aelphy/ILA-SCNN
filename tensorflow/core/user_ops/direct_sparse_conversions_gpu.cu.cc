@@ -64,7 +64,6 @@ preprocess_filter(OpKernelContext* context, DeviceT d, const IndiceT* f_ids_kd, 
     int** filter_segments_start, int** filter_segments_end, T** filter_sorted_weights, IndiceT** filter_sorted_ind_1d, int& filter_segment_count_, int* filter_channel_mapping, int in_channel_count,
     int out_channel_count, Tensor& fss_tensor, Tensor& fse_tensor, Tensor& fsw_tensor, Tensor& fsi_tensor)
 {
-  std::stringstream debugs;
   Tensor um_tensor, uc_tensor, fi1d_tensor, foc_tensor, fic_tensor, fid_tensor;
   IndiceT *unique_masked = 0;
   allocate_tensor(context, um_tensor, &unique_masked,  filter_weight_count);
@@ -117,9 +116,9 @@ preprocess_filter(OpKernelContext* context, DeviceT d, const IndiceT* f_ids_kd, 
   allocate_tensor(context, fsw_tensor, filter_sorted_weights,  filter_weight_count);
   apply_sorted_indices<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, *filter_sorted_weights, f_vals, filter_id);
   apply_sorted_indices<<<config_f1d.block_count, config_f1d.thread_per_block, 0, d.stream()>>>(config_f1d, *filter_sorted_ind_1d, filter_ind_1d, filter_id);
+  //cudaMemcpy(*filter_sorted_ind_1d, filter_id, filter_weight_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   filter_segment_count_ = filter_segment_count;
   cudaDeviceSynchronize();
-  LOG(INFO) << debugs.str() << std::endl;
 }
 
 namespace functor {
@@ -135,7 +134,7 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto i_ind = in_indices->matrix<IndiceT>();
   auto i_val = in_values->flat<T>();
   const IndiceT data_entry_count = i_ind.dimension(0);
-  int hypercube_size = 12; //TODO: get as parameter
+  int hypercube_size = 16; //TODO: get as parameter
   std::stringstream dout_s;
   //indices must! be sorted
   //preprocessing step (1) has to be performed only for one layer in the neural network! Also step (2) can be precomputed and shouldn't affect runtime of nn
@@ -148,25 +147,29 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   T *in_block_vals = 0;
   coo_to_blocks<DeviceT, T, IndiceT, data_dimension>(context, d, i_ind.data(), i_val.data(), i_sh.data(), &in_block_ids, &in_block_vals, &in_block_pointer, &in_block_pointer_ids, data_entry_count, hypercube_size, block_count, ibi_tensor, ibp_tensor, ibpi_tensor, ibv_tensor);
   
-  Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL, *out_block_pointer;
+  Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL, *out_block_pointer = NULL, *out_block_pointer_ids = NULL;
   TensorShape out_ind_shape = {data_entry_count}; 
   TensorShape out_val_shape = {data_entry_count};
+  TensorShape out_block1_shape = {(IndiceT) block_count + 1};
   TensorShape out_block_shape = {(IndiceT) block_count};
   TensorShape out_sh_shape = {(IndiceT) data_dimension};
   TensorShape out_count_shape = {(IndiceT) 1}; 
   OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
-  OP_REQUIRES_OK(context, context->allocate_output("out_block_ptr", out_block_shape, &out_block_pointer));
+  OP_REQUIRES_OK(context, context->allocate_output("out_block_ptr", out_block1_shape, &out_block_pointer));
+  OP_REQUIRES_OK(context, context->allocate_output("out_block_ptr_ids", out_block_shape, &out_block_pointer_ids));
   OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
   OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
   OP_REQUIRES_OK(context, context->allocate_output("data_count", out_count_shape, &data_count));
   auto o_sh = out_shape->flat<IndiceT>();
-  auto o_ind = out_indices->matrix<IndiceT>();
-  auto o_b_ptr = out_block_pointer->matrix<IndiceT>();
+  auto o_ind = out_indices->flat<IndiceT>();
+  auto o_b_ptr = out_block_pointer->flat<IndiceT>();
+  auto o_b_ptr_ids = out_block_pointer->flat<IndiceT>();
   auto o_val = out_values->flat<T>();
   auto data_offset = data_count->flat<int>();
-  cudaMemcpy(o_sh.data(), i_sh.data(), sizeof(IndiceT) * data_dimension, cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_sh.data(), i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_ind.data(), in_block_ids, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
-  cudaMemcpy(o_b_ptr.data(), in_block_pointer, block_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_b_ptr.data(), in_block_pointer, (block_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_b_ptr_ids.data(), in_block_pointer_ids, block_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_val.data(), in_block_vals, data_entry_count * sizeof(T), cudaMemcpyDeviceToDevice);
   cudaMemcpy(data_offset.data(), &data_entry_count, sizeof(IndiceT), cudaMemcpyHostToDevice);
 }
@@ -211,7 +214,7 @@ void DirectSparseFilterConversionFunctor<DeviceT, T, IndiceT, data_dimension>::o
   OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
   OP_REQUIRES_OK(context, context->allocate_output("out_channel_mapping", out_mapping_shape, &data_channel_mapping));
   auto o_sh = out_shape->flat<IndiceT>();
-  auto o_ind = out_indices->matrix<IndiceT>();
+  auto o_ind = out_indices->flat<IndiceT>();
   auto o_val = out_values->flat<T>();
   auto o_cmap = data_channel_mapping->flat<int>();
   cudaMemcpy(o_sh.data(), f_sh.data(), sizeof(IndiceT) * data_dimension, cudaMemcpyDeviceToDevice);
