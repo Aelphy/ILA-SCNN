@@ -12,7 +12,7 @@ typedef Eigen::GpuDevice GPUDevice;
 
   namespace functor {
     template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-    struct ApproxDirectSparseConvFunctor {
+    struct DirectSparseConvFunctor {
       void operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, const float max_density) const;
     };
   } //namespace functor

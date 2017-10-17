@@ -389,7 +389,7 @@ prepare_filter_weights_(CudaLaunchConfig config,
 //TODO: check sort input data correctly (1. batch, 2. channel, 3. position)
 //generate dense lookup table for blocks in each batch and channel
 template <typename dtype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_prt_id, int* out_index_ptr, const dtype* in_shape_ptr, int number_blocks, int number_batches, int number_channels){
+compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, const dtype* in_block_ids, int* out_index_ptr, const dtype* in_shape_ptr, int number_blocks, int number_batches, int number_channels){
   //initialize values to 0
   dtype idKD[data_dimension];
   dtype op_count = number_batches * number_channels;
@@ -410,7 +410,7 @@ compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_prt_id,
       break;
     }
     if(x >= number_blocks) continue;
-    decompress_block_id<dtype, data_dimension>(in_block_prt_id[x], in_shape_ptr, &idKD[0]);
+    index_1DtoKD<dtype, data_dimension>(0, in_block_ids[in_block_ptr[x]], in_shape_ptr, &idKD[0]);
     //index_1DtoKD<dtype, data_dimension>(0, in_block_id[in_block_ptr[x]], in_shape_ptr, idKD);
     int channel = idKD[data_dimension - 1];
     int batch = idKD[0];

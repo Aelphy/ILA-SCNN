@@ -79,10 +79,7 @@ class DirectSparseConvKD : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type, dim)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseConvKD<indice_type, functor::ApproxDirectSparseConvFunctor<GPUDevice, type, indice_type, dim> >);    //           \
-//  REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-//                          DirectSparseConvKD<indice_type, functor::DirectSparseConvFunctor<GPUDevice, type, indice_type> >);
-
+                          DirectSparseConvKD<indice_type, functor::DirectSparseConvFunctor<GPUDevice, type, indice_type, dim> >);
 
 #define REGISTER_GPU_TYPE_(type, indice_type) \
   REGISTER_GPU_TYPE(type, indice_type, 5);
