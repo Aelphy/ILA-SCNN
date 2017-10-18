@@ -133,9 +133,13 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto i_sh = in_shape->flat<IndiceT>();
   auto i_ind = in_indices->matrix<IndiceT>();
   auto i_val = in_values->flat<T>();
-  const IndiceT data_entry_count = i_ind.dimension(0);
   int hypercube_size = 16; //TODO: get as parameter
   std::stringstream dout_s;
+  std::vector<IndiceT> cpu_in_shape(data_dimension);
+  cudaMemcpy(&cpu_in_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  const int batch_count = cpu_in_shape[0];
+  const int in_channel_count = cpu_in_shape[data_dimension - 1];
+  const int data_entry_count = i_ind.dimension(0);
   //indices must! be sorted
   //preprocessing step (1) has to be performed only for one layer in the neural network! Also step (2) can be precomputed and shouldn't affect runtime of nn
   
@@ -147,31 +151,34 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   T *in_block_vals = 0;
   coo_to_blocks<DeviceT, T, IndiceT, data_dimension>(context, d, i_ind.data(), i_val.data(), i_sh.data(), &in_block_ids, &in_block_vals, &in_block_pointer, &in_block_pointer_ids, data_entry_count, hypercube_size, block_count, ibi_tensor, ibp_tensor, ibpi_tensor, ibv_tensor);
   
+  /////
+  //2. Get mapping of blocks / channels (input) and input channels / output channels (filter)
+  Tensor input_block_mapping_tensor;
+  int* input_block_mapping = 0;
+  allocate_tensor(context, input_block_mapping_tensor, &input_block_mapping,  (batch_count * in_channel_count + 1));
+  CudaLaunchConfig ib_config = GetCudaLaunchConfig(max(block_count, batch_count * in_channel_count + 1), d); 
+  compute_input_block_index<IndiceT, data_dimension><<<ib_config.block_count, ib_config.thread_per_block, 0, d.stream()>>>(ib_config, /*in_block_ids,*/ 
+    in_block_pointer, in_block_ids, input_block_mapping, i_sh.data(), block_count, batch_count, in_channel_count, data_entry_count);
+
+  /////
+  //3. Write to output
   Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL, *out_block_pointer = NULL, *out_block_pointer_ids = NULL;
   TensorShape out_ind_shape = {data_entry_count}; 
   TensorShape out_val_shape = {data_entry_count};
-  TensorShape out_block1_shape = {(IndiceT) block_count + 1};
-  TensorShape out_block1_ids_shape = {(IndiceT) block_count + 1};
+  TensorShape out_block1_shape = {(IndiceT) batch_count * in_channel_count + 1};
   TensorShape out_sh_shape = {(IndiceT) data_dimension};
-  TensorShape out_count_shape = {(IndiceT) 1}; 
   OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
-  OP_REQUIRES_OK(context, context->allocate_output("out_block_ptr", out_block1_shape, &out_block_pointer));
-  OP_REQUIRES_OK(context, context->allocate_output("out_block_ptr_ids", out_block1_ids_shape, &out_block_pointer_ids));
+  OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_block1_shape, &out_block_pointer));
   OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
   OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
-  OP_REQUIRES_OK(context, context->allocate_output("data_count", out_count_shape, &data_count));
   auto o_sh = out_shape->flat<IndiceT>();
   auto o_ind = out_indices->flat<IndiceT>();
-  auto o_b_ptr = out_block_pointer->flat<IndiceT>();
-  auto o_b_ptr_ids = out_block_pointer_ids->flat<IndiceT>();
+  auto o_b_ptr = out_block_pointer->flat<int>();
   auto o_val = out_values->flat<T>();
-  auto data_offset = data_count->flat<int>();
   cudaMemcpy(o_sh.data(), i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_ind.data(), in_block_ids, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
-  cudaMemcpy(o_b_ptr.data(), in_block_pointer, (block_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
-  cudaMemcpy(o_b_ptr_ids.data(), in_block_pointer_ids, (block_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_b_ptr.data(), input_block_mapping, (batch_count * in_channel_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_val.data(), in_block_vals, data_entry_count * sizeof(T), cudaMemcpyDeviceToDevice);
-  cudaMemcpy(data_offset.data(), &data_entry_count, sizeof(IndiceT), cudaMemcpyHostToDevice);
 }
 
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>

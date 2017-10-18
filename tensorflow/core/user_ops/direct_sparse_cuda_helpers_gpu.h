@@ -389,7 +389,7 @@ prepare_filter_weights_(CudaLaunchConfig config,
 //TODO: check sort input data correctly (1. batch, 2. channel, 3. position)
 //generate dense lookup table for blocks in each batch and channel
 template <typename dtype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, const dtype* in_block_ids, int* out_index_ptr, const dtype* in_shape_ptr, int number_blocks, int number_batches, int number_channels){
+compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, const dtype* in_block_ids, int* out_index_ptr, const dtype* in_shape_ptr, int number_blocks, int number_batches, int number_channels, int data_entry_count){
   //initialize values to 0
   dtype idKD[data_dimension];
   dtype op_count = number_batches * number_channels;
@@ -397,11 +397,7 @@ compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, co
     if (x < 0 || x > op_count) {  //x might overflow when testing extreme case
       break;
     }
-    if(x < op_count){
-      out_index_ptr[x] = number_blocks; //not defined
-    } if(x == op_count){
-      out_index_ptr[x] = number_blocks; //end of blocks
-    }
+    out_index_ptr[x] = data_entry_count; //not defined
   }
   __syncthreads();
   //find existing correspondences
@@ -414,7 +410,7 @@ compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, co
     //index_1DtoKD<dtype, data_dimension>(0, in_block_id[in_block_ptr[x]], in_shape_ptr, idKD);
     int channel = idKD[data_dimension - 1];
     int batch = idKD[0];
-    atomicMin(&(out_index_ptr[batch * number_channels + channel]), x);
+    atomicMin(&(out_index_ptr[batch * number_channels + channel]), in_block_ptr[x]);
   }
   __syncthreads();
   //fix non existing correspondences

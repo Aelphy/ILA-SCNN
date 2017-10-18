@@ -17,11 +17,9 @@ REGISTER_OP("DirectSparseDataConversion")
   .Input("in_values: T")
   .Input("in_shape: Tindices")
   .Output("out_indices: Tindices")
-  .Output("out_block_ptr: Tindices")
-  .Output("out_block_ptr_ids: Tindices")
+  .Output("out_block_channel_mapping: int32")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
-  .Output("data_count: int32")
   .Attr("dim: int=5");
 
 REGISTER_OP("DirectSparseFilterConversion")

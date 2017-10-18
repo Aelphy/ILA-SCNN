@@ -27,10 +27,8 @@ REGISTER_OP("DirectSparseConvKD")
   .Attr("Tindices: {int32, int64}")
   .Input("in_indices: Tindices")
   .Input("in_values: T")
-  .Input("in_block_ptr: Tindices")
-  .Input("in_block_ptr_ids: Tindices")
   .Input("in_shape: Tindices")
-  .Input("in_data_count: int32")
+  .Input("in_block_channel_mapping: int32")
   .Input("filter_indices: Tindices")
   .Input("filter_values: T")
   .Input("filter_shape: Tindices")
@@ -38,12 +36,34 @@ REGISTER_OP("DirectSparseConvKD")
   .Output("out_indices: Tindices")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
-  .Output("out_data_count: int32")
+  .Output("out_block_channel_mapping: int32")
   .Attr("strides: list(int)")
   .Attr("padding: string")
-  .Attr("filter_dim: int = 3")
+  .Attr("dim: int = 5")
   .Attr("max_density: float = 1");
 
+REGISTER_OP("DirectSparseConvKDBackprop")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
+  .Input("in_values: T")
+  .Input("in_shape: Tindices")
+  .Input("in_block_channel_mapping: int32")
+  .Input("filter_indices: Tindices")
+  .Input("filter_values: T")
+  .Input("filter_shape: Tindices")
+  .Input("filter_channel_mapping: int32")
+  .Input("out_indices: Tindices")
+  .Input("out_values: T")
+  .Input("out_shape: Tindices")
+  .Input("out_block_channel_mapping: int32")
+  .Input("grads: T")
+  .Output("input_grads: T")
+  .Output("filter_grads: T")
+  .Attr("strides: list(int)")
+  .Attr("padding: string")
+  .Attr("dim: int = 5")
+  .Attr("max_density: float = 1");
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -51,12 +71,12 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 
 using namespace tensorflow;
 
-template <typename Tindices, typename FunctorT>
+template <typename T, typename Tindices, template<typename, typename, typename, int> class FunctorT>
 class DirectSparseConvKD : public OpKernel {
  public:
  explicit DirectSparseConvKD(OpKernelConstruction* context) : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("strides", &stride_));
-    OP_REQUIRES_OK(context, context->GetAttr("filter_dim", &filter_dim));
+    OP_REQUIRES_OK(context, context->GetAttr("dim", &dim));
     OP_REQUIRES(context, stride_.size() >= 4,
                 errors::InvalidArgument("Sliding window strides field must "
                                         "at least specify 4 dimensions"));
@@ -66,27 +86,28 @@ class DirectSparseConvKD : public OpKernel {
 
   void Compute(OpKernelContext* context) override {
     //functor requires kernel context since output shape is not known befor computing results
-    FunctorT()(context, stride_, padding, max_density);
+    if(dim == 5){
+      FunctorT<GPUDevice, T, Tindices, 5>()(context, stride_, padding, max_density);
+    } //TODO: add more dimensions
   }
 
  private:
   std::vector<int32> stride_;
-  Tindices filter_dim;
+  int dim;
   std::string padding;
   float max_density;
 };
 
 #if GOOGLE_CUDA
-#define REGISTER_GPU_TYPE(type, indice_type, dim)      \
+#define REGISTER_GPU_TYPE(type, indice_type)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseConvKD<indice_type, functor::DirectSparseConvFunctor<GPUDevice, type, indice_type, dim> >);
-
-#define REGISTER_GPU_TYPE_(type, indice_type) \
-  REGISTER_GPU_TYPE(type, indice_type, 5);
+                          DirectSparseConvKD<type, indice_type, functor::DirectSparseConvFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseConvKDBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseConvKD<type, indice_type, functor::DirectSparseConvBackPropFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
-  REGISTER_GPU_TYPE_(type, int64); \
-  REGISTER_GPU_TYPE_(type, int32);
+  REGISTER_GPU_TYPE(type, int64); \
+  REGISTER_GPU_TYPE(type, int32);
 
 
 REGISTER_GPU_ALL(float);
@@ -95,7 +116,6 @@ REGISTER_GPU_ALL(float);
 //REGISTER_GPU_ALL(complex64);
 //REGISTER_GPU_ALL(complex128);
 #undef REGISTER_GPU_TYPE
-#undef REGISTER_GPU_TYPE_
 #undef REGISTER_GPU_ALL
 #endif //GOOGLE_CUDA
 
