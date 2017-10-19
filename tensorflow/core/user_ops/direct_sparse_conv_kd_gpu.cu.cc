@@ -527,7 +527,7 @@ gmSparseDirectConvBackProp(Cuda2DLaunchConfig config, const dtype* __restrict__ 
 
 
 template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-fill_channel_buffer(CudaLaunchConfig config, const itype* in_op_idkd, const dtype* in_op_val, const itype* out_shape, dtype* out_buffer){
+fill_channel_buffer(CudaLaunchConfig config, const itype* in_op_idkd, const dtype* in_op_val, const itype* out_shape, dtype* out_buffer, int data_start){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
@@ -535,12 +535,12 @@ fill_channel_buffer(CudaLaunchConfig config, const itype* in_op_idkd, const dtyp
     itype acc_id = 0;
     bool is_valid = true;
     int mul = 1;
-    const itype* out_id = &in_op_idkd[x * (data_dimension - 2)];
+    const itype* out_id = &in_op_idkd[(x + data_start) * (data_dimension - 2)];
     for(int i = 0; i < data_dimension - 2; ++i){
       acc_id += out_id[i] * mul;
       mul = mul * out_shape[i + 1]; 
     } 
-    out_buffer[acc_id] = in_op_val[x];
+    out_buffer[acc_id] = in_op_val[x + data_start];
   }
 }
 
@@ -660,7 +660,7 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
       int out_c_end = cpu_output_block_mapping[i * out_channel_count + j + 1]; //all blocks for batch
       if(out_c_end - out_c_start == 0) continue;
       CudaLaunchConfig config_obuff = GetCudaLaunchConfig(out_c_end - out_c_start, d);
-      fill_channel_buffer<T, IndiceT, data_dimension><<<config_obuff.block_count, config_obuff.thread_per_block,0, d.stream()>>>(config_obuff, out_id_kd_ptr, grads.data(), o_sh.data(), channel_buffer);
+      fill_channel_buffer<T, IndiceT, data_dimension><<<config_obuff.block_count, config_obuff.thread_per_block,0, d.stream()>>>(config_obuff, out_id_kd_ptr, grads.data(), o_sh.data(), channel_buffer, out_c_start);
       for(int k = 0; k < in_channel_count; ++k){
         int block_start_ = cpu_input_block_mapping[i * in_channel_count + k];
         int block_end_ = cpu_input_block_mapping[i * in_channel_count + k + 1]; //all blocks for batch

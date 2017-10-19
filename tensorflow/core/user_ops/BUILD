@@ -31,16 +31,19 @@ tf_custom_op_library_flags(
               "direct_sparse_to_dense_op.cc",
               "sparse_tensor_filter_zero_entries.cc",
               "evaluate_confusion_matrix.cc",
-              "direct_sparse_conv_kd.cc",
               "direct_sparse_conversions.cc",
+              "direct_sparse_conv_kd.cc",
+              "direct_sparse_pooling_kd.cc",
             ],
 
     gpu_srcs = [
               "direct_sparse_cuda_helpers_gpu.h",
-              "direct_sparse_conv_kd_gpu.h",
-              "direct_sparse_conv_kd_gpu.cu.cc",
               "direct_sparse_conversions_gpu.h",
               "direct_sparse_conversions_gpu.cu.cc",
+              "direct_sparse_conv_kd_gpu.h",
+              "direct_sparse_conv_kd_gpu.cu.cc",
+              "direct_sparse_pooling_kd_gpu.h",
+              "direct_sparse_pooling_kd_gpu.cu.cc",
     ],
 
     deps = [

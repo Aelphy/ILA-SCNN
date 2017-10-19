@@ -30,7 +30,7 @@ inline cudaError_t checkCuda(cudaError_t result)
 
 
 template<typename Device, typename T, typename V>
-bool compute_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys, T* d_out_keys, const  V* d_in_values, V* d_out_values, int num_items){
+inline bool compute_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys, T* d_out_keys, const  V* d_in_values, V* d_out_values, int num_items){
   size_t temp_storage_bytes = 0;
   cub::DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, d_in_keys, d_out_keys, d_in_values, d_out_values, num_items, 0, 8 * sizeof(T), d.stream());
 
@@ -45,7 +45,7 @@ bool compute_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys, T* d_out_
 
 
 template<typename Device, typename T, typename V>
-bool compute_segmented_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys, T* d_out_keys, const  V* d_in_values, V* d_out_values, int num_items, int segments_count, const int* segments_start, const int* segments_end){
+inline bool compute_segmented_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys, T* d_out_keys, const  V* d_in_values, V* d_out_values, int num_items, int segments_count, const int* segments_start, const int* segments_end){
   size_t temp_storage_bytes = 0;
   cub::DeviceSegmentedRadixSort::SortPairs(nullptr, temp_storage_bytes, d_in_keys, d_out_keys, d_in_values, d_out_values, num_items, segments_count, segments_start, segments_end, (int) 0, (int) 8 * sizeof(T), d.stream());
 
@@ -59,7 +59,7 @@ bool compute_segmented_sort(OpKernelContext* ctx, Device& d, const T* d_in_keys,
 }
 
 template<typename Device, typename T>
-bool compute_scan(OpKernelContext* ctx, Device& d, T* __restrict__ out, const T* __restrict__ in, const int count, const bool inclusive = true){
+inline bool compute_scan(OpKernelContext* ctx, Device& d, T* __restrict__ out, const T* __restrict__ in, const int count, const bool inclusive = true){
   size_t temp_storage_bytes = 0;
   if(inclusive){
       cub::DeviceScan::InclusiveSum(/*temp_storage*/ nullptr, temp_storage_bytes,
