@@ -199,7 +199,7 @@ index_1DtoKD(const int x_out, const dtype in_index_1d, const dtype* __restrict__
 //decompress 1D key + channel into K dimensional indices
 template <typename dtype, int data_dimension> __device__ __forceinline__ void
 index_1DtoKD_reduced(const int x_out, const dtype in_index_1d, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
-                    dtype* __restrict__ out_ind_ptr){
+                    dtype* __restrict__ out_ind_ptr, const int offset = 1){
   dtype idx_out = x_out * (data_dimension - 2);
   //1. compressed 1d key, except channel
   dtype fact[data_dimension];
@@ -208,10 +208,12 @@ index_1DtoKD_reduced(const int x_out, const dtype in_index_1d, const dtype* __re
     fact[i] = fact[i + 1] * in_shape_ptr[i + 1];
   }
   dtype r = in_index_1d;
-  r = r % fact[0];
-  for(int i = 1; i < data_dimension - 1; ++i){
+  for(int i = 0; i < offset; ++i){
+    r = r % fact[i];
+  }
+  for(int i = offset; i < data_dimension - 2 + offset; ++i){
     auto f = r / fact[i];
-    out_ind_ptr[idx_out + i - 1] = f;
+    out_ind_ptr[idx_out + i - offset] = f;
     r = r % fact[i];
   }
 }
@@ -372,12 +374,8 @@ prepare_filter_weights_(CudaLaunchConfig config,
     //data format: [batch, depth, height, width, in_channels]
     //filter format: [depth, height, width, in_channels, out_channels]
     //manipulate depth, height width only and store in and out channels 
-    for(int i = data_dimension - 2; i > 0; --i){
-      mul = mul * in_sh_ptr[i + 1];
-      const int f_i = i - 1;
-      idx = x * data_dimension +  f_i;
-      val = val + mul * (f_id_ptr[idx]); //flip filter weights
-    }
+    
+    index_KDto1D_<dtype, data_dimension>(&f_id_ptr[x * data_dimension], f_sh_ptr, &val);
     //const dtype channel = in_ptr[(x + 1)  * data_dimension - 1];
     out_id_ptr[x] = val;
     out_ch_ptr[x] = f_id_ptr[x * data_dimension + data_dimension - 1];

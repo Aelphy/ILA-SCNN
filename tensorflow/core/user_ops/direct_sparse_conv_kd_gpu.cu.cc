@@ -69,7 +69,7 @@ map_channel_buffer_1d_to_kd(dtype in_id, const dtype* __restrict__ out_shape_ptr
 }
 
 template <typename dtype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK) 
-decompress_1d_to_kd(CudaLaunchConfig config, const dtype* in_data_id1d, const dtype* in_filter_id1d, const dtype* in_shape_ptr, dtype* out_data_idkd, dtype* out_filter_idkd, int data_start, int data_end, int filter_start, int filter_end)
+decompress_1d_to_kd(CudaLaunchConfig config, const dtype* in_data_id1d, const dtype* in_filter_id1d, const dtype* in_shape_ptr, const dtype* filter_shape_ptr, dtype* out_data_idkd, dtype* out_filter_idkd, int data_start, int data_end, int filter_start, int filter_end)
 {
   int data_size = data_end - data_start;
   int filter_size = filter_end - filter_start;
@@ -79,10 +79,10 @@ decompress_1d_to_kd(CudaLaunchConfig config, const dtype* in_data_id1d, const dt
     }
     if(x < data_size){
       int id = x;
-      index_1DtoKD_reduced<dtype, data_dimension>(0, in_data_id1d[id + data_start], in_shape_ptr, &out_data_idkd[(data_dimension - 2) * id]);
+      index_1DtoKD_reduced<dtype, data_dimension>(0, in_data_id1d[id + data_start], in_shape_ptr, &out_data_idkd[(data_dimension - 2) * id], 1);
     } else {
       int id = x - data_size;
-      index_1DtoKD_reduced<dtype, data_dimension>(0, in_filter_id1d[id + filter_start], in_shape_ptr, &out_filter_idkd[(data_dimension - 2) * id]);
+      index_1DtoKD_reduced<dtype, data_dimension>(0, in_filter_id1d[id + filter_start], filter_shape_ptr, &out_filter_idkd[(data_dimension - 2) * id], 0);
     }
   }
 }
@@ -347,7 +347,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   allocate_tensor(context, in_id_kd_buffer, &in_id_kd_ptr, (data_dimension - 2) * data_entry_count);
   allocate_tensor(context, filter_id_kd_buffer, &filter_id_kd_ptr, (data_dimension - 2) * filter_weight_count);
   CudaLaunchConfig config_dec = GetCudaLaunchConfig(data_entry_count + filter_weight_count, d);
-  decompress_1d_to_kd<IndiceT, data_dimension><<<config_dec.block_count, config_dec.thread_per_block, 0, d.stream()>>>(config_dec, in_block_ids, filter_sorted_ind_1d, i_sh.data(), in_id_kd_ptr, filter_id_kd_ptr, 0, data_entry_count, 0, filter_weight_count);
+  decompress_1d_to_kd<IndiceT, data_dimension><<<config_dec.block_count, config_dec.thread_per_block, 0, d.stream()>>>(config_dec, in_block_ids, filter_sorted_ind_1d, i_sh.data(), f_sh.data(), in_id_kd_ptr, filter_id_kd_ptr, 0, data_entry_count, 0, filter_weight_count);
   
   cudaDeviceSynchronize(); 
   dout_s << "t6: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
@@ -444,7 +444,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
 
 
 template <typename dtype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK) 
-decompress_1d_to_kd(CudaLaunchConfig config, const dtype* in_data_id1d, const dtype* in_filter_id1d, const dtype* output_id1d, const dtype* in_shape_ptr, const dtype* out_shape_ptr, dtype* out_data_idkd, dtype* out_filter_idkd, dtype* out_out_idkd, int data_start, int data_end, int filter_start, int filter_end, int output_start, int output_end)
+decompress_1d_to_kd(CudaLaunchConfig config, const dtype* in_data_id1d, const dtype* in_filter_id1d, const dtype* output_id1d, const dtype* in_shape_ptr, const dtype* filter_shape_ptr, const dtype* out_shape_ptr, dtype* out_data_idkd, dtype* out_filter_idkd, dtype* out_out_idkd, int data_start, int data_end, int filter_start, int filter_end, int output_start, int output_end)
 {
   int data_size = data_end - data_start;
   int filter_size = filter_end - filter_start;
@@ -454,13 +454,13 @@ decompress_1d_to_kd(CudaLaunchConfig config, const dtype* in_data_id1d, const dt
     }
     if(x < data_size){
       int id = x;
-      index_1DtoKD_reduced<dtype, data_dimension>(0, in_data_id1d[id + data_start], in_shape_ptr, &out_data_idkd[(data_dimension - 2) * id]);
+      index_1DtoKD_reduced<dtype, data_dimension>(0, in_data_id1d[id + data_start], in_shape_ptr, &out_data_idkd[(data_dimension - 2) * id], 1);
     } else if(x < data_size + filter_size){
       int id = x - data_size;
-      index_1DtoKD_reduced<dtype, data_dimension>(0, in_filter_id1d[id + filter_start], in_shape_ptr, &out_filter_idkd[(data_dimension - 2) * id]);
+      index_1DtoKD_reduced<dtype, data_dimension>(0, in_filter_id1d[id + filter_start], filter_shape_ptr, &out_filter_idkd[(data_dimension - 2) * id], 0);
     } else {
       int id = x - data_size - filter_size;
-      index_1DtoKD_reduced<dtype, data_dimension>(0, output_id1d[id + output_start], out_shape_ptr, &out_out_idkd[(data_dimension - 2) * id]);
+      index_1DtoKD_reduced<dtype, data_dimension>(0, output_id1d[id + output_start], out_shape_ptr, &out_out_idkd[(data_dimension - 2) * id], 1);
     }
   }
 }
@@ -623,7 +623,7 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   allocate_tensor(context, filter_id_kd_buffer, &filter_id_kd_ptr, (data_dimension - 2) * filter_weight_count);
   allocate_tensor(context, out_id_kd_buffer, &out_id_kd_ptr, (data_dimension - 2) * output_entry_count);
   CudaLaunchConfig config_dec = GetCudaLaunchConfig(data_entry_count + filter_weight_count + output_entry_count, d);
-  decompress_1d_to_kd<IndiceT, data_dimension><<<config_dec.block_count, config_dec.thread_per_block, 0, d.stream()>>>(config_dec, in_block_ids, filter_sorted_ind_1d, o_ind.data(), i_sh.data(), o_sh.data(), in_id_kd_ptr, filter_id_kd_ptr, out_id_kd_ptr, 0, data_entry_count, 0, filter_weight_count, 0, output_entry_count);
+  decompress_1d_to_kd<IndiceT, data_dimension><<<config_dec.block_count, config_dec.thread_per_block, 0, d.stream()>>>(config_dec, in_block_ids, filter_sorted_ind_1d, o_ind.data(), i_sh.data(), f_sh.data(), o_sh.data(), in_id_kd_ptr, filter_id_kd_ptr, out_id_kd_ptr, 0, data_entry_count, 0, filter_weight_count, 0, output_entry_count);
   
   cudaDeviceSynchronize(); 
 
