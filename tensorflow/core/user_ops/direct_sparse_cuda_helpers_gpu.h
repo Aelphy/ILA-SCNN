@@ -113,6 +113,18 @@ debug_out(T* data, int count, std::stringstream& dout_s, std::string name = "dbg
   dout_s << std::endl;
 }
 
+
+template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+init_index_x(CudaLaunchConfig config, dtype* out_idx){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }   
+    out_idx[x] = x;
+  }
+}
+
+
 //Compress [batch, x, y, ..., channel] indices into a [1D] key while keeping the data sorted.
 template <typename dtype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
 index_KDto1D(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, const dtype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
@@ -367,16 +379,8 @@ prepare_filter_weights_(CudaLaunchConfig config,
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
-    //index type (dtype) must! be signed
     dtype val = 0;
-    dtype mul = 1;
-    dtype idx = x;
-    //data format: [batch, depth, height, width, in_channels]
-    //filter format: [depth, height, width, in_channels, out_channels]
-    //manipulate depth, height width only and store in and out channels 
-    
     index_KDto1D_<dtype, data_dimension>(&f_id_ptr[x * data_dimension], f_sh_ptr, &val);
-    //const dtype channel = in_ptr[(x + 1)  * data_dimension - 1];
     out_id_ptr[x] = val;
     out_ch_ptr[x] = f_id_ptr[x * data_dimension + data_dimension - 1];
     in_channel[x] = f_id_ptr[x * data_dimension + data_dimension - 2];

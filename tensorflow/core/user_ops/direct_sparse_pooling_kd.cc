@@ -21,7 +21,6 @@
   * The result can be assigned to a tensor of rank equal to the rank of the input. The dimensions of the result will be filters, depth, height, width (and others if applicable).
   */
 
-
 REGISTER_OP("DirectSparseMaxPoolingKD")
   .Attr("T: realnumbertype")
   .Attr("Tindices: {int32, int64}")
@@ -33,6 +32,22 @@ REGISTER_OP("DirectSparseMaxPoolingKD")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
   .Output("out_block_channel_mapping: int32")
+  .Attr("strides: list(int)")
+  .Attr("dim: int = 5");
+
+REGISTER_OP("DirectSparseMaxPoolingKDBackprop")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
+  .Input("in_values: T")
+  .Input("in_shape: Tindices")
+  .Input("in_block_channel_mapping: int32")
+  .Input("out_indices: Tindices")
+  .Input("out_values: T")
+  .Input("out_shape: Tindices")
+  .Input("out_block_channel_mapping: int32")
+  .Input("grads: T")
+  .Output("backprops: T")
   .Attr("strides: list(int)")
   .Attr("dim: int = 5");
 
@@ -66,7 +81,9 @@ class DirectSparsePoolingKD : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseMaxPoolingKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingFunctor>);
+                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseMaxPoolingKDBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingBackpropFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \

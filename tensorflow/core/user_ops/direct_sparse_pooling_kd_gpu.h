@@ -15,5 +15,10 @@ typedef Eigen::GpuDevice GPUDevice;
     struct DirectSparseMaxPoolingFunctor {
       void operator()(OpKernelContext* context, const std::vector<int32>& stride) const;
     };
+
+    template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
+    struct DirectSparseMaxPoolingBackpropFunctor {
+      void operator()(OpKernelContext* context, const std::vector<int32>& stride) const;
+    };
   } //namespace functor
 } //namespace tensorflow

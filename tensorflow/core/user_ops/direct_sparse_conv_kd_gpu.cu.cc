@@ -214,16 +214,6 @@ abs_values(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, btype* 
 }
 
 
-template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-gen_sorted_index(CudaLaunchConfig config, dtype* out_buffer){
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
-    if (x < 0) {  //x might overflow when testing extreme case
-      break;
-    }
-    out_buffer[x] = x;
-  }
-}
-
 template <typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
 gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block_vals, const itype* __restrict__ in_shape_ptr, 
   const dtype* __restrict__ filter_weights, const itype* __restrict__ filter_shape_ptr, const itype* __restrict__ out_sh, dtype* dense_channel_buffer,
