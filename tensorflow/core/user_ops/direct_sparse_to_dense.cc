@@ -70,9 +70,9 @@ class DirectSparseToDense : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseToDense").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectSparseToDenseFunctor>); //\
-  REGISTER_KERNEL_BUILDER(Name("DirectSparseMaxPoolingKDBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingBackpropFunctor>);
+                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectSparseToDenseFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseToDenseBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectSparseToDenseBackpropFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \
