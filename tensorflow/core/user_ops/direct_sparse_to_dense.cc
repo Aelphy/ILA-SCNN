@@ -43,6 +43,28 @@ REGISTER_OP("DirectSparseToDenseBackprop")
   .Output("backprops: T")
   .Attr("dim: int = 5");
 
+REGISTER_OP("DirectDenseToSparse")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_values: T")
+  .Input("in_shape: Tindices") //dummy to define type of Tindices 
+  .Output("out_indices: Tindices")
+  .Output("out_values: T")
+  .Output("out_shape: Tindices")
+  .Output("out_block_channel_mapping: int32")
+  .Attr("dim: int = 5");
+
+REGISTER_OP("DirectDenseToSparseBackprop")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_values: T")
+  .Input("out_indices: Tindices")
+  .Input("out_values: T")
+  .Input("out_shape: Tindices")
+  .Input("out_block_channel_mapping: int32")
+  .Input("grads: T")
+  .Output("backprops: T")
+  .Attr("dim: int = 5");
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -72,7 +94,11 @@ class DirectSparseToDense : public OpKernel {
   REGISTER_KERNEL_BUILDER(Name("DirectSparseToDense").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
                           DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectSparseToDenseFunctor>); \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseToDenseBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectSparseToDenseBackpropFunctor>);
+                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectSparseToDenseBackpropFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectDenseToSparse").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectDenseToSparseFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectDenseToSparseBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseToDense<GPUDevice, type, indice_type, functor::DirectDenseToSparseBackpropFunctor>); 
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \

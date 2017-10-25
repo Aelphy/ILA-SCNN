@@ -20,5 +20,15 @@ typedef Eigen::GpuDevice GPUDevice;
     struct DirectSparseToDenseBackpropFunctor {
       void operator()(OpKernelContext* context) const;
     };
+    
+    template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
+    struct DirectDenseToSparseFunctor {
+      void operator()(OpKernelContext* context) const;
+    };
+    
+    template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
+    struct DirectDenseToSparseBackpropFunctor {
+      void operator()(OpKernelContext* context) const;
+    };
   } //namespace functor
 } //namespace tensorflow
