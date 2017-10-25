@@ -207,12 +207,25 @@ abs_values(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, btype* 
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
+    if(in_buffer[x] == 0) continue;
     int out_x = atomicAdd(out_count, 1);
     out_buffer[out_x] = itype(abs(in_buffer[x] * 2048));
     out_ids[out_x] = x;
   }
 }
 
+template <typename dtype, typename itype, typename btype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+relu_values(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, btype* out_buffer, itype* out_ids, int* out_count){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(in_buffer[x] <= 0) continue;
+    int out_x = atomicAdd(out_count, 1);
+    out_buffer[out_x] = itype(in_buffer[x] * 2048);
+    out_ids[out_x] = x;
+  }
+}
 
 template <typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
 gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block_vals, const itype* __restrict__ in_shape_ptr, 
@@ -272,7 +285,7 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
 
 namespace functor {
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density) const {
+void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density, const std::string& filter_type) const {
   clock_t t_total = clock();
   std::stringstream dout_s;
   clock_t t;
@@ -292,8 +305,11 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   auto f_sh = filter_shape->flat<IndiceT>();
   auto f_ind = filter_indices->flat<IndiceT>();
   auto f_val = filter_values->flat<T>(); 
-  int data_entry_count = i_ind.dimension(0);
-  const int filter_weight_count = f_ind.dimension(0);
+  auto i_mapping = in_block_ptr_t->flat<int>();
+  auto f_mapping = filter_channel_mapping_t->flat<int>();
+  int data_entry_count, filter_weight_count;
+  cudaMemcpy(&data_entry_count, i_mapping.data() + i_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&filter_weight_count, f_mapping.data() + f_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
   IndiceT out_channel_count = -1;
   cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   std::vector<IndiceT> cpu_in_shape(data_dimension);
@@ -400,7 +416,14 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       }
       cudaMemset(result_dense_count, 0, sizeof(int));
       cudaStreamSynchronize(d.stream());
-      abs_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer, in_channel_ids_buffer, result_dense_count);
+      if(filter_type == "K-ABS"){
+        abs_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer, in_channel_ids_buffer, result_dense_count);
+      } else if(filter_type == "K-RELU"){
+        relu_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer, in_channel_ids_buffer, result_dense_count);
+      } else {
+        LOG(ERROR) << "unsupported filter type: " << filter_type << ". Only 'K-ABS' and 'K-RELU' are supported.";
+        return;
+      }
       cudaStreamSynchronize(d.stream());
       int cpu_result_count;
       IndiceT* write_ids;
@@ -418,8 +441,10 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
         write_vals = abs_channel_buffer;
       }
       CudaLaunchConfig config_dbuffer = GetCudaLaunchConfig(min(cpu_result_count, max_channel_count), d);
-      write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer.block_count, config_dbuffer.thread_per_block, 0, d.stream()>>>(config_dbuffer, write_vals + start_offset, 
-          write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
+      if(config_dbuffer.virtual_thread_count > 0){
+        write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer.block_count, config_dbuffer.thread_per_block, 0, d.stream()>>>(config_dbuffer, write_vals + start_offset, 
+            write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
+      }
       data_offset_ptr = data_offset.data() + i * out_channel_count + j + 1; //TODO
       cudaMemcpy(data_offset_ptr, result_block_count, sizeof(int), cudaMemcpyDeviceToDevice);
      }
@@ -535,7 +560,7 @@ fill_channel_buffer(CudaLaunchConfig config, const itype* in_op_idkd, const dtyp
 }
 
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density) const {
+void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density, const std::string& filter_type) const {
   clock_t t_total = clock();
   std::stringstream dout_s;
   const Tensor  *in_indices, *in_values, *in_shape, *in_block_ptr_t, *out_indices, *out_values, *out_shape, *out_block_ptr_t, 
@@ -557,18 +582,22 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   auto i_sh = in_shape->flat<IndiceT>();
   auto i_ind = in_indices->flat<IndiceT>();
   auto i_val = in_values->flat<T>();
-  const int* input_block_mapping = in_block_ptr_t->flat<int>().data();
+  auto i_mapping = in_block_ptr_t->flat<int>();
+  const int* input_block_mapping = i_mapping.data();
   auto o_sh = out_shape->flat<IndiceT>();
   auto o_ind = out_indices->flat<IndiceT>();
   auto o_val = out_values->flat<T>();
-  const int* output_block_mapping = in_block_ptr_t->flat<int>().data();
+  auto o_mapping = out_block_ptr_t->flat<int>();
+  const int* output_block_mapping = o_mapping.data();
   auto f_sh = filter_shape->flat<IndiceT>();
   auto f_ind = filter_indices->flat<IndiceT>();
   auto f_val = filter_values->flat<T>(); 
+  auto f_mapping = filter_channel_mapping_t->flat<int>();
   auto grads = gradients->flat<T>(); 
-  int data_entry_count = i_ind.dimension(0); //TODO: get from *_block_mapping
-  int output_entry_count = o_ind.dimension(0); //TODO: get from *_block_mapping
-  const int filter_weight_count = f_ind.dimension(0); //TODO: get from *_block_mapping
+  int data_entry_count, filter_weight_count, output_entry_count;
+  cudaMemcpy(&data_entry_count, i_mapping.data() + i_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&output_entry_count, o_mapping.data() + o_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpy(&filter_weight_count, f_mapping.data() + f_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
   IndiceT out_channel_count = -1;
   cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   std::vector<IndiceT> cpu_in_shape(data_dimension);

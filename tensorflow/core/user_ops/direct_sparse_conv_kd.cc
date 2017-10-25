@@ -40,7 +40,8 @@ REGISTER_OP("DirectSparseConvKD")
   .Attr("strides: list(int)")
   .Attr("padding: string")
   .Attr("dim: int = 5")
-  .Attr("max_density: float = 1");
+  .Attr("max_density: float = 1")
+  .Attr("filter_type: string = 'K-ABS'");
 
 REGISTER_OP("DirectSparseConvKDBackprop")
   .Attr("T: realnumbertype")
@@ -63,7 +64,8 @@ REGISTER_OP("DirectSparseConvKDBackprop")
   .Attr("strides: list(int)")
   .Attr("padding: string")
   .Attr("dim: int = 5")
-  .Attr("max_density: float = 1");
+  .Attr("max_density: float = 1")
+  .Attr("filter_type: string = 'K-ABS'");
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -82,12 +84,13 @@ class DirectSparseConvKD : public OpKernel {
                                         "at least specify 4 dimensions"));
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
     OP_REQUIRES_OK(context, context->GetAttr("max_density", &max_density));
+    OP_REQUIRES_OK(context, context->GetAttr("filter_type", &filter_type));
   }
 
   void Compute(OpKernelContext* context) override {
     //functor requires kernel context since output shape is not known befor computing results
     if(dim == 5){
-      FunctorT<GPUDevice, T, Tindices, 5>()(context, stride_, padding, max_density);
+      FunctorT<GPUDevice, T, Tindices, 5>()(context, stride_, padding, max_density, filter_type);
     } //TODO: add more dimensions
   }
 
@@ -95,6 +98,7 @@ class DirectSparseConvKD : public OpKernel {
   std::vector<int32> stride_;
   int dim;
   std::string padding;
+  std::string filter_type;
   float max_density;
 };
 
