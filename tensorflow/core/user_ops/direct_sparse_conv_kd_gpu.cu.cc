@@ -54,7 +54,7 @@ map_shared_to_channel_buffer(const dtype in_id, const dtype* block_start_array, 
 
 //index war :)
 template <typename dtype, int data_dimension> __device__ __forceinline__ void 
-map_channel_buffer_1d_to_kd(dtype in_id, const dtype* __restrict__ out_shape_ptr, dtype* out_index)
+map_channel_buffer_1d_to_kd(dtype in_id, const dtype* out_shape_ptr, dtype* out_index)
 {
   dtype fact[data_dimension- 2];
   fact[0] = 1;
@@ -190,11 +190,22 @@ write_conv_res2(CudaLaunchConfig config, const itype* in_buffer, const itype* in
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     itype idx = in_ids[x];
     dtype outval = dtype(in_buffer[x]) / 2048;
-    if(outval == 0) continue;
     itype* idkd_r = &idkd[1];
-    map_channel_buffer_1d_to_kd<itype, data_dimension>(idx, out_shape_ptr, idkd_r);
-    itype out_id_1d;
-    index_KDto1D_<itype, data_dimension>(idkd, out_shape_ptr, &out_id_1d);
+    //map_channel_buffer_1d_to_kd<itype, data_dimension>(idx, out_shape_ptr, idkd_r);
+    itype fact[data_dimension- 2]; 
+    fact[0] = 1;
+    for(int i = 2; i < data_dimension; ++i){
+      fact[i - 1] = fact[i - 2] * out_shape_ptr[i - 1]; 
+    }
+    itype r = idx;
+    for(int i =  data_dimension - 3; i >= 0; --i){
+      idkd_r[i] = r / fact[i];
+      r = r % fact[i];
+    }
+   
+ 
+    itype out_id_1d = 0;
+    index_KDto1D_<itype, data_dimension>(&idkd[0], out_shape_ptr, &out_id_1d);
     int out_x = atomicAdd(count, 1);
     out_val[out_x] = outval;
     out_ind[out_x] = out_id_1d;
@@ -286,8 +297,6 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
 namespace functor {
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
 void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density, const std::string& filter_type) const {
-  clock_t t_total = clock();
-  std::stringstream dout_s;
   clock_t t;
   const Tensor *in_indices, *in_values, *in_shape, *in_block_ptr_t, *data_count_t, *filter_indices, *filter_values, *filter_shape, *filter_channel_mapping_t;
   OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
@@ -354,9 +363,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   allocate_tensor(context, filter_id_kd_buffer, &filter_id_kd_ptr, (data_dimension - 2) * filter_weight_count);
   CudaLaunchConfig config_dec = GetCudaLaunchConfig(data_entry_count + filter_weight_count, d);
   decompress_1d_to_kd<IndiceT, data_dimension><<<config_dec.block_count, config_dec.thread_per_block, 0, d.stream()>>>(config_dec, in_block_ids, filter_sorted_ind_1d, i_sh.data(), f_sh.data(), in_id_kd_ptr, filter_id_kd_ptr, 0, data_entry_count, 0, filter_weight_count);
-  
-  cudaDeviceSynchronize(); 
-  dout_s << "t6: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
+  cudaStreamSynchronize(d.stream());
 
   /////
   //3. Perform convolution; upper bound of output shape is known by max_density
@@ -440,21 +447,21 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
         write_ids = in_channel_ids_buffer;
         write_vals = abs_channel_buffer;
       }
-      CudaLaunchConfig config_dbuffer = GetCudaLaunchConfig(min(cpu_result_count, max_channel_count), d);
-      if(config_dbuffer.virtual_thread_count > 0){
-        write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer.block_count, config_dbuffer.thread_per_block, 0, d.stream()>>>(config_dbuffer, write_vals + start_offset, 
+      CudaLaunchConfig config_dbuffer_ = GetCudaLaunchConfig(min(cpu_result_count, max_channel_count), d);
+      if(config_dbuffer_.virtual_thread_count > 0){
+        write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer_.block_count, config_dbuffer_.thread_per_block, 0, d.stream()>>>(config_dbuffer_, write_vals + start_offset, 
             write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
+        cudaStreamSynchronize(d.stream());
       }
       data_offset_ptr = data_offset.data() + i * out_channel_count + j + 1; //TODO
       cudaMemcpy(data_offset_ptr, result_block_count, sizeof(int), cudaMemcpyDeviceToDevice);
+      int dbg, dbg2;
+      cudaMemcpy(&dbg, data_offset_ptr, sizeof(int), cudaMemcpyDeviceToHost);
+      cudaMemcpy(&dbg2, result_block_count, sizeof(int), cudaMemcpyDeviceToHost);
+      LOG(INFO) << "dbg " << i << " " << j << " " << dbg << " " << dbg2;
      }
   }
   cudaMemcpy(o_sh.data(), out_sh, data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
-
-  cudaDeviceSynchronize();
-  dout_s << "t7: " << float(clock() - t)/CLOCKS_PER_SEC << std::endl;
-  dout_s << "t_total: " << float(clock() - t_total)/CLOCKS_PER_SEC << std::endl;
-  LOG(INFO) << dout_s.str();
 }
 
 
@@ -561,8 +568,6 @@ fill_channel_buffer(CudaLaunchConfig config, const itype* in_op_idkd, const dtyp
 
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
 void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density, const std::string& filter_type) const {
-  clock_t t_total = clock();
-  std::stringstream dout_s;
   const Tensor  *in_indices, *in_values, *in_shape, *in_block_ptr_t, *out_indices, *out_values, *out_shape, *out_block_ptr_t, 
                 *data_count_t, *filter_indices, *filter_values, *filter_shape, *filter_channel_mapping_t, *gradients;
   OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
@@ -644,7 +649,7 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   CudaLaunchConfig config_dec = GetCudaLaunchConfig(data_entry_count + filter_weight_count + output_entry_count, d);
   decompress_1d_to_kd<IndiceT, data_dimension><<<config_dec.block_count, config_dec.thread_per_block, 0, d.stream()>>>(config_dec, in_block_ids, filter_sorted_ind_1d, o_ind.data(), i_sh.data(), f_sh.data(), o_sh.data(), in_id_kd_ptr, filter_id_kd_ptr, out_id_kd_ptr, 0, data_entry_count, 0, filter_weight_count, 0, output_entry_count);
   
-  cudaDeviceSynchronize(); 
+  cudaStreamSynchronize(d.stream());
 
   /////
   //3. Perform convolution; upper bound of output shape is known by max_density
@@ -698,9 +703,6 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
       }
     }
   }
-  cudaDeviceSynchronize();
-  dout_s << "t_total: " << float(clock() - t_total)/CLOCKS_PER_SEC << std::endl;
-  LOG(INFO) << dout_s.str();
 }
 
 }  // end namespace functor
