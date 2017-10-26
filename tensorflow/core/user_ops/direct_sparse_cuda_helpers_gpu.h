@@ -535,21 +535,21 @@ __device__ __forceinline__ void hash_function(dtype* out_val, const dtype* in_va
 
 template <typename dtype>
 __global__ void precompute_bucket_count(CudaLaunchConfig config, 
-                  dtype* bucket_count, dtype* bucket_offset, dtype* bucket_id, const dtype* in_values, const HashConfig hc){
+                  int* bucket_count, int* bucket_offset, dtype* bucket_id, const dtype* in_values, const HashConfig hc){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
     dtype h(0);
     hash_function(&h, &(in_values[x]), hc.c0_0, hc.c0_i, hc.bucket_count);
-    bucket_offset[x] = CAtomicAdd(&bucket_count[h], (dtype) 1);
+    bucket_offset[x] = atomicAdd(&bucket_count[h], (dtype) 1);
     bucket_id[x] = h;
   }
 }
 
 template <typename dtype>
 __global__ void check_bucket_count(CudaLaunchConfig config, 
-                  dtype* result, const dtype* bucket_count, const float max_bucket_density, const HashConfig hc){
+                  dtype* result, const int* bucket_count, const float max_bucket_density, const HashConfig hc){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
@@ -562,7 +562,7 @@ __global__ void check_bucket_count(CudaLaunchConfig config,
 
 template <typename dtype>
 __global__ void init_buckets(CudaLaunchConfig config, 
-                  dtype* hash_table, const dtype* h_ids, const dtype* h_offsets, const dtype* in_ids, const HashConfig hc){
+                  dtype* hash_table, const dtype* h_ids, const int* h_offsets, const dtype* in_ids, const HashConfig hc){
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
@@ -756,10 +756,11 @@ __global__ void rehash_buckets(CudaLaunchConfig config,
   __syncthreads();
 }
 
+//(tensorflow::OpKernelContext *, const tensorflow::GPUDevice, tensorflow::Tensor, tensorflow::Tensor, const tensorflow::int64 *, const tensorflow::int64 *, tensorflow::int64, tensorflow::HashConfig, tensorflow::int64)
 //not minimal yet, is minimal needed?
 template <typename Device, typename dtype, typename itype>
-int initialize_table(OpKernelContext* ctx, Device d, itype** hash_table_, dtype** hash_values_, const itype* in_keys, const dtype* in_vals, 
-    const itype data_count, HashConfig& hc, const itype bucket_size = 1024)
+int initialize_table(OpKernelContext* ctx, const Device& d, Tensor& hash_table_tensor, Tensor& hash_values_tensor, const itype* in_keys, const dtype* in_vals, 
+    itype data_count, HashConfig& hc, itype bucket_size = 1024)
 {
   if(d.sharedMemPerBlock() / std::max(sizeof(dtype), sizeof(itype)) / 2 < bucket_size) return -1; //error, not enough shared memory, select smaller number of keys
   if(bucket_size > d.maxCudaThreadsPerBlock()) return -2; 
@@ -769,22 +770,22 @@ int initialize_table(OpKernelContext* ctx, Device d, itype** hash_table_, dtype*
   hc.bucket_count =  ceil(data_count / (0.7 * bucket_size)); //on average 70% filled buckets
   hc.bucket_size = bucket_size;
   hc.cuckoo_max_iterations = 100;
-  itype *bucket_count = 0;
-  checkCuda(cudaMalloc(&bucket_count, hc.bucket_count * sizeof(itype)));
-  itype *bucket_offset = 0;
-  checkCuda(cudaMalloc(&bucket_offset, data_count * sizeof(itype)));
+  Tensor tmp1, tmp2, tmp3, tmp4, tmp5;
+  int *bucket_count = 0;
+  allocate_tensor(ctx, tmp1, &bucket_count, hc.bucket_count);
+  int *bucket_offset = 0;
+  allocate_tensor(ctx, tmp2, &bucket_offset, data_count);
   itype *bucket_id = 0;
-  checkCuda(cudaMalloc(&bucket_id, data_count * sizeof(itype)));
+  allocate_tensor(ctx, tmp3, &bucket_id, data_count);
   itype *bucket_start = 0;
-  checkCuda(cudaMalloc(&bucket_start, hc.bucket_count * sizeof(itype)));
+  allocate_tensor(ctx, tmp4, &bucket_start, hc.bucket_count);
   itype *kernel_result = 0;
-  checkCuda(cudaMalloc(&kernel_result, sizeof(itype)));
+  allocate_tensor(ctx, tmp5, &kernel_result, 1);
+  
   itype *hash_table = 0;
-  checkCuda(cudaMalloc(hash_table_, hc.bucket_count * hc.bucket_size * sizeof(itype)));
-  hash_table = *hash_table_;
+  allocate_tensor(ctx, hash_table_tensor, &hash_table, hc.bucket_count * hc.bucket_size);
   dtype *hash_values = 0;
-  checkCuda(cudaMalloc(hash_values_, hc.bucket_count * hc.bucket_size * sizeof(dtype)));
-  hash_values = *hash_values_;
+  allocate_tensor(ctx, hash_values_tensor, &hash_values, hc.bucket_count * hc.bucket_size);
 
   CudaLaunchConfig cfg = GetCudaLaunchConfig(data_count, d);
   CudaLaunchConfig cfg2 = GetCudaLaunchConfig(hc.bucket_count, d);
@@ -810,7 +811,6 @@ int initialize_table(OpKernelContext* ctx, Device d, itype** hash_table_, dtype*
     check_bucket_count<<<cfg2.block_count, cfg2.thread_per_block, 0, d.stream()>>>(cfg2, kernel_result, bucket_count, max_bucket_density, hc);
     cudaMemcpy(&result_kernel, kernel_result, sizeof(itype), cudaMemcpyDeviceToHost);
     if(result_kernel == 1) continue;
-  	//compute_scan(ctx, d, bucket_start, bucket_count, hc.bucket_count, false);
 
     hc.c1_0 = rand() ^ 0xffff;
     hc.c1_i = rand() ^ 0xcba9;
@@ -829,16 +829,6 @@ int initialize_table(OpKernelContext* ctx, Device d, itype** hash_table_, dtype*
   fill_values2<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, hash_values, hash_table, in_keys, hc);
   cudaDeviceSynchronize();
   check_hash_table2<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, kernel_result, hash_table, hash_values, in_keys, hc);
-  cudaMemcpy(&result_kernel, kernel_result, sizeof(itype), cudaMemcpyDeviceToHost);
-  LOG(INFO) << "result: " << result_kernel << std::endl;
-  
-  cudaFree(bucket_count);
-  cudaFree(bucket_offset);
-  cudaFree(bucket_id);
-  cudaFree(bucket_start);
-  cudaFree(kernel_result);
-  //cudaFree(hash_table);
-  //cudaFree(hash_values);
   return 0;
 }
 

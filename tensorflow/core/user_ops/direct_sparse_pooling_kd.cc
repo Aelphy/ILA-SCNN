@@ -83,7 +83,9 @@ class DirectSparsePoolingKD : public OpKernel {
   REGISTER_KERNEL_BUILDER(Name("DirectSparseMaxPoolingKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
                           DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingFunctor>); \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseMaxPoolingKDBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingBackpropFunctor>);
+                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingBackpropFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseUnpoolingKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseUnpoolingFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \
