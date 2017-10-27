@@ -65,6 +65,21 @@ REGISTER_OP("DirectSparseUnpoolingKD")
   .Attr("strides: list(int)")
   .Attr("dim: int = 5");
 
+REGISTER_OP("DirectSparseUnpoolingKDBackprop")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
+  .Input("in_values: T")
+  .Input("in_shape: Tindices")
+  .Input("in_block_channel_mapping: int32")
+  .Input("out_indices: Tindices")
+  .Input("out_values: T")
+  .Input("out_shape: Tindices")
+  .Input("out_block_channel_mapping: int32")
+  .Input("grads: T")
+  .Output("backprops: T")
+  .Attr("strides: list(int)")
+  .Attr("dim: int = 5");
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -99,7 +114,9 @@ class DirectSparsePoolingKD : public OpKernel {
   REGISTER_KERNEL_BUILDER(Name("DirectSparseMaxPoolingKDBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
                           DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseMaxPoolingBackpropFunctor>); \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseUnpoolingKD").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseUnpoolingFunctor>);
+                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseUnpoolingFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseUnpoolingKDBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparsePoolingKD<GPUDevice, type, indice_type, functor::DirectSparseUnpoolingBackpropFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \

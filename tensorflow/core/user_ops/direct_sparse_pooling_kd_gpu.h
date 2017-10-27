@@ -26,5 +26,9 @@ typedef Eigen::GpuDevice GPUDevice;
       void operator()(OpKernelContext* context, const std::vector<int32>& stride) const;
     };
 
+    template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
+    struct DirectSparseUnpoolingBackpropFunctor {
+      void operator()(OpKernelContext* context, const std::vector<int32>& stride) const;
+    };
   } //namespace functor
 } //namespace tensorflow

@@ -161,6 +161,36 @@ compute_out_mapping(CudaLaunchConfig config, const dtype* __restrict__ in_offset
   }
 }
 
+
+template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_max_unpooling_backprop(CudaLaunchConfig config, const itype* __restrict__ data_cor, const itype* __restrict__ in_offset, const itype* __restrict__ in_ids, const dtype* __restrict__ in_vals, const itype* __restrict__ out_shape, const itype* __restrict__ hash_table, const itype* __restrict__ hash_values, HashConfig hc, dtype* out_vals)
+{
+  itype id_kd[data_dimension];
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if(x < 0){  //x might overflow when testing extreme case
+      break;
+    }
+    //find maximum for block
+    dtype sum = 0;
+    itype sum_id = in_ids[data_cor[x]];
+    int up_range =  max(data_cor[x], data_cor[x + 1]);
+    for(int i = data_cor[x]; i < up_range; ++i){
+      sum += in_vals[i];
+    }
+    //convert block id to data id
+    decompress_block_id<itype, data_dimension>(sum_id, out_shape, &id_kd[0]);
+    itype data_sum_id;
+    index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape, &data_sum_id);
+    //find corresponding input value:
+    itype hash_result_id;
+    querry_hash_table(&hash_result_id, hash_table, &sum_id, hc); 
+    if(hash_result_id >= 0){
+      int cid = hash_values[hash_result_id];
+      out_vals[cid] = sum;
+    }
+  }
+}
+
 namespace functor {
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
   void DirectSparseMaxPoolingFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
@@ -403,13 +433,102 @@ namespace functor {
     CudaLaunchConfig configo = GetCudaLaunchConfig(o_ind.dimension(0), d);
     compute_coresponces_values<T, IndiceT, data_dimension><<<configo.block_count, configo.thread_per_block, 0, d.stream()>>>(configo, in_out_map_ids, i_sh.data(), i_val.data(), hasht, hashv, hc, o_val.data());
   }
+  
+  template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
+  void DirectSparseUnpoolingBackpropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
+    const Tensor *in_indices, *in_values, *in_shape, *in_block_channel_mapping;
+    const Tensor *out_indices, *out_values, *out_shape, *out_block_channel_mapping, *gradients;
+    OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
+    OP_REQUIRES_OK(context, context->input("in_values", &in_values));
+    OP_REQUIRES_OK(context, context->input("in_shape", &in_shape));
+    OP_REQUIRES_OK(context, context->input("in_block_channel_mapping", &in_block_channel_mapping));
+    OP_REQUIRES_OK(context, context->input("out_indices", &out_indices));
+    OP_REQUIRES_OK(context, context->input("out_values", &out_values));
+    OP_REQUIRES_OK(context, context->input("out_shape", &out_shape));
+    OP_REQUIRES_OK(context, context->input("out_block_channel_mapping", &out_block_channel_mapping));
+    OP_REQUIRES_OK(context, context->input("grads", &gradients));
+    const DeviceT d = context->eigen_device<DeviceT>();
+    auto i_sh = in_shape->flat<IndiceT>();
+    auto i_ind = in_indices->flat<IndiceT>();
+    auto i_val = in_values->flat<T>();
+    auto i_mapping = in_block_channel_mapping->flat<int>();
+    auto o_ind = out_indices->flat<IndiceT>();
+    auto o_val = out_values->flat<T>();
+    auto o_mapping = out_block_channel_mapping->flat<int>();
+    auto o_sh = out_shape->flat<IndiceT>();
+    auto bcount = o_mapping.dimension(0);
+    auto grads = gradients->flat<T>();
+    int data_entry_count;
+    cudaMemcpy(&data_entry_count, o_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
+    
+    /////
+    //1. create hash table
+    HashConfig hc;
+    Tensor hash_table, hash_values;
+    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) i_ind.dimension(0), hc, (IndiceT) 1024);
+   
+    /////
+    //2. allocate temp buffer
+    Tensor in_out_map_tensor, in_out_map_ids_sorted_tensor, out_sorted_values_tensor, strides_tensor, offset_tensor, batch_channel_count_tensor; 
+    IndiceT *in_out_map_ids = 0, *in_out_map_ids_sorted = 0, *offset = 0;
+    int32 *strides_ = 0, *tmp_batch_channel_count;
+    T *out_sorted_values = 0;
+    CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
+    allocate_tensor(context, in_out_map_tensor, &in_out_map_ids, data_entry_count);
+    allocate_tensor(context, in_out_map_ids_sorted_tensor, &in_out_map_ids_sorted, data_entry_count);
+    allocate_tensor(context, out_sorted_values_tensor, &out_sorted_values, data_entry_count);
+    allocate_tensor(context, strides_tensor, &strides_, data_dimension);
+    allocate_tensor(context, offset_tensor, &offset, data_entry_count + 1);
+    allocate_tensor(context, batch_channel_count_tensor, &tmp_batch_channel_count, bcount);
+    cudaMemcpy(strides_, &stride[0], data_dimension * sizeof(int32), cudaMemcpyHostToDevice);
+    
+    /////
+    //3. compute hypercubes for pooling
+    cudaStreamSynchronize(d.stream());
+    compute_voxel_id1D__<IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, o_ind.data(), 
+      o_sh.data(), i_sh.data(), in_out_map_ids, strides_);
+    cudaStreamSynchronize(d.stream());
+    compute_sort(context, d, in_out_map_ids, in_out_map_ids_sorted, grads.data(), out_sorted_values, data_entry_count);
+    cudaStreamSynchronize(d.stream());
+    IndiceT *unique_mask = in_out_map_ids;
+    compute_unique_mask<IndiceT><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, in_out_map_ids_sorted, unique_mask);
+    cudaStreamSynchronize(d.stream());
+    compute_scan(context, d, offset, unique_mask, data_entry_count, true); //inclusive scan
+    cudaStreamSynchronize(d.stream());
+    IndiceT out_count = 0;
+    cudaMemcpy(&out_count, offset + data_entry_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
+    Tensor data_cor_tensor;
+    IndiceT* data_cor;
+    allocate_tensor(context, data_cor_tensor, &data_cor, out_count + 1);
+    CudaLaunchConfig config1 = GetCudaLaunchConfig(data_entry_count + 1, d);
+    compute_coresponces<IndiceT, data_dimension><<<config1.block_count, config1.thread_per_block, 0, d.stream()>>>(config1, unique_mask, offset, data_cor, out_count);
+      cudaStreamSynchronize(d.stream());
+   
+    /////
+    //4. allocate output tensors 
+    Tensor *backprops;
+    TensorShape out_val_shape = {(IndiceT) o_ind.dimension(0)};
+    OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &backprops));
+    auto bp = backprops->flat<T>();
+
+    /////
+    //5. find correspondences for unpooling and perform unpooling
+
+    cudaStreamSynchronize(d.stream());
+    auto hashv = (IndiceT*) hash_values.flat<int8>().data();
+    auto hasht = (IndiceT*) hash_table.flat<int8>().data();
+    CudaLaunchConfig configo = GetCudaLaunchConfig(out_count, d);
+
+    compute_max_unpooling_backprop<T, IndiceT, data_dimension><<<configo.block_count, configo.thread_per_block, 0, d.stream()>>>(configo, data_cor, offset, in_out_map_ids_sorted, out_sorted_values, i_sh.data(), hasht, hashv, hc, bp.data());
+  }
 } //end namespace functor
 
 
 #define INIT_GPU_TYPE(type, indice_type, dim) \
  template struct functor::DirectSparseMaxPoolingFunctor<GPUDevice, type, indice_type, dim>; \
  template struct functor::DirectSparseMaxPoolingBackpropFunctor<GPUDevice, type, indice_type, dim>; \
- template struct functor::DirectSparseUnpoolingFunctor<GPUDevice, type, indice_type, dim>;
+ template struct functor::DirectSparseUnpoolingFunctor<GPUDevice, type, indice_type, dim>; \
+ template struct functor::DirectSparseUnpoolingBackpropFunctor<GPUDevice, type, indice_type, dim>;
 #define INIT_GPU_ALL(type, dim)    \
   INIT_GPU_TYPE(type, int64, dim); \
   INIT_GPU_TYPE(type, int32, dim);
