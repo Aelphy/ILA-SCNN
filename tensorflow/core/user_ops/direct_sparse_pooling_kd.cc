@@ -51,6 +51,20 @@ REGISTER_OP("DirectSparseMaxPoolingKDBackprop")
   .Attr("strides: list(int)")
   .Attr("dim: int = 5");
 
+REGISTER_OP("DirectSparseUnpoolingKD")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("in_indices: Tindices")
+  .Input("in_values: T")
+  .Input("in_shape: Tindices")
+  .Input("in_block_channel_mapping: int32")
+  .Input("out_indices: Tindices")
+  .Input("out_shape: Tindices")
+  .Input("out_block_channel_mapping: int32")
+  .Output("out_values: T")
+  .Attr("strides: list(int)")
+  .Attr("dim: int = 5");
+
 
 #include "tensorflow/core/framework/op_kernel.h"
 

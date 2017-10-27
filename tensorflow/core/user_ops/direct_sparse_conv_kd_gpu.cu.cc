@@ -455,10 +455,6 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       }
       data_offset_ptr = data_offset.data() + i * out_channel_count + j + 1; //TODO
       cudaMemcpy(data_offset_ptr, result_block_count, sizeof(int), cudaMemcpyDeviceToDevice);
-      int dbg, dbg2;
-      cudaMemcpy(&dbg, data_offset_ptr, sizeof(int), cudaMemcpyDeviceToHost);
-      cudaMemcpy(&dbg2, result_block_count, sizeof(int), cudaMemcpyDeviceToHost);
-      LOG(INFO) << "dbg " << i << " " << j << " " << dbg << " " << dbg2;
      }
   }
   cudaMemcpy(o_sh.data(), out_sh, data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);

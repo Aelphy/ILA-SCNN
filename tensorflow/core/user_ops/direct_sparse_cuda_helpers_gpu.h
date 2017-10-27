@@ -783,9 +783,9 @@ int initialize_table(OpKernelContext* ctx, const Device& d, Tensor& hash_table_t
   allocate_tensor(ctx, tmp5, &kernel_result, 1);
   
   itype *hash_table = 0;
-  allocate_tensor(ctx, hash_table_tensor, &hash_table, hc.bucket_count * hc.bucket_size);
+  allocate_tensor<itype>(ctx, hash_table_tensor, &hash_table, hc.bucket_count * hc.bucket_size);
   dtype *hash_values = 0;
-  allocate_tensor(ctx, hash_values_tensor, &hash_values, hc.bucket_count * hc.bucket_size);
+  allocate_tensor<dtype>(ctx, hash_values_tensor, &hash_values, hc.bucket_count * hc.bucket_size);
 
   CudaLaunchConfig cfg = GetCudaLaunchConfig(data_count, d);
   CudaLaunchConfig cfg2 = GetCudaLaunchConfig(hc.bucket_count, d);
