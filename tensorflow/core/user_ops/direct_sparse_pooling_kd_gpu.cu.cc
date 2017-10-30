@@ -162,34 +162,6 @@ compute_out_mapping(CudaLaunchConfig config, const dtype* __restrict__ in_offset
 }
 
 
-template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-compute_max_unpooling_backprop(CudaLaunchConfig config, const itype* __restrict__ data_cor, const itype* __restrict__ in_offset, const itype* __restrict__ in_ids, const dtype* __restrict__ in_vals, const itype* __restrict__ out_shape, const itype* __restrict__ hash_table, const itype* __restrict__ hash_values, HashConfig hc, dtype* out_vals)
-{
-  itype id_kd[data_dimension];
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
-    if(x < 0){  //x might overflow when testing extreme case
-      break;
-    }
-    //find maximum for block
-    dtype sum = 0;
-    itype sum_id = in_ids[data_cor[x]];
-    int up_range =  max(data_cor[x], data_cor[x + 1]);
-    for(int i = data_cor[x]; i < up_range; ++i){
-      sum += in_vals[i];
-    }
-    //convert block id to data id
-    decompress_block_id<itype, data_dimension>(sum_id, out_shape, &id_kd[0]);
-    itype data_sum_id;
-    index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape, &data_sum_id);
-    //find corresponding input value:
-    itype hash_result_id;
-    querry_hash_table(&hash_result_id, hash_table, &sum_id, hc); 
-    if(hash_result_id >= 0){
-      int cid = hash_values[hash_result_id];
-      out_vals[cid] = sum;
-    }
-  }
-}
 
 namespace functor {
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
@@ -434,6 +406,35 @@ namespace functor {
     compute_coresponces_values<T, IndiceT, data_dimension><<<configo.block_count, configo.thread_per_block, 0, d.stream()>>>(configo, in_out_map_ids, i_sh.data(), i_val.data(), hasht, hashv, hc, o_val.data());
   }
   
+  template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+  compute_max_unpooling_backprop(CudaLaunchConfig config, const itype* __restrict__ data_cor, const itype* __restrict__ in_offset, const itype* __restrict__ in_ids, const dtype* __restrict__ in_vals, const itype* __restrict__ out_shape, const itype* __restrict__ hash_table, const itype* __restrict__ hash_values, HashConfig hc, dtype* out_vals, const itype* dbg_ids)
+  {
+    itype id_kd[data_dimension];
+    CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+      if(x < 0){  //x might overflow when testing extreme case
+        break;
+      }
+      //find maximum for block
+      dtype sum = 0;
+      itype sum_id = in_ids[data_cor[x]];
+      int up_range =  max(data_cor[x], data_cor[x + 1]);
+      for(int i = data_cor[x]; i < up_range; ++i){
+        sum += in_vals[i];
+      }
+      //convert block id to data id
+      decompress_block_id<itype, data_dimension>(sum_id, out_shape, &id_kd[0]);
+      itype data_sum_id;
+      index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape, &data_sum_id);
+      //find corresponding input value:
+      itype hash_result_id;
+      querry_hash_table(&hash_result_id, hash_table, &data_sum_id, hc); 
+      if(hash_result_id >= 0){
+        int cid = hash_values[hash_result_id];
+        out_vals[cid] = sum;
+      }
+    }
+  }
+
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
   void DirectSparseUnpoolingBackpropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
     const Tensor *in_indices, *in_values, *in_shape, *in_block_channel_mapping;
@@ -510,6 +511,7 @@ namespace functor {
     TensorShape out_val_shape = {(IndiceT) o_ind.dimension(0)};
     OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &backprops));
     auto bp = backprops->flat<T>();
+    cudaMemset(bp.data(), 0, bp.dimension(0) * sizeof(T));
 
     /////
     //5. find correspondences for unpooling and perform unpooling
@@ -519,7 +521,7 @@ namespace functor {
     auto hasht = (IndiceT*) hash_table.flat<int8>().data();
     CudaLaunchConfig configo = GetCudaLaunchConfig(out_count, d);
 
-    compute_max_unpooling_backprop<T, IndiceT, data_dimension><<<configo.block_count, configo.thread_per_block, 0, d.stream()>>>(configo, data_cor, offset, in_out_map_ids_sorted, out_sorted_values, i_sh.data(), hasht, hashv, hc, bp.data());
+    compute_max_unpooling_backprop<T, IndiceT, data_dimension><<<configo.block_count, configo.thread_per_block, 0, d.stream()>>>(configo, data_cor, offset, in_out_map_ids_sorted, out_sorted_values, i_sh.data(), hasht, hashv, hc, bp.data(), i_ind.data());
   }
 } //end namespace functor
 
