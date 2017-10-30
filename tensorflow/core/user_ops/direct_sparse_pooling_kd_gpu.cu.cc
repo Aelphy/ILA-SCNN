@@ -369,7 +369,7 @@ namespace functor {
     //1. create hash table
     HashConfig hc;
     Tensor hash_table, hash_values;
-    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) i_ind.dimension(0), hc, (IndiceT) 1024);
+    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) i_ind.dimension(0), hc);
    
     /////
     //2. allocate temp buffer
@@ -466,7 +466,7 @@ namespace functor {
     //1. create hash table
     HashConfig hc;
     Tensor hash_table, hash_values;
-    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) i_ind.dimension(0), hc, (IndiceT) 1024);
+    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) i_ind.dimension(0), hc);
    
     /////
     //2. allocate temp buffer

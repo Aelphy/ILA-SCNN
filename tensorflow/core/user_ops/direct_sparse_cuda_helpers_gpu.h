@@ -542,7 +542,8 @@ __global__ void precompute_bucket_count(CudaLaunchConfig config,
     }
     dtype h(0);
     hash_function(&h, &(in_values[x]), hc.c0_0, hc.c0_i, hc.bucket_count);
-    bucket_offset[x] = atomicAdd(&bucket_count[h], (dtype) 1);
+    int offset = atomicAdd(&bucket_count[h], (dtype) 1);
+    atomicMax(&bucket_offset[x], offset);
     bucket_id[x] = h;
   }
 }
@@ -678,8 +679,8 @@ __global__ void rehash_buckets(CudaLaunchConfig config,
   dtype bidx = blockIdx.x;
   dtype tidx = threadIdx.x;
   //initialize shared memory
-  __shared__ dtype s[1025];
-  auto &is_good = s[hc.bucket_size];
+  __shared__ dtype s[1026];
+  auto &is_good = s[1025];
   is_good = 1;
 
   //try to insert items into shared memory:
@@ -760,14 +761,15 @@ __global__ void rehash_buckets(CudaLaunchConfig config,
 //not minimal yet, is minimal needed?
 template <typename Device, typename dtype, typename itype>
 int initialize_table(OpKernelContext* ctx, const Device& d, Tensor& hash_table_tensor, Tensor& hash_values_tensor, const itype* in_keys, const dtype* in_vals, 
-    itype data_count, HashConfig& hc, itype bucket_size = 1024)
+    itype data_count, HashConfig& hc)
 {
+  itype bucket_size = 1024;
   if(d.sharedMemPerBlock() / std::max(sizeof(dtype), sizeof(itype)) / 2 < bucket_size) return -1; //error, not enough shared memory, select smaller number of keys
   if(bucket_size > d.maxCudaThreadsPerBlock()) return -2; 
 
-  const float average_bucket_density = 0.7;
-  const float max_bucket_density = 1 - (1 - average_bucket_density) / 2;
-  hc.bucket_count =  ceil(data_count / (0.7 * bucket_size)); //on average 70% filled buckets
+  const float average_bucket_density = 0.5;
+  const float max_bucket_density = 0.8;
+  hc.bucket_count =  ceil(data_count / (average_bucket_density * bucket_size)); //on average 70% filled buckets
   hc.bucket_size = bucket_size;
   hc.cuckoo_max_iterations = 100;
   Tensor tmp1, tmp2, tmp3, tmp4, tmp5;
@@ -798,7 +800,9 @@ int initialize_table(OpKernelContext* ctx, const Device& d, Tensor& hash_table_t
   srand (time(NULL));
 
   itype result_kernel = 1;
-  while(result_kernel == 1){
+  int count = 0;
+  while(result_kernel == 1 && count < hc.cuckoo_max_iterations){
+    count = count + 1;
     cudaMemset(hash_table, 0, hc.bucket_count * hc.bucket_size * sizeof(itype));
     cudaMemset(hash_values, 0, hc.bucket_count * hc.bucket_size * sizeof(dtype));
     cudaMemset(kernel_result, 0, sizeof(itype));
@@ -819,8 +823,10 @@ int initialize_table(OpKernelContext* ctx, const Device& d, Tensor& hash_table_t
     hc.c3_0 = rand() ^ 0xd9f1;
     hc.c3_i = rand() ^ 0x337a;
     init_buckets<<<cfg.block_count, cfg.thread_per_block, 0, d.stream()>>>(cfg, hash_table, bucket_id, bucket_offset, in_keys, hc);
+    cudaDeviceSynchronize();
     cudaMemset(kernel_result, 0, sizeof(itype));
     rehash_buckets<<<cfg3.block_count, cfg3.thread_per_block, 0, d.stream()>>>(cfg3, kernel_result, hash_table, hc);
+    cudaDeviceSynchronize();
     cudaMemcpy(&result_kernel, kernel_result, sizeof(itype), cudaMemcpyDeviceToHost);
   }
 

@@ -51,6 +51,7 @@ tf_custom_op_library(
     srcs =  [
               "direct_sparse_conversions.cc",
               "direct_sparse_conv_kd.cc",
+              "direct_sparse_approx_conv_kd.cc",
               "direct_sparse_pooling_kd.cc",
               "direct_sparse_to_dense.cc",
             ],
@@ -61,6 +62,8 @@ tf_custom_op_library(
               "direct_sparse_conversions_gpu.cu.cc",
               "direct_sparse_conv_kd_gpu.h",
               "direct_sparse_conv_kd_gpu.cu.cc",
+              "direct_sparse_approx_conv_kd_gpu.h",
+              "direct_sparse_approx_conv_kd_gpu.cu.cc",
               "direct_sparse_pooling_kd_gpu.h",
               "direct_sparse_pooling_kd_gpu.cu.cc",
               "direct_sparse_to_dense_gpu.h",
