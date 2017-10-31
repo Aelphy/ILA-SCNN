@@ -33,7 +33,7 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_cl
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   sc1 = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, 0.8, "K-ABS", name = scope + "sc1")
   sd = ld.create_direct_sparse_to_dense(sc1, dim)
-  sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
+  sd_flat = tf.reshape(sd, [batch_size, total_size])
   if False:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
   else:

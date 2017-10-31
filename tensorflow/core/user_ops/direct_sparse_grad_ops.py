@@ -12,11 +12,8 @@ def _DirectSparseConvKDGrad(op, *grads):
     unused_output_indices_grad: the incoming gradients of the output indices
     output_values_grad: the incoming gradients of the output values
   Returns:
-    Gradient for each of the 6 input tensors:
-      (input_indices, input_values, input_shape, filter_indices, filter_value, filter_shape)
-    The gradients for input_indices, input_shape, filter_indices and filter_shape are None.
   """
-  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_conv_kd_backprop(op.inputs[0],
+  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
                                                 op.inputs[3],
@@ -33,7 +30,7 @@ def _DirectSparseConvKDGrad(op, *grads):
                                                 padding=op.get_attr("padding"),
                                                 dim=op.get_attr("dim"),
                                                 max_density=op.get_attr("max_density"),
-                                                filter_type=op.get_attr("filter_type")),
+                                                filter_type=op.get_attr("filter_type"))
   return [None, 
           input_grads,
           None,
@@ -45,7 +42,7 @@ def _DirectSparseConvKDGrad(op, *grads):
 
 @ops.RegisterGradient("DirectSparseConvKDInput")
 def _DirectSparseConvKDInputGrad(op, *grads):
-  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_conv_kd_backprop(op.inputs[0],
+  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
                                                 op.inputs[3],
@@ -62,7 +59,7 @@ def _DirectSparseConvKDInputGrad(op, *grads):
                                                 padding=op.get_attr("padding"),
                                                 dim=op.get_attr("dim"),
                                                 max_density=op.get_attr("max_density"),
-                                                filter_type=op.get_attr("filter_type")),
+                                                filter_type=op.get_attr("filter_type"))
   return [None,
           input_grads,
           None,
@@ -75,7 +72,7 @@ def _DirectSparseConvKDInputGrad(op, *grads):
 
 @ops.RegisterGradient("DirectSparseConvKDFilter")
 def _DirectSparseConvKDFilterGrad(op, *grads):
-  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_conv_kd_backprop(op.inputs[0],
+  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
                                                 op.inputs[3],
@@ -92,7 +89,7 @@ def _DirectSparseConvKDFilterGrad(op, *grads):
                                                 padding=op.get_attr("padding"),
                                                 dim=op.get_attr("dim"),
                                                 max_density=op.get_attr("max_density"),
-                                                filter_type=op.get_attr("filter_type")),
+                                                filter_type=op.get_attr("filter_type"))
   return [None,
           None,
           None,
