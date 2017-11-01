@@ -21,7 +21,7 @@ import direct_sparse_grad_ops
 from tensorflow.python import debug as tf_debug
 import direct_sparse_layer_definition as ld
 
-def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn8-"):
+def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn8-", initializer = None, regularizer = None):
   strides = [1,1,1,1,1]
   padding = "SAME"
   dim = 5
@@ -31,23 +31,25 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_cl
   for i in range(1, len(tensor_in_sizes)): #skip batch size
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
-  sc1 = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, 0.8, "K-ABS", name = scope + "sc1")
+  sc1 = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, 0.8, "K-ABS", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
   sd = ld.create_direct_sparse_to_dense(sc1, dim)
   sd_flat = tf.reshape(sd, [batch_size, total_size])
-  if False:
+  if train_labels != None:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
   else:
     conv_out = sd_flat
-  fc512 = tf.layers.dense(conv_out, 1024)
-  fc10 = tf.layers.dense(fc512, num_classes)
+  fc512 = tf.layers.dense(conv_out, 1024, name="dense2")
+  fc10 = tf.layers.dense(fc512, num_classes, name="dense1")
   #if train:
-  sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
-  #else:
+  if train_labels != None:
+    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
+  else:
+    sd_out = None
   p_sd_out = tf.nn.softmax(logits=fc10)
   return [sd_out, p_sd_out]
 
-def model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = False, train_labels = None, approx = True):
-  '''strides = [1,1,1,1,1]
+def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn256-", initializer = None, regularizer = None):
+  strides = [1,1,1,1,1]
   padding = "SAME"
   dim = 5
   pooling_sizes = [1,2,2,2,1]
@@ -55,30 +57,45 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, var_list, train = False, 
   total_size = 1
   for i in range(1, len(tensor_in_sizes)): #skip batch size
     total_size = total_size * tensor_in_sizes[i]
-  sc1 = ld.create_sparse_conv_relu([3,3,3,1,8], rho_filter, strides, padding, approx, dim, var_list, sparse_data, name = "sc1")
-  sp1 = ld.layer_to_sparse_tensor(ld.create_sparse_pooling_layer(sc1, pooling_sizes, dim))
-  sc2 = ld.create_sparse_conv_relu([3,3,3,8,16], rho_filter, strides, padding, approx, dim, var_list, sp1, name = "sc2")
-  sp2 = ld.layer_to_sparse_tensor(ld.create_sparse_pooling_layer(sc2, pooling_sizes, dim))
-  sc3 = ld.create_sparse_conv_relu([3,3,3,16,24], rho_filter, strides, padding, approx, dim, var_list, sp2, name = "sc3")
-  sp3 = ld.layer_to_sparse_tensor(ld.create_sparse_pooling_layer(sc3, pooling_sizes, dim))
-  sc4 = ld.create_sparse_conv_relu([3,3,3,24,32], rho_filter, strides, padding, approx, dim, var_list, sp3, name = "sc4")
-  sp4 = ld.layer_to_sparse_tensor(ld.create_sparse_pooling_layer(sc4, pooling_sizes, dim))
-  sc5 = ld.create_sparse_conv_relu([3,3,3,32,40], rho_filter, strides, padding, approx, dim, var_list, sp4, name = "sc5")
-  sp5 = ld.layer_to_sparse_tensor(ld.create_sparse_pooling_layer(sc5, pooling_sizes, dim))
-  sc6 = ld.layer_to_sparse_tensor(ld.create_sparse_conv_layer([3,3,3,40,48], rho_filter, strides, padding, approx, dim, var_list, sp5, name = "sc6"))
-  s_out = sc6
-  sd = ld.create_direct_sparse_to_dense(s_out)
-  sd_flat = tf.reshape(sd, [batch_size, int(total_size * 48 / 32768)])
+  sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
+  d1 = 0.01
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, 0.01, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, 0.01, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, 0.01, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  d2 = 0.03
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  d3 = 0.05
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  net = ld.create_direct_sparse_to_dense(net)
+  net = reshape(net, [batch_size, 32, 32, 32, 24])
+  #dense layers
+  net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc10", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc11", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc12", initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.max_pooling3d(inputs=net, pool_size=pooling_sizes, padding="same")
+  net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc13", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc14", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc15", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.max_pooling3d(inputs=net, pool_size=pooling_sizes, padding="same")
+  net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc16", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc17", kernel_initializer=initializer, kernel_regularizer=regularizer)
+  net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", name = scope + "sc18")
+  if train_labels != None:
+    net = tf.nn.dropout(net, 0.5, name="dropout")
+  net = tf.reshape(net, [batch_size, 24576])
+  net = tf.layers.dense(net, 512)
+  net = tf.layers.dense(net, 10)
   if train:
-    conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
+    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=net, labels=train_labels, name = "softmax_loss"))
   else:
-    conv_out = sd_flat
-  fc512 = tf.layers.dense(conv_out, 512)
-  fc10 = tf.layers.dense(fc512, 10)
-  if train:
-    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
-  else:
-    sd_out = tf.nn.softmax(logits=fc10)
-  return sd_out'''
-  return sparse_data
+    sd_out = None
+  p_sd_out = tf.nn.softmax(logits=fc10)
+  return [sd_out, p_sd_out]
 
