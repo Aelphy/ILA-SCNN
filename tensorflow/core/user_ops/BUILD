@@ -54,6 +54,7 @@ tf_custom_op_library(
               "direct_sparse_approx_conv_kd.cc",
               "direct_sparse_pooling_kd.cc",
               "direct_sparse_to_dense.cc",
+              "evaluate_confusion_matrix.cc",
             ],
 
     gpu_srcs = [

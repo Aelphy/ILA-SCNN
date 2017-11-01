@@ -15,6 +15,7 @@ import tensorflow as tf
 import random
 import numpy as np
 import time
+import direct_sparse_regularizers as reg
 import sparse_tools as sp
 import os
 from tensorflow.python import debug as tf_debug
@@ -47,9 +48,9 @@ sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="spa
 #initialize graph
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
 if res == 8:
-  [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes)
+  [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, regularizer = reg.biased_l2_regularizer(0.1, -0.1))
 elif res == 256:
-  [sd_loss, test_loss] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes)
+  [sd_loss, test_loss] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, regularizer = reg.biased_l2_regularizer(0.1, -0.1))
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
 sd_grads = sd_train_op.compute_gradients(sd_loss)

@@ -1,10 +1,8 @@
-#include <omp.h>
 #include <map>
 #include <sstream>
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
-#include "sparse_tensor_sparse_kernel_dense_conv_kd.h"
 
 
 REGISTER_OP("EvaluateConfusionMatrix")

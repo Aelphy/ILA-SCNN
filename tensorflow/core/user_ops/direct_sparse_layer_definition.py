@@ -30,16 +30,20 @@ def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, n
     sd = sparse_filter
     return sc_module.direct_sparse_filter_conversion(sd.indices, sd.values, sd.dense_shape, tensor_in_shape, dim=dim)
 
-def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", init_mean = 0, init_stddev = 1):
+def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, regularizer=None):
   with tf.variable_scope(name):
+    dense_filter_shape = np.prod(filter_in_sizes)
     sd = sparse_data
-    dense_filter = tf.Variable(tf.random_normal(filter_in_sizes, init_mean, init_stddev), trainable = True)
+    dense_filter = tf.ones(filter_in_sizes)
     idx = tf.where(tf.not_equal(dense_filter, 0))
     # Use tf.shape(a_t, out_type=tf.int64) instead of a_t.get_shape() if tensor shape is dynamic
     sparse_filter_tensor = tf.SparseTensor(idx, tf.gather_nd(dense_filter, idx), dense_filter.get_shape())
     sf = create_sparse_filter_to_direct_sparse(sparse_filter_tensor, sd.out_shape, dim, name);
-    print(sd.out_shape, sf.out_shape, dim)
-    return sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, sf.out_indices, sf.out_values, sf.out_shape, sf.out_channel_mapping, strides, padding, dim, max_density, filter_type);
+    f_ind = tf.get_variable('filter_indices', initializer=sf.out_indices, trainable = False, validate_shape=False)
+    f_sh = tf.get_variable('filter_shape', initializer=sf.out_shape, trainable = False, validate_shape=False)
+    f_map = tf.get_variable('filter_channel_mapping', initializer=sf.out_channel_mapping, trainable = False, validate_shape=False)
+    f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=regularizer, shape=[dense_filter_shape], trainable = True, validate_shape=True)
+    return sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type);
 
 def create_sparse_pooling_layer(sparse_data, pooling_sizes, dim):
   sd = sparse_data
