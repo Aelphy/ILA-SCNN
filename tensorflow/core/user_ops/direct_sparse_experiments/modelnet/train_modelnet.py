@@ -11,6 +11,7 @@ from tensorflow.python.ops import gradient_checker
 from tensorflow.python.ops import nn_ops
 import tensorflow.python.ops.nn_grad  # pylint: disable=unused-import
 from tensorflow.python.platform import test
+from tensorflow.python import debug as tf_debug
 import tensorflow as tf
 import random
 import numpy as np
@@ -21,11 +22,10 @@ import os
 from tensorflow.python import debug as tf_debug
 import modelnet_models as models
 from read_modelnet_models import ModelnetReader
-
 #just a quick test, no nice code
 
-res = 8
-data_location = '/home/thackel/Desktop/ModelNet10'
+res = 256
+data_location = '/scratch/thackel/ModelNet10'
 pretrained_model = ''
 if res == 8:
   model_location = '/home/thackel/cnn_models/modelnet10_8'
@@ -33,10 +33,12 @@ elif res == 256:
   model_location = '/home/thackel/cnn_models/modelnet10_256'
 learning_rate = 0.01
 approx = True
-rho_data = 0.01
+rho_data = 1 / (3 * res)
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
+print("started construction data reader")
 reader = ModelnetReader(data_location, res, 0, batch_size)
+print("data reader constructed")
 num_classes = reader.getNumClasses()
 batch_label_sizes = [batch_size, num_classes]
 max_epochs = 1000
@@ -47,10 +49,12 @@ sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="spa
 
 #initialize graph
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
+print("started model generation")
 if res == 8:
   [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, regularizer = reg.biased_l2_regularizer(0.1, -0.1))
 elif res == 256:
   [sd_loss, test_loss] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, regularizer = reg.biased_l2_regularizer(0.1, -0.1))
+print("model generated")
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
 sd_grads = sd_train_op.compute_gradients(sd_loss)
@@ -72,9 +76,11 @@ random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_sh
 [label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, batch_label_sizes)
 random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 with tf.Session(config=config) as sess:
+  sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+  print("writing graph")
+  writer = tf.summary.FileWriter("/tmp/test", sess.graph)
   trainable = tf.trainable_variables()
   print("trainable: ", trainable)
-  writer = tf.summary.FileWriter("/tmp/test", sess.graph)
   feed_dict={sparse_data: tf.SparseTensorValue(data_ind, data_val, data_sh), dense_labels: random_dense_label}
   sess.run(initall, feed_dict=feed_dict)
   if len(pretrained_model) > 0:
