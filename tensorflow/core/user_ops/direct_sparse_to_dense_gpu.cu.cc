@@ -38,6 +38,7 @@ namespace functor {
     cudaMemcpy(&data_entry_count, i_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
     std::vector<IndiceT> cpu_shape(data_dimension);
     cudaMemcpy(&cpu_shape[0], i_sh.data(), (data_dimension) * sizeof(IndiceT), cudaMemcpyDeviceToHost);
+    //LOG(INFO) << "sparse 2 dense " << data_entry_count << " : " << cpu_shape[0] << " " << cpu_shape[1] << " " << cpu_shape[2] << " " << cpu_shape[3] << " " << cpu_shape[4] << std::endl;
 
     /////
     //1. allocate output tensors

@@ -43,6 +43,8 @@ num_classes = reader.getNumClasses()
 batch_label_sizes = [batch_size, num_classes]
 max_epochs = 1000
 dim = 5
+initializer = tf.truncated_normal_initializer(0.01, 0.5)
+regularizer =  reg.biased_l2_regularizer(0.005, -0.005)
 
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
 sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="sparse_placeholder")
@@ -51,9 +53,9 @@ sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="spa
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
 print("started model generation")
 if res == 8:
-  [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, regularizer = reg.biased_l2_regularizer(0.1, -0.1))
+  [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
 elif res == 256:
-  [sd_loss, test_loss] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, regularizer = reg.biased_l2_regularizer(0.1, -0.1))
+  [sd_loss, test_loss, n1, n2, n3, n4, n5] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
 print("model generated")
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss)
@@ -100,12 +102,14 @@ with tf.Session(config=config) as sess:
       reader.start()
       values_ = np.array(batch[1], dtype=np.float32)
       indices_ = np.array(batch[0], dtype =np.int64)
-      print(indices_, values_, batch[2])
+      #print(indices_, values_, batch[2])
       feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
       t_train1 = time.time()
       #perform training
-      [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
+      [_, loss_val, test_loss_, r1, r2, r3, r4, r5] = sess.run([sd_train, sd_loss, test_loss, n1, n2, n3, n4, n5], feed_dict=feed_dict)
       t_train2 = time.time()
+      #print(r1, r2)
+      #print("loss val: ", loss_val)
       av_loss = av_loss + loss_val
       batches = batches + 1
     t2 = time.time()

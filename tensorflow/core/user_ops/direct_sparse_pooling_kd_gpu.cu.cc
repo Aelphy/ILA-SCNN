@@ -180,6 +180,7 @@ namespace functor {
     int data_entry_count;
     cudaMemcpy(&data_entry_count, i_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
    
+    //LOG(DEBUG) << "pooling0 " << data_entry_count; 
     //TODO: filter (per channel)
     //TODO: no atomic max for floating point values! (suboptimal implementation with radix sort) :/
  
@@ -282,6 +283,7 @@ namespace functor {
     auto bcount = i_mapping.dimension(0);
     int data_entry_count;
     cudaMemcpy(&data_entry_count, i_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
+    //LOG(DEBUG) << "pooling bp" << data_entry_count; 
    
     //TODO: filter (per channel)
     //TODO: no atomic max for floating point values! (suboptimal implementation with radix sort) :/

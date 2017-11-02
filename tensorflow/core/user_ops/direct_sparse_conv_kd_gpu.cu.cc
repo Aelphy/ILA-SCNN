@@ -333,6 +333,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   const IndiceT batch_dense_size = in_channel_count * batch_count;
   const IndiceT tensor_dense_size = channel_dense_size * batch_dense_size;
 
+  //LOG(INFO) << "conv " << data_entry_count << " " << double(data_entry_count) / tensor_dense_size << " : " << cpu_in_shape[0] << " " << cpu_in_shape[1] << " " << cpu_in_shape[2] << " " << cpu_in_shape[3] << " " << cpu_in_shape[4] << std::endl;
   const IndiceT *in_block_ids = i_ind.data();
   const T *in_block_vals = i_val.data();
   const int* input_block_mapping = in_block_ptr_t->flat<int>().data();
@@ -430,7 +431,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       } else if(filter_type == "K-RELU"){
         relu_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer, in_channel_ids_buffer, result_dense_count);
       } else {
-        LOG(ERROR) << "unsupported filter type: " << filter_type << ". Only 'K-ABS' and 'K-RELU' are supported.";
+        //LOG(ERROR) << "unsupported filter type: " << filter_type << ". Only 'K-ABS' and 'K-RELU' are supported.";
         return;
       }
       cudaStreamSynchronize(d.stream());
@@ -607,6 +608,7 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   std::vector<IndiceT> cpu_in_shape(data_dimension);
   cudaMemcpy(&cpu_in_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  //LOG(INFO) << "conv bp" << data_entry_count << " : " << cpu_in_shape[0] << " " << cpu_in_shape[1] << " " << cpu_in_shape[2] << " " << cpu_in_shape[3] << " " << cpu_in_shape[4] << std::endl;
   IndiceT channel_dense_size = 1;
   int max_dim = 0;
   for(size_t i = 0; i < data_dimension - 2; ++i){

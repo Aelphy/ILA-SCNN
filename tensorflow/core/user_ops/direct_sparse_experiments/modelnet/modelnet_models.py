@@ -59,22 +59,22 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_
   for i in range(1, len(tensor_in_sizes)): #skip batch size
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
-  d1 = 0.05
+  d1 = 0.01
   net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
-  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
-  d2 = 0.015
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
+  n1 = net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  d2 = 0.03
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
-  d3 = 0.02
+  d3 = 0.07
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
-  net = ld.create_direct_sparse_to_dense(net, dim)
+  n2 = net = ld.create_direct_sparse_to_dense(net, dim)
   net = tf.reshape(net, [batch_size, 32, 32, 32, 24])
   #dense layers
   net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc10", kernel_initializer=initializer, kernel_regularizer=regularizer)
@@ -87,16 +87,16 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_
   net = tf.layers.max_pooling3d(inputs=net, pool_size=dpooling_sizes, strides=2, padding="same", name="dp2")
   net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc16", kernel_initializer=initializer, kernel_regularizer=regularizer)
   net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc17", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", name = scope + "sc18")
+  n3 = net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", name = scope + "sc18")
   if train_labels != None:
     net = tf.nn.dropout(net, 0.5, name="dropout")
   net = tf.reshape(net, [batch_size, -1])
-  net = tf.layers.dense(net, 512)
-  net = tf.layers.dense(net, num_classes)
+  n4 = net = tf.layers.dense(net, 512)
+  n5 = net = tf.layers.dense(net, num_classes)
   if train_labels == None:
     sd_out = None
   else:
     sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=net, labels=train_labels, name = "softmax_loss"))
   p_sd_out = tf.nn.softmax(logits=net)
-  return [sd_out, p_sd_out]
+  return [sd_out, p_sd_out, n1, n2, n3, n4, n5]
 
