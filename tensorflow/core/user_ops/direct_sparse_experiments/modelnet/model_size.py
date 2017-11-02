@@ -52,7 +52,9 @@ psc6 = td * 48 * 27 * 3
 pfc1 = td * (512 * 48 * b * pow(r6,3))
 pfc2 = td * (512 * 10)
 
-parameter_size = (psc1 + psc2 + psc3 +psc4 + psc5 + psc6 + pfc1 + pfc2) / float(pow(10,9))
+cparameter_size = (psc1 + psc2 + psc3 +psc4 + psc5 + psc6) / float(pow(10,9))
+fparameter_size = (pfc1 + pfc2) / float(pow(10,9))
 
-print("parameter size [GB]", parameter_size)
-print("total size [GB]: ", dense_size + sparse_size + parameter_size)
+print("convolutional parameter size [GB]", cparameter_size)
+print("dense parameter size [GB]", fparameter_size)
+print("total size [GB]: ", dense_size + sparse_size + cparameter_size + fparameter_size)

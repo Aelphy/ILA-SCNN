@@ -332,6 +332,8 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   const IndiceT in_channel_count = cpu_in_shape[data_dimension - 1];
   const IndiceT batch_dense_size = in_channel_count * batch_count;
   const IndiceT tensor_dense_size = channel_dense_size * batch_dense_size;
+  const IndiceT result_count = ceil(tensor_dense_size * max_density);
+  const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
 
   //LOG(INFO) << "conv " << data_entry_count << " " << double(data_entry_count) / tensor_dense_size << " : " << cpu_in_shape[0] << " " << cpu_in_shape[1] << " " << cpu_in_shape[2] << " " << cpu_in_shape[3] << " " << cpu_in_shape[4] << std::endl;
   const IndiceT *in_block_ids = i_ind.data();
@@ -347,6 +349,22 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   std::vector<int> cpu_filter_channel_mapping(out_channel_count * in_channel_count + 1);
   cudaMemcpy(&cpu_filter_channel_mapping[0], filter_channel_mapping, (out_channel_count * in_channel_count + 1) * sizeof(int), cudaMemcpyDeviceToHost);
 
+  Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL;
+  TensorShape out_ind_shape = {(IndiceT) result_count, (IndiceT) 1};
+  TensorShape out_val_shape = {(IndiceT) result_count};
+  TensorShape out_sh_shape = {(IndiceT) data_dimension};
+  TensorShape out_count_shape = {(IndiceT) (batch_count * out_channel_count + 1)};
+  OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
+  OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
+  OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
+  OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_count_shape, &data_count));
+  auto o_sh = out_shape->flat<IndiceT>();
+  auto o_ind = out_indices->matrix<IndiceT>();
+  auto o_val = out_values->flat<T>();
+  auto data_offset = data_count->flat<int>();
+  int* data_offset_ptr = data_offset.data();
+  cudaMemset(data_offset_ptr, 0, (batch_count * out_channel_count + 1) * sizeof(int)); //stores the dense result of the computed output channel in buffer
+
   /////
   //1. Compute out shape
   //TODO
@@ -355,6 +373,10 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   allocate_tensor(context, out_sh_tensor, &out_sh,  data_dimension);
   cudaMemcpy(out_sh, i_sh.data(), (data_dimension - 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(out_sh + data_dimension - 1, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  if(data_entry_count <= 0){
+    LOG(WARNING) << "encountered zero tenso";
+    return;
+  }
 
   /////
   //2. decompress 1d to kd indice in temporary buffer
@@ -375,8 +397,6 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   CudaLaunchConfig config_rbuffer = GetCudaLaunchConfig(channel_dense_size * max_density, d);
   Tensor channel_offset_tensor, result_block_count_tensor, result_dense_count_tensor;
   
-  const IndiceT result_count = ceil(tensor_dense_size * max_density);
-  const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
   int *result_block_count, *result_dense_count;
   allocate_tensor(context, result_block_count_tensor, &result_block_count, 1);
   allocate_tensor(context, result_dense_count_tensor, &result_dense_count, 1);
@@ -389,21 +409,6 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   allocate_tensor(context, in_channel_ids_tensor, &in_channel_ids_buffer, channel_dense_size);
   allocate_tensor(context, sorted_channel_ids_tensor, &sorted_channel_ids_buffer, channel_dense_size);
   allocate_tensor(context, tmp_channel_tensor, &tmp_channel_buffer, channel_dense_size);
-  Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL;
-  TensorShape out_ind_shape = {(IndiceT) result_count, (IndiceT) 1};
-  TensorShape out_val_shape = {(IndiceT) result_count};
-  TensorShape out_sh_shape = {(IndiceT) data_dimension};
-  TensorShape out_count_shape = {(IndiceT) (batch_count * out_channel_count + 1)};
-  OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
-  OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
-  OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
-  OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_count_shape, &data_count));
-  auto o_sh = out_shape->flat<IndiceT>();
-  auto o_ind = out_indices->matrix<IndiceT>();
-  auto o_val = out_values->flat<T>();
-  auto data_offset = data_count->flat<int>();
-  int* data_offset_ptr = data_offset.data();
-  cudaMemset(data_offset_ptr, 0, (batch_count * out_channel_count + 1) * sizeof(int)); //stores the dense result of the computed output channel in buffer
   for(int i = 0; i < batch_count; ++i){
     for(int j = 0; j < out_channel_count; ++j){
       cudaStreamSynchronize(d.stream());
@@ -617,6 +622,8 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   const IndiceT batch_count = cpu_in_shape[0];
   const IndiceT in_channel_count = cpu_in_shape[data_dimension - 1];
   const IndiceT tensor_dense_size = channel_dense_size * batch_count * in_channel_count;
+  const IndiceT result_count = ceil(tensor_dense_size * max_density);
+  const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
 
   const IndiceT *in_block_ids = i_ind.data();
   const T *in_block_vals = i_val.data();
@@ -631,6 +638,20 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   const IndiceT* filter_sorted_ind_1d = f_ind.data();
   std::vector<int> cpu_filter_channel_mapping(out_channel_count * in_channel_count + 1);
   cudaMemcpy(&cpu_filter_channel_mapping[0], filter_channel_mapping, (out_channel_count * in_channel_count + 1) * sizeof(int), cudaMemcpyDeviceToHost);
+
+  Tensor *input_grads = NULL, *filter_grads = NULL;
+  TensorShape out_i_shape = {(IndiceT) i_val.dimension(0)};
+  TensorShape out_f_shape = {(IndiceT) f_val.dimension(0)};
+  OP_REQUIRES_OK(context, context->allocate_output("input_grads", out_i_shape, &input_grads));
+  OP_REQUIRES_OK(context, context->allocate_output("filter_grads", out_f_shape, &filter_grads));
+  auto in_grads = input_grads->flat<T>();
+  auto f_grads = filter_grads->flat<T>();
+  cudaMemset(in_grads.data(), 0, i_val.dimension(0) * sizeof(T));
+  cudaMemset(f_grads.data(), 0, f_val.dimension(0) * sizeof(T));
+  
+  if(data_entry_count <= 0){
+    return;
+  }
 
   /////
   //1. Compute out shape
@@ -659,8 +680,6 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   CudaLaunchConfig config_rbuffer = GetCudaLaunchConfig(channel_dense_size * max_density, d);
   Tensor channel_offset_tensor, result_block_count_tensor, result_dense_count_tensor;
   
-  const IndiceT result_count = ceil(tensor_dense_size * max_density);
-  const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
   int *result_block_count, *result_dense_count;
   allocate_tensor(context, result_block_count_tensor, &result_block_count, 1);
   allocate_tensor(context, result_dense_count_tensor, &result_dense_count, 1);
@@ -668,15 +687,6 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   Tensor channel_buffer_tensor;
   T* channel_buffer = 0;
   allocate_tensor(context, channel_buffer_tensor, &channel_buffer, channel_dense_size);
-  Tensor *input_grads = NULL, *filter_grads = NULL;
-  TensorShape out_i_shape = {(IndiceT) i_val.dimension(0)};
-  TensorShape out_f_shape = {(IndiceT) f_val.dimension(0)};
-  OP_REQUIRES_OK(context, context->allocate_output("input_grads", out_i_shape, &input_grads));
-  OP_REQUIRES_OK(context, context->allocate_output("filter_grads", out_f_shape, &filter_grads));
-  auto in_grads = input_grads->flat<T>();
-  auto f_grads = filter_grads->flat<T>();
-  cudaMemset(in_grads.data(), 0, i_val.dimension(0) * sizeof(T));
-  cudaMemset(f_grads.data(), 0, f_val.dimension(0) * sizeof(T));
   for(int i = 0; i < batch_count; ++i){
     for(int j = 0; j < out_channel_count; ++j){
       cudaStreamSynchronize(d.stream());

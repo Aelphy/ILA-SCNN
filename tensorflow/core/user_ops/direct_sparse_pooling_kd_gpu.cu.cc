@@ -183,7 +183,19 @@ namespace functor {
     //LOG(DEBUG) << "pooling0 " << data_entry_count; 
     //TODO: filter (per channel)
     //TODO: no atomic max for floating point values! (suboptimal implementation with radix sort) :/
- 
+    Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *out_block_mapping = NULL;
+    if(data_entry_count <= 0){
+      TensorShape out_ind_shape = {0};
+      TensorShape out_val_shape = {0};
+      TensorShape out_block1_shape = {(IndiceT) bcount};
+      OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
+      OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_block1_shape, &out_block_mapping));
+      OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
+      auto o_mapping = out_block_mapping->flat<int>();
+      cudaMemset(o_mapping.data(), 0, bcount * sizeof(IndiceT));
+      LOG(WARNING) << "zero tensor encounterd";
+      return;
+    }
     /////
     //1. allocate temp buffer
     Tensor in_out_map_tensor, in_out_map_ids_sorted_tensor, out_sorted_values_tensor, strides_tensor, offset_tensor, batch_channel_count_tensor; 
@@ -203,7 +215,6 @@ namespace functor {
     //2. write output shape
     std::vector<IndiceT> cpu_shape(data_dimension);
     cudaMemcpy(&cpu_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
-    Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *out_block_mapping = NULL;
     TensorShape out_sh_shape = {(IndiceT) data_dimension};
     OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
     auto o_sh = out_shape->flat<IndiceT>();
@@ -368,6 +379,13 @@ namespace functor {
     cudaMemcpy(&data_entry_count, o_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
     
     /////
+    //4. allocate output tensors 
+    Tensor *out_values;
+    TensorShape out_val_shape = {(IndiceT) o_ind.dimension(0)};
+    OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
+    auto o_val = out_values->flat<T>();
+    if(data_entry_count <= 0) return;
+    /////
     //1. create hash table
     HashConfig hc;
     Tensor hash_table, hash_values;
@@ -390,13 +408,6 @@ namespace functor {
     compute_voxel_id1D__<IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, o_ind.data(), 
       o_sh.data(), i_sh.data(), in_out_map_ids, strides_);
     cudaStreamSynchronize(d.stream());
-
-    /////
-    //4. allocate output tensors 
-    Tensor *out_values;
-    TensorShape out_val_shape = {(IndiceT) o_ind.dimension(0)};
-    OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
-    auto o_val = out_values->flat<T>();
 
     /////
     //5. find correspondences for unpooling and perform unpooling
@@ -465,6 +476,15 @@ namespace functor {
     cudaMemcpy(&data_entry_count, o_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
     
     /////
+    //4. allocate output tensors 
+    Tensor *backprops;
+    TensorShape out_val_shape = {(IndiceT) o_ind.dimension(0)};
+    OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &backprops));
+    auto bp = backprops->flat<T>();
+    cudaMemset(bp.data(), 0, bp.dimension(0) * sizeof(T));
+    if(data_entry_count <= 0) return;
+    
+    /////
     //1. create hash table
     HashConfig hc;
     Tensor hash_table, hash_values;
@@ -507,14 +527,6 @@ namespace functor {
     compute_coresponces<IndiceT, data_dimension><<<config1.block_count, config1.thread_per_block, 0, d.stream()>>>(config1, unique_mask, offset, data_cor, out_count);
       cudaStreamSynchronize(d.stream());
    
-    /////
-    //4. allocate output tensors 
-    Tensor *backprops;
-    TensorShape out_val_shape = {(IndiceT) o_ind.dimension(0)};
-    OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &backprops));
-    auto bp = backprops->flat<T>();
-    cudaMemset(bp.data(), 0, bp.dimension(0) * sizeof(T));
-
     /////
     //5. find correspondences for unpooling and perform unpooling
 

@@ -52,8 +52,10 @@ namespace functor {
     OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
     auto o_val = out_values->flat<T>();
     cudaMemset(o_val.data(), 0, total_count * sizeof(T));
-    CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
-    sparse_to_dense<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), i_val.data(), i_sh.data(), o_val.data());
+    if(data_entry_count > 0){
+      CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
+      sparse_to_dense<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), i_val.data(), i_sh.data(), o_val.data());
+    }
   }
   
   template<typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
@@ -94,8 +96,10 @@ namespace functor {
     OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &out_values));
     auto o_val = out_values->flat<T>();
     cudaMemset(o_val.data(), 0, i_ind.dimension(0) * sizeof(T));
-    CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
-    sparse_to_dense_backprops<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), grads.data(), i_sh.data(), o_val.data());
+    if(data_entry_count > 0){
+      CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
+      sparse_to_dense_backprops<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), grads.data(), i_sh.data(), o_val.data());
+    }
   }
 
   template<typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
@@ -160,7 +164,14 @@ namespace functor {
     Tensor block_count_tensor;
     allocate_tensor(context, block_count_tensor, &block_count, channel_count * batch_count + 1);
     cudaMemset(block_count, 0, (batch_count * channel_count + 1) * sizeof(IndiceT));
-    
+    if(dense_entry_count <= 0){
+      Tensor *out_indices, *out_values;
+      TensorShape out_val_shape = {(IndiceT) 0};
+      TensorShape out_ind_shape = {(IndiceT) 0};
+      OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
+      OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
+      return;
+    }
     CudaLaunchConfig config = GetCudaLaunchConfig(dense_entry_count, d);
     compute_block_channel_count<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_val.data(), o_sh.data(), block_count);
     cudaStreamSynchronize(d.stream());
@@ -224,8 +235,10 @@ namespace functor {
     OP_REQUIRES_OK(context, context->allocate_output("backprops", out_val_shape, &out_values));
     auto o_val = out_values->flat<T>();
     cudaMemset(o_val.data(), 0, dense_entry_count * sizeof(T));
-    CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
-    dense_to_sparse_backprops<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), grads.data(), i_sh.data(), o_val.data());
+    if(data_entry_count > 0){
+      CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
+      dense_to_sparse_backprops<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), grads.data(), i_sh.data(), o_val.data());
+    }
   }
 } //end namespace functor
 
