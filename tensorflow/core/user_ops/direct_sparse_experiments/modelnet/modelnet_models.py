@@ -59,17 +59,17 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_
   for i in range(1, len(tensor_in_sizes)): #skip batch size
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
-  d1 = 0.01
+  d1 = 0.05
   net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
-  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
-  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
+  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
+  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
-  d2 = 0.03
+  d2 = 0.015
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
-  d3 = 0.05
+  d3 = 0.02
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)

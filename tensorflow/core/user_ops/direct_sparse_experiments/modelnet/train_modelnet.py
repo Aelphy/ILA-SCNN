@@ -63,7 +63,7 @@ config = tf.ConfigProto(
 #device_count = {'GPU': 0}
 )
 
-config.gpu_options.per_process_gpu_memory_fraction = 0.85
+config.gpu_options.per_process_gpu_memory_fraction = 0.8
 
 saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES), max_to_keep=100)
 initall = tf.global_variables_initializer()
