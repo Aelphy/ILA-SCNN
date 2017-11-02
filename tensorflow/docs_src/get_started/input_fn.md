@@ -11,7 +11,7 @@ median house values.
 The `input_fn` is used to pass feature and target data to the `train`,
 `evaluate`, and `predict` methods of the `Estimator`.
 The user can do feature engineering or pre-processing inside the `input_fn`.
-Here's an example taken from the @{$estimator$tf.estimator Quickstart tutorial}:
+Here's an example taken from the @{$get_started/estimator$tf.estimator Quickstart tutorial}:
 
 ```python
 import numpy as np
@@ -249,7 +249,7 @@ here](https://www.tensorflow.org/code/tensorflow/examples/tutorials/input_fn/bos
 
 ### Importing the Housing Data
 
-To start, set up your imports (including `pandas` and `tensorflow`) and @{$monitors#enabling-logging-with-tensorflow$set logging verbosity} to
+To start, set up your imports (including `pandas` and `tensorflow`) and set logging verbosity to
 `INFO` for more detailed log output:
 
 ```python

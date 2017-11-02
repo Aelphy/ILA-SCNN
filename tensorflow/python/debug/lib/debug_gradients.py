@@ -24,8 +24,9 @@ import uuid
 import six
 
 from tensorflow.python.debug.lib import debug_data
-from tensorflow.python.debug.ops import gen_debug_ops
+from tensorflow.python.debug.lib import debug_graphs
 from tensorflow.python.framework import ops
+from tensorflow.python.ops import gen_array_ops
 from tensorflow.python.ops import variables
 
 _GRADIENT_DEBUG_TAG = "gradient_debug_"
@@ -34,7 +35,7 @@ _gradient_debuggers = {}
 
 
 def _tensor_to_grad_debug_op_name(tensor, grad_debugger_uuid):
-  op_name, slot = debug_data.parse_node_or_tensor_name(tensor.name)
+  op_name, slot = debug_graphs.parse_node_or_tensor_name(tensor.name)
   return "%s_%d/%s%s" % (op_name, slot, _GRADIENT_DEBUG_TAG, grad_debugger_uuid)
 
 
@@ -154,15 +155,14 @@ class GradientsDebugger(object):
     # TODO(cais): Allow overriding gradient.
     # TODO(cais): Implement value_stack.
     grad_debug_op_name = _tensor_to_grad_debug_op_name(input_tensor, self._uuid)
-    debug_identity = gen_debug_ops.debug_identity(
-        input_tensor,
-        tensor_name=input_tensor.name,
-        debug_urls=[],
-        name=grad_debug_op_name)
-    if debug_identity.op.name != grad_debug_op_name:
+    # pylint: disable=protected-access
+    debug_grad_identity = gen_array_ops._debug_gradient_identity(
+        input_tensor, name=grad_debug_op_name)
+    # pylint: enable=protected-access
+    if debug_grad_identity.op.name != grad_debug_op_name:
       raise ValueError(
           "The graph already contains an op named %s" % grad_debug_op_name)
-    return debug_identity
+    return debug_grad_identity
 
   def watch_gradients_by_tensors(self, graph, tensors):
     """Watch gradient tensors by x-tensor(s).
@@ -346,7 +346,7 @@ class GradientsDebugger(object):
   def _get_tensor_name(self, tensor):
     if isinstance(tensor, (ops.Tensor, variables.Variable)):
       return tensor.name
-    elif  isinstance(tensor, six.string_types):
+    elif isinstance(tensor, six.string_types):
       return tensor
     else:
       raise TypeError(
@@ -359,7 +359,7 @@ def clear_gradient_debuggers():
   _gradient_debuggers.clear()
 
 
-@ops.RegisterGradient("DebugIdentity")
+@ops.RegisterGradient("DebugGradientIdentity")
 def _identify_gradient_grad(op, dy):
   """Gradient function for the DebugIdentity op."""
   # TODO(cais): Allow overriding gradient.
@@ -408,7 +408,7 @@ def gradient_values_from_dump(grad_debugger, x_tensor, dump):
         (grad_debugger.graph, dump.python_graph))
 
   gradient_tensor = grad_debugger.gradient_tensor(x_tensor)
-  node_name, output_slot = debug_data.parse_node_or_tensor_name(
+  node_name, output_slot = debug_graphs.parse_node_or_tensor_name(
       gradient_tensor.name)
 
   try:

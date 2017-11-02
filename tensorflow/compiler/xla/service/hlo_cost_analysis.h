@@ -49,71 +49,43 @@ class HloCostAnalysis : public DfsHloVisitor {
   using ShapeSizeFunction = std::function<int64(const Shape&)>;
   explicit HloCostAnalysis(const ShapeSizeFunction& shape_size);
 
-  Status HandleElementwiseUnary(HloInstruction* hlo, HloOpcode opcode) override;
-  Status HandleElementwiseBinary(HloInstruction* hlo,
-                                 HloOpcode opcode) override;
-  Status HandleConstant(HloInstruction* constant,
-                        const Literal& literal) override;
-  Status HandleGetTupleElement(HloInstruction* get_tuple_element,
-                               HloInstruction* operand) override;
-  Status HandleSelect(HloInstruction* select, HloInstruction* pred,
-                      HloInstruction* on_true,
-                      HloInstruction* on_false) override;
-  Status HandleCompare(HloInstruction* compare, HloOpcode opcode,
-                       HloInstruction* lhs, HloInstruction* rhs) override;
-  Status HandleClamp(HloInstruction* clamp, HloInstruction* min,
-                     HloInstruction* arg, HloInstruction* max) override;
+  Status HandleElementwiseUnary(HloInstruction* hlo) override;
+  Status HandleElementwiseBinary(HloInstruction* hlo) override;
+  Status HandleConstant(HloInstruction* constant) override;
+  Status HandleGetTupleElement(HloInstruction* get_tuple_element) override;
+  Status HandleSelect(HloInstruction* select) override;
+  Status HandleCompare(HloInstruction* compare) override;
+  Status HandleClamp(HloInstruction* clamp) override;
   Status HandleReducePrecision(HloInstruction* hlo) override;
-  Status HandleConcatenate(
-      HloInstruction* concatenate,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands) override;
+  Status HandleConcatenate(HloInstruction* concatenate) override;
   Status HandleSend(HloInstruction* send) override;
   Status HandleRecv(HloInstruction* recv) override;
   Status HandleConvert(HloInstruction* convert) override;
   Status HandleCopy(HloInstruction* copy) override;
-  Status HandleDot(HloInstruction* dot, HloInstruction* lhs,
-                   HloInstruction* rhs) override;
-  Status HandleConvolution(HloInstruction* convolution, HloInstruction* lhs,
-                           HloInstruction* rhs, const Window& window) override;
+  Status HandleDot(HloInstruction* dot) override;
+  Status HandleConvolution(HloInstruction* convolution) override;
   Status HandleCrossReplicaSum(HloInstruction* crs) override;
   Status HandleInfeed(HloInstruction* infeed) override;
   Status HandleOutfeed(HloInstruction* outfeed) override;
-  Status HandleRng(HloInstruction* random,
-                   RandomDistribution distribution) override;
-  Status HandleReverse(HloInstruction* reverse,
-                       HloInstruction* operand) override;
-  Status HandleSort(HloInstruction* sort, HloInstruction* operand) override;
+  Status HandleRng(HloInstruction* random) override;
+  Status HandleReverse(HloInstruction* reverse) override;
+  Status HandleSort(HloInstruction* sort) override;
   Status HandleParameter(HloInstruction* parameter) override;
-  Status HandleReduce(HloInstruction* reduce, HloInstruction* arg,
-                      HloInstruction* init_value,
-                      tensorflow::gtl::ArraySlice<int64> dimensions,
-                      HloComputation* function_handle) override;
-  Status HandleBatchNormTraining(HloInstruction* batchNormTraining) override;
-  Status HandleBatchNormGrad(HloInstruction* batchNormGrad) override;
+  Status HandleReduce(HloInstruction* reduce) override;
+  Status HandleBatchNormTraining(HloInstruction* batch_norm_training) override;
+  Status HandleBatchNormInference(
+      HloInstruction* batch_norm_inference) override;
+  Status HandleBatchNormGrad(HloInstruction* batch_norm_grad) override;
   Status HandleFusion(HloInstruction* fusion) override;
   Status HandleCall(HloInstruction* call) override;
-  Status HandleCustomCall(HloInstruction* custom_call,
-                          tensorflow::gtl::ArraySlice<HloInstruction*> operands,
-                          tensorflow::StringPiece custom_call_target) override;
-  Status HandleSlice(HloInstruction* slice, HloInstruction* operand) override;
-  Status HandleDynamicSlice(HloInstruction* dynamic_slice,
-                            HloInstruction* operand,
-                            HloInstruction* start_indices) override;
-  Status HandleDynamicUpdateSlice(HloInstruction* dynamic_update_slice,
-                                  HloInstruction* operand,
-                                  HloInstruction* update,
-                                  HloInstruction* start_indices) override;
-  Status HandleTuple(
-      HloInstruction* tuple,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands) override;
-  Status HandleMap(
-      HloInstruction* map,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands,
-      HloComputation* function,
-      tensorflow::gtl::ArraySlice<HloInstruction*> static_operands) override;
-  Status HandleReduceWindow(HloInstruction* reduce_window,
-                            HloInstruction* operand, const Window& window,
-                            HloComputation* function) override;
+  Status HandleCustomCall(HloInstruction* custom_call) override;
+  Status HandleSlice(HloInstruction* slice) override;
+  Status HandleDynamicSlice(HloInstruction* dynamic_slice) override;
+  Status HandleDynamicUpdateSlice(
+      HloInstruction* dynamic_update_slice) override;
+  Status HandleTuple(HloInstruction* tuple) override;
+  Status HandleMap(HloInstruction* map) override;
+  Status HandleReduceWindow(HloInstruction* reduce_window) override;
   Status HandleSelectAndScatter(HloInstruction* instruction) override;
   Status HandleBitcast(HloInstruction* bitcast) override;
   Status HandleBroadcast(HloInstruction* broadcast) override;
@@ -175,9 +147,11 @@ class HloCostAnalysis : public DfsHloVisitor {
   // Utility function to handle all element-wise operations.
   Status HandleElementwiseOp(HloInstruction* hlo_instruction);
 
-  // Returns 0.0f if the key is not present in the properties. Otherwise,
-  // returns the value that the key maps to from the properties parameter.
-  static float GetProperty(const string& key, const Properties& properties);
+  // Returns the default value if the key is not present in the
+  // properties. Otherwise, returns the value that the key maps to from the
+  // properties parameter.
+  static float GetProperty(const string& key, const Properties& properties,
+                           float default_value = 0.0f);
 
   // Returns 0.0f if the hlo is not present in hlo_to_properties or if the key
   // is not present in hlo_to_properties[hlo]. Otherwise, returns the value that

@@ -52,138 +52,135 @@ class HloInstruction;
 // "unimplemented" error status.
 //
 // Note: this may change to an iterator in the future for flexibility purposes.
-//
-// TODO(b/26548304): Stop passing in information about the visited
-// instruction that is accessible from the instruction object itself.
 class DfsHloVisitor {
  public:
-  DfsHloVisitor()
-      : visit_state_(32)  // Start the hash table a bit larger to avoid resizes
-  {}
+  DfsHloVisitor() {}
   virtual ~DfsHloVisitor() {}
 
   // These routines are self-descriptive, see class comment for usage
   // information.
 
-  virtual Status HandleElementwiseUnary(HloInstruction* hlo, HloOpcode opcode);
-  virtual Status HandleElementwiseBinary(HloInstruction* hlo, HloOpcode opcode);
-  virtual Status HandleClamp(HloInstruction* clamp, HloInstruction* min,
-                             HloInstruction* arg, HloInstruction* max) = 0;
-  virtual Status HandleSelect(HloInstruction* select, HloInstruction* pred,
-                              HloInstruction* on_true,
-                              HloInstruction* on_false) = 0;
+  virtual Status HandleElementwiseUnary(HloInstruction* hlo);
+  virtual Status HandleElementwiseBinary(HloInstruction* hlo);
+  virtual Status HandleClamp(HloInstruction* clamp) = 0;
+  virtual Status HandleSelect(HloInstruction* select) = 0;
   virtual Status HandleMaximum(HloInstruction* maximum) {
-    return HandleElementwiseBinary(maximum, HloOpcode::kMaximum);
+    return HandleElementwiseBinary(maximum);
   }
   virtual Status HandleMinimum(HloInstruction* minimum) {
-    return HandleElementwiseBinary(minimum, HloOpcode::kMinimum);
+    return HandleElementwiseBinary(minimum);
   }
-  virtual Status HandleConcatenate(
-      HloInstruction* concatenate,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands) = 0;
+  virtual Status HandleConcatenate(HloInstruction* concatenate) = 0;
   virtual Status HandleConvert(HloInstruction* convert) {
-    return HandleElementwiseUnary(convert, HloOpcode::kConvert);
+    return HandleElementwiseUnary(convert);
   }
   virtual Status HandleCopy(HloInstruction* copy) {
-    return HandleElementwiseUnary(copy, HloOpcode::kCopy);
+    return HandleElementwiseUnary(copy);
   }
-  virtual Status HandleMultiply(HloInstruction* multiply, HloInstruction* lhs,
-                                HloInstruction* rhs) {
-    return HandleElementwiseBinary(multiply, HloOpcode::kMultiply);
+  virtual Status HandleComplex(HloInstruction* complex) {
+    return HandleElementwiseBinary(complex);
   }
-  virtual Status HandleDot(HloInstruction* dot, HloInstruction* lhs,
-                           HloInstruction* rhs) = 0;
-  virtual Status HandlePower(HloInstruction* power, HloInstruction* lhs,
-                             HloInstruction* rhs) {
-    return HandleElementwiseBinary(power, HloOpcode::kPower);
+  virtual Status HandleMultiply(HloInstruction* multiply) {
+    return HandleElementwiseBinary(multiply);
   }
-  virtual Status HandleConvolution(HloInstruction* convolution,
-                                   HloInstruction* lhs, HloInstruction* rhs,
-                                   const Window& window) = 0;
+  virtual Status HandleDot(HloInstruction* dot) = 0;
+  virtual Status HandlePower(HloInstruction* power) {
+    return HandleElementwiseBinary(power);
+  }
+  virtual Status HandleConvolution(HloInstruction* convolution) = 0;
   virtual Status HandleCrossReplicaSum(HloInstruction* crs) = 0;
-  virtual Status HandleCompare(HloInstruction* compare, HloOpcode opcode,
-                               HloInstruction* lhs, HloInstruction* rhs) {
-    return HandleElementwiseBinary(compare, opcode);
+  virtual Status HandleCompare(HloInstruction* compare) {
+    return HandleElementwiseBinary(compare);
   }
-  virtual Status HandleAdd(HloInstruction* add, HloInstruction* lhs,
-                           HloInstruction* rhs) {
-    return HandleElementwiseBinary(add, HloOpcode::kAdd);
+  virtual Status HandleAdd(HloInstruction* add) {
+    return HandleElementwiseBinary(add);
   }
-  virtual Status HandleDivide(HloInstruction* divide, HloInstruction* lhs,
-                              HloInstruction* rhs) {
-    return HandleElementwiseBinary(divide, HloOpcode::kDivide);
+  virtual Status HandleDivide(HloInstruction* divide) {
+    return HandleElementwiseBinary(divide);
   }
-  virtual Status HandleRemainder(HloInstruction* remainder, HloInstruction* lhs,
-                                 HloInstruction* rhs) {
-    return HandleElementwiseBinary(remainder, HloOpcode::kRemainder);
+  virtual Status HandleRemainder(HloInstruction* remainder) {
+    return HandleElementwiseBinary(remainder);
   }
-  virtual Status HandleSubtract(HloInstruction* subtract, HloInstruction* lhs,
-                                HloInstruction* rhs) {
-    return HandleElementwiseBinary(subtract, HloOpcode::kSubtract);
+  virtual Status HandleSubtract(HloInstruction* subtract) {
+    return HandleElementwiseBinary(subtract);
   }
-  virtual Status HandleAbs(HloInstruction* abs, HloInstruction* operand) {
-    return HandleElementwiseUnary(abs, HloOpcode::kAbs);
+  virtual Status HandleAbs(HloInstruction* abs) {
+    return HandleElementwiseUnary(abs);
   }
-  virtual Status HandleSign(HloInstruction* sign, HloInstruction* operand) {
-    return HandleElementwiseUnary(sign, HloOpcode::kSign);
+  virtual Status HandleAtan2(HloInstruction* atan2) {
+    return HandleElementwiseBinary(atan2);
   }
-  virtual Status HandleNegate(HloInstruction* negate, HloInstruction* operand) {
-    return HandleElementwiseUnary(negate, HloOpcode::kNegate);
+  virtual Status HandleRound(HloInstruction* round) {
+    return HandleElementwiseUnary(round);
   }
-  virtual Status HandleExp(HloInstruction* exp, HloInstruction* operand) {
-    return HandleElementwiseUnary(exp, HloOpcode::kExp);
+  virtual Status HandleSign(HloInstruction* sign) {
+    return HandleElementwiseUnary(sign);
   }
-  virtual Status HandleFloor(HloInstruction* floor, HloInstruction* operand) {
-    return HandleElementwiseUnary(floor, HloOpcode::kFloor);
+  virtual Status HandleNegate(HloInstruction* negate) {
+    return HandleElementwiseUnary(negate);
   }
-  virtual Status HandleCeil(HloInstruction* ceil, HloInstruction* operand) {
-    return HandleElementwiseUnary(ceil, HloOpcode::kCeil);
+  virtual Status HandleExp(HloInstruction* exp) {
+    return HandleElementwiseUnary(exp);
   }
-  virtual Status HandleLog(HloInstruction* log, HloInstruction* operand) {
-    return HandleElementwiseUnary(log, HloOpcode::kLog);
+  virtual Status HandleFloor(HloInstruction* floor) {
+    return HandleElementwiseUnary(floor);
   }
-  virtual Status HandleCos(HloInstruction* cos, HloInstruction* operand) {
-    return HandleElementwiseUnary(cos, HloOpcode::kCos);
+  virtual Status HandleCeil(HloInstruction* ceil) {
+    return HandleElementwiseUnary(ceil);
   }
-  virtual Status HandleTanh(HloInstruction* tanh, HloInstruction* operand) {
-    return HandleElementwiseUnary(tanh, HloOpcode::kTanh);
+  virtual Status HandleLog(HloInstruction* log) {
+    return HandleElementwiseUnary(log);
   }
-  virtual Status HandleIsFinite(HloInstruction* is_finite,
-                                HloInstruction* operand) {
-    return HandleElementwiseUnary(is_finite, HloOpcode::kIsFinite);
+  virtual Status HandleCos(HloInstruction* cos) {
+    return HandleElementwiseUnary(cos);
   }
-  virtual Status HandleLogicalAnd(HloInstruction* logical_and,
-                                  HloInstruction* lhs, HloInstruction* rhs) {
-    return HandleElementwiseBinary(logical_and, HloOpcode::kLogicalAnd);
+  virtual Status HandleSin(HloInstruction* sin) {
+    return HandleElementwiseUnary(sin);
   }
-  virtual Status HandleLogicalNot(HloInstruction* logical_not,
-                                  HloInstruction* operand) {
-    return HandleElementwiseUnary(logical_not, HloOpcode::kLogicalNot);
+  virtual Status HandleTanh(HloInstruction* tanh) {
+    return HandleElementwiseUnary(tanh);
   }
-  virtual Status HandleLogicalOr(HloInstruction* logical_or,
-                                 HloInstruction* lhs, HloInstruction* rhs) {
-    return HandleElementwiseBinary(logical_or, HloOpcode::kLogicalOr);
+  virtual Status HandleReal(HloInstruction* real) {
+    return HandleElementwiseUnary(real);
   }
+  virtual Status HandleImag(HloInstruction* imag) {
+    return HandleElementwiseUnary(imag);
+  }
+  virtual Status HandleIsFinite(HloInstruction* is_finite) {
+    return HandleElementwiseUnary(is_finite);
+  }
+  virtual Status HandleAnd(HloInstruction* and_) {
+    return HandleElementwiseBinary(and_);
+  }
+  virtual Status HandleNot(HloInstruction* not_) {
+    return HandleElementwiseUnary(not_);
+  }
+  virtual Status HandleOr(HloInstruction* or_) {
+    return HandleElementwiseBinary(or_);
+  }
+  virtual Status HandleShiftLeft(HloInstruction* shift_left) {
+    return HandleElementwiseBinary(shift_left);
+  }
+  virtual Status HandleShiftRightArithmetic(
+      HloInstruction* shift_right_arithmetic) {
+    return HandleElementwiseBinary(shift_right_arithmetic);
+  }
+  virtual Status HandleShiftRightLogical(HloInstruction* shift_right_logical) {
+    return HandleElementwiseBinary(shift_right_logical);
+  }
+
   virtual Status HandleReducePrecision(HloInstruction* reduce_precision) {
-    return HandleElementwiseUnary(reduce_precision,
-                                  HloOpcode::kReducePrecision);
+    return HandleElementwiseUnary(reduce_precision);
   }
 
   virtual Status HandleInfeed(HloInstruction* infeed) = 0;
   virtual Status HandleOutfeed(HloInstruction* outfeed) = 0;
-  virtual Status HandleRng(HloInstruction* random,
-                           RandomDistribution distribution) = 0;
-  virtual Status HandleReverse(HloInstruction* reverse,
-                               HloInstruction* operand) = 0;
-  virtual Status HandleSort(HloInstruction* sort, HloInstruction* operand) = 0;
-  virtual Status HandleConstant(HloInstruction* constant,
-                                const Literal& literal) = 0;
-  virtual Status HandleGetTupleElement(HloInstruction* get_tuple_element,
-                                       HloInstruction* operand) = 0;
-  virtual Status HandleReduce(HloInstruction* reduce, HloInstruction* arg,
-                              HloInstruction* init_value,
-                              tensorflow::gtl::ArraySlice<int64> dimensions,
-                              HloComputation* function) = 0;
+  virtual Status HandleRng(HloInstruction* random) = 0;
+  virtual Status HandleReverse(HloInstruction* reverse) = 0;
+  virtual Status HandleSort(HloInstruction* sort) = 0;
+  virtual Status HandleConstant(HloInstruction* constant) = 0;
+  virtual Status HandleGetTupleElement(HloInstruction* get_tuple_element) = 0;
+  virtual Status HandleReduce(HloInstruction* reduce) = 0;
   virtual Status HandleBitcast(HloInstruction* bitcast) = 0;
   virtual Status HandleBroadcast(HloInstruction* broadcast) = 0;
   virtual Status HandleReshape(HloInstruction* reshape) = 0;
@@ -191,31 +188,14 @@ class DfsHloVisitor {
   virtual Status HandleParameter(HloInstruction* parameter) = 0;
   virtual Status HandleFusion(HloInstruction* fusion) = 0;
   virtual Status HandleCall(HloInstruction* call) = 0;
-  virtual Status HandleCustomCall(
-      HloInstruction* custom_call,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands,
-      tensorflow::StringPiece custom_call_target) = 0;
-  virtual Status HandleSlice(HloInstruction* slice,
-                             HloInstruction* operand) = 0;
-  virtual Status HandleDynamicSlice(HloInstruction* dynamic_slice,
-                                    HloInstruction* operand,
-                                    HloInstruction* start_indices) = 0;
-  virtual Status HandleDynamicUpdateSlice(HloInstruction* dynamic_update_slice,
-                                          HloInstruction* operand,
-                                          HloInstruction* update,
-                                          HloInstruction* start_indices) = 0;
-  virtual Status HandleTuple(
-      HloInstruction* tuple,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands) = 0;
-  virtual Status HandleMap(
-      HloInstruction* map,
-      tensorflow::gtl::ArraySlice<HloInstruction*> operands,
-      HloComputation* function,
-      tensorflow::gtl::ArraySlice<HloInstruction*> static_operands) = 0;
-  virtual Status HandleReduceWindow(HloInstruction* reduce_window,
-                                    HloInstruction* operand,
-                                    const Window& window,
-                                    HloComputation* function) = 0;
+  virtual Status HandleCustomCall(HloInstruction* custom_call) = 0;
+  virtual Status HandleSlice(HloInstruction* slice) = 0;
+  virtual Status HandleDynamicSlice(HloInstruction* dynamic_slice) = 0;
+  virtual Status HandleDynamicUpdateSlice(
+      HloInstruction* dynamic_update_slice) = 0;
+  virtual Status HandleTuple(HloInstruction* tuple) = 0;
+  virtual Status HandleMap(HloInstruction* map) = 0;
+  virtual Status HandleReduceWindow(HloInstruction* reduce_window) = 0;
   virtual Status HandleSelectAndScatter(HloInstruction* instruction) = 0;
   virtual Status HandleWhile(HloInstruction* xla_while) = 0;
 
@@ -225,9 +205,13 @@ class DfsHloVisitor {
 
   virtual Status HandleRecv(HloInstruction* recv) = 0;
 
-  virtual Status HandleBatchNormTraining(HloInstruction* batchNormTraining) = 0;
+  virtual Status HandleBatchNormTraining(
+      HloInstruction* batch_norm_training) = 0;
 
-  virtual Status HandleBatchNormGrad(HloInstruction* batchNormGrad) = 0;
+  virtual Status HandleBatchNormInference(
+      HloInstruction* batch_norm_inference) = 0;
+
+  virtual Status HandleBatchNormGrad(HloInstruction* batch_norm_grad) = 0;
 
   // Invoked to inform the visitor that the traversal has completed, and that
   // the root was "root".
@@ -236,17 +220,21 @@ class DfsHloVisitor {
   // 3 possible visitation states of HLO instructions. Each instruction's
   // state only flows one way: kNotVisited -> kVisiting -> kVisited.
   enum VisitState {
-    kNotVisited,
-    kVisiting,
-    kVisited,
+    kNotVisited = 0,
+    kVisiting = 1,
+    kVisited = 2,
   };
 
-  VisitState GetVisitState(const HloInstruction& instruction) {
-    auto it = visit_state_.find(&instruction);
-    if (it == visit_state_.end()) {
-      return kNotVisited;
-    }
-    return it->second;
+  VisitState GetVisitState(int id) { return visit_state_.GetState(id); }
+  VisitState GetVisitState(const HloInstruction& instruction);
+
+  // Resize internal state if necessary to hold state for ids <= num.
+  // This call is purely a performance hint and can be omitted without
+  // affecting correctness.
+  void ReserveVisitStates(int num) { visit_state_.Reserve(num); }
+
+  void SetVisitState(int id, VisitState state) {
+    visit_state_.SetState(id, state);
   }
 
   // Sets the visitation state of the given instruction as kVisiting.
@@ -296,9 +284,43 @@ class DfsHloVisitor {
   virtual Status Postprocess(HloInstruction* visited);
 
  private:
-  // Tracks the visitation state of each instruction. Any instructions that are
-  // not found in the map are considered as VisitState::kNotVisited.
-  tensorflow::gtl::FlatMap<const HloInstruction*, VisitState> visit_state_;
+  class DFSVisitStates {
+   public:
+    DFSVisitStates() {}
+    void Reserve(uint64 num) {
+      states_.reserve((num + kStatesPerWord - 1) / kStatesPerWord);
+    }
+    VisitState GetState(uint64 id) {
+      uint64 word_index = id / kStatesPerWord;
+      if (word_index >= states_.size()) {
+        return VisitState::kNotVisited;
+      }
+      static_assert(static_cast<int>(VisitState::kVisited) < 3,
+                    "VisitState must fit in two bits");
+      uint64 w = states_[word_index];
+      uint32 shift = 2 * (id % kStatesPerWord);  // 2 bits per state
+      return static_cast<VisitState>((w >> shift) & 0x3);
+    }
+    void SetState(uint64 id, VisitState state) {
+      uint64 word_index = id / kStatesPerWord;
+      if (word_index >= states_.size()) {
+        states_.resize(word_index + 1, 0);
+      }
+      uint64* w = &states_[word_index];
+      uint32 shift = 2 * (id % kStatesPerWord);  // 2 bits per state
+      uint64 mask = 0x3ull << shift;
+      *w = (*w & ~mask) | (static_cast<uint64>(state) << shift);
+      DCHECK_EQ(GetState(id), state);
+    }
+
+   private:
+    static const uint32 kStatesPerWord = sizeof(uint64) / 2 /*bits per entry*/;
+    // Map from id to two-bit states.  We store 32 such states per 64-bit
+    // value
+    std::vector<uint64> states_;
+  };
+
+  DFSVisitStates visit_state_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(DfsHloVisitor);
 };

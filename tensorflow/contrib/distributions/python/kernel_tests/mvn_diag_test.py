@@ -275,6 +275,32 @@ class MultivariateNormalDiagTest(test.TestCase):
                           np.tile(num_draws, dims),
                           rtol=1e-6, atol=0.)
 
+  def testDynamicBatchShape(self):
+    mvn = ds.MultivariateNormalDiag(
+        loc=array_ops.placeholder(dtypes.float32, shape=[None, None, 2]),
+        scale_diag=array_ops.placeholder(dtypes.float32, shape=[None, None, 2]))
+    self.assertListEqual(mvn.batch_shape.as_list(), [None, None])
+    self.assertListEqual(mvn.event_shape.as_list(), [2])
+
+  def testDynamicEventShape(self):
+    mvn = ds.MultivariateNormalDiag(
+        loc=array_ops.placeholder(dtypes.float32, shape=[2, 3, None]),
+        scale_diag=array_ops.placeholder(dtypes.float32, shape=[2, 3, None]))
+    self.assertListEqual(mvn.batch_shape.as_list(), [2, 3])
+    self.assertListEqual(mvn.event_shape.as_list(), [None])
+
+  def testKLDivIdenticalGradientDefined(self):
+    dims = 3
+    with self.test_session() as sess:
+      loc = array_ops.zeros([dims], dtype=dtypes.float32)
+      mvn = ds.MultivariateNormalDiag(
+          loc=loc,
+          scale_diag=np.ones([dims], dtype=np.float32))
+      g = gradients_impl.gradients(ds.kl_divergence(mvn, mvn), loc)
+      g_ = sess.run(g)
+      self.assertAllEqual(np.ones_like(g_, dtype=np.bool),
+                          np.isfinite(g_))
+
 
 if __name__ == "__main__":
   test.main()
