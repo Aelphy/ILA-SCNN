@@ -14,6 +14,7 @@ r4 = 32
 r5 = 16
 r6=8
 
+#data
 #backprop + forward pass
 sc1 = (ti + td + td) * b * 8 * math.pow(r1,3)* d1 * 3
 sc2 = (ti + td + td) * b * 16 * math.pow(r2,3) * d2 * 3
@@ -33,7 +34,25 @@ dc3 = (td + td) * b * 48 * pow(r6,3) * 3
 pd1 = td * b * 32 * pow(r4,3) + td * b * 40 * pow(r5,3)
 pd2 = td * b * 40 * pow(r5,3) + td * b * 48 * pow(r6,3)
 
-dense_size = (dc1 + dc2 + dc3 + pd1 + pd2) / float(pow(10,9))
-print("dense layers size [GB]: ", dense_size)
-print("total size [GB]: ", dense_size + sparse_size)
+fc1 = 512
+fc2 = 10
 
+dense_size = (dc1 + dc2 + dc3 + pd1 + pd2 + fc1 + fc2) / float(pow(10,9))
+
+print("dense layers size [GB]: ", dense_size)
+
+#parameters
+
+psc1 = td * 8 * 27 * 3
+psc2 = td * 16 * 27 * 3
+psc3 = td * 24 * 27 * 3
+psc4 = td * 32 * 27 * 3
+psc5 = td * 40 * 27 * 3
+psc6 = td * 48 * 27 * 3
+pfc1 = td * (512 * 48 * b * pow(r6,3))
+pfc2 = td * (512 * 10)
+
+parameter_size = (psc1 + psc2 + psc3 +psc4 + psc5 + psc6 + pfc1 + pfc2) / float(pow(10,9))
+
+print("parameter size [GB]", parameter_size)
+print("total size [GB]: ", dense_size + sparse_size + parameter_size)

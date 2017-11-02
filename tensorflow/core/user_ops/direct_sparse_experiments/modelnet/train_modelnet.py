@@ -76,13 +76,14 @@ random_sparse_data = tf.SparseTensor(indices=data_ind, values=data_val, dense_sh
 [label_ind, label_val, label_sh] = sp.createRandomSparseTensor(1, batch_label_sizes)
 random_dense_label = sp.sparse_to_dense(label_ind, label_val, label_sh)
 with tf.Session(config=config) as sess:
-  sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+  #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
   print("writing graph")
   writer = tf.summary.FileWriter("/tmp/test", sess.graph)
   trainable = tf.trainable_variables()
   print("trainable: ", trainable)
   feed_dict={sparse_data: tf.SparseTensorValue(data_ind, data_val, data_sh), dense_labels: random_dense_label}
   sess.run(initall, feed_dict=feed_dict)
+  print("data initialized")
   if len(pretrained_model) > 0:
     saver.restore(sess,pretrained_model)
   for epoch in range(1, max_epochs):
@@ -99,6 +100,7 @@ with tf.Session(config=config) as sess:
       reader.start()
       values_ = np.array(batch[1], dtype=np.float32)
       indices_ = np.array(batch[0], dtype =np.int64)
+      print(indices_, values_, batch[2])
       feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
       t_train1 = time.time()
       #perform training

@@ -33,7 +33,7 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_cl
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   sc1 = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, 0.8, "K-ABS", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
   sd = ld.create_direct_sparse_to_dense(sc1, dim)
-  sd_flat = tf.reshape(sd, [batch_size, total_size])
+  sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
   if train_labels != None:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
   else:
@@ -61,18 +61,18 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   d1 = 0.01
   net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
   d2 = 0.03
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
   d3 = 0.05
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
-  #net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
   net = ld.create_direct_sparse_to_dense(net, dim)
   net = tf.reshape(net, [batch_size, 32, 32, 32, 24])

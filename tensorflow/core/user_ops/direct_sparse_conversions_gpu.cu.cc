@@ -175,10 +175,10 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto o_ind = out_indices->flat<IndiceT>();
   auto o_b_ptr = out_block_pointer->flat<int>();
   auto o_val = out_values->flat<T>();
-  cudaMemcpy(o_sh.data(), i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_ind.data(), in_block_ids, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_b_ptr.data(), input_block_mapping, (batch_count * in_channel_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_val.data(), in_block_vals, data_entry_count * sizeof(T), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_sh.data(), i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
 }
 
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>

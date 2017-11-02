@@ -328,9 +328,10 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   for(size_t i = 0; i < data_dimension - 2; ++i){
     channel_dense_size = (channel_dense_size * cpu_in_shape[i + 1]); //x,y,z, ... (no channel and no batch) rounded up
   }
-  const int tensor_dense_size = channel_dense_size * cpu_in_shape[0] * cpu_in_shape[data_dimension - 1];
-  const int batch_count = cpu_in_shape[0];
-  const int in_channel_count = cpu_in_shape[data_dimension - 1];
+  const IndiceT batch_count = cpu_in_shape[0];
+  const IndiceT in_channel_count = cpu_in_shape[data_dimension - 1];
+  const IndiceT batch_dense_size = in_channel_count * batch_count;
+  const IndiceT tensor_dense_size = channel_dense_size * batch_dense_size;
 
   const IndiceT *in_block_ids = i_ind.data();
   const T *in_block_vals = i_val.data();
@@ -351,7 +352,8 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   Tensor out_sh_tensor;
   IndiceT *out_sh = 0;
   allocate_tensor(context, out_sh_tensor, &out_sh,  data_dimension);
-  cudaMemcpy(out_sh, i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(out_sh, i_sh.data(), (data_dimension - 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(out_sh + data_dimension - 1, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToDevice);
 
   /////
   //2. decompress 1d to kd indice in temporary buffer
@@ -372,8 +374,8 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   CudaLaunchConfig config_rbuffer = GetCudaLaunchConfig(channel_dense_size * max_density, d);
   Tensor channel_offset_tensor, result_block_count_tensor, result_dense_count_tensor;
   
-  int result_count = ceil(tensor_dense_size * max_density);
-  int max_channel_count = floor(result_count / float(out_channel_count * batch_count));
+  const IndiceT result_count = ceil(tensor_dense_size * max_density);
+  const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
   int *result_block_count, *result_dense_count;
   allocate_tensor(context, result_block_count_tensor, &result_block_count, 1);
   allocate_tensor(context, result_dense_count_tensor, &result_dense_count, 1);
@@ -447,11 +449,13 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
         write_ids = in_channel_ids_buffer;
         write_vals = abs_channel_buffer;
       }
-      CudaLaunchConfig config_dbuffer_ = GetCudaLaunchConfig(min(cpu_result_count, max_channel_count), d);
-      if(config_dbuffer_.virtual_thread_count > 0){
-        write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer_.block_count, config_dbuffer_.thread_per_block, 0, d.stream()>>>(config_dbuffer_, write_vals + start_offset, 
-            write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
-        cudaStreamSynchronize(d.stream());
+      if(cpu_result_count > 0){
+        CudaLaunchConfig config_dbuffer_ = GetCudaLaunchConfig(min(cpu_result_count, max_channel_count), d);
+        if(config_dbuffer_.virtual_thread_count > 0){
+          write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer_.block_count, config_dbuffer_.thread_per_block, 0, d.stream()>>>(config_dbuffer_, write_vals + start_offset, 
+              write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
+          cudaStreamSynchronize(d.stream());
+        }
       }
       data_offset_ptr = data_offset.data() + i * out_channel_count + j + 1; //TODO
       cudaMemcpy(data_offset_ptr, result_block_count, sizeof(int), cudaMemcpyDeviceToDevice);
@@ -608,9 +612,9 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   for(size_t i = 0; i < data_dimension - 2; ++i){
     channel_dense_size = (channel_dense_size * cpu_in_shape[i + 1]); //x,y,z, ... (no channel and no batch) rounded up
   }
-  const int tensor_dense_size = channel_dense_size * cpu_in_shape[0] * cpu_in_shape[data_dimension - 1];
-  const int batch_count = cpu_in_shape[0];
-  const int in_channel_count = cpu_in_shape[data_dimension - 1];
+  const IndiceT batch_count = cpu_in_shape[0];
+  const IndiceT in_channel_count = cpu_in_shape[data_dimension - 1];
+  const IndiceT tensor_dense_size = channel_dense_size * batch_count * in_channel_count;
 
   const IndiceT *in_block_ids = i_ind.data();
   const T *in_block_vals = i_val.data();
@@ -653,8 +657,8 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   CudaLaunchConfig config_rbuffer = GetCudaLaunchConfig(channel_dense_size * max_density, d);
   Tensor channel_offset_tensor, result_block_count_tensor, result_dense_count_tensor;
   
-  int result_count = ceil(tensor_dense_size * max_density);
-  int max_channel_count = floor(result_count / float(out_channel_count * batch_count));
+  const IndiceT result_count = ceil(tensor_dense_size * max_density);
+  const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
   int *result_block_count, *result_dense_count;
   allocate_tensor(context, result_block_count_tensor, &result_block_count, 1);
   allocate_tensor(context, result_dense_count_tensor, &result_dense_count, 1);
