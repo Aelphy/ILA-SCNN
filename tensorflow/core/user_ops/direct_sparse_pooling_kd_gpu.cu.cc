@@ -183,6 +183,19 @@ namespace functor {
     //LOG(DEBUG) << "pooling0 " << data_entry_count; 
     //TODO: filter (per channel)
     //TODO: no atomic max for floating point values! (suboptimal implementation with radix sort) :/
+    
+    /////
+    //0. write output shape
+    std::vector<IndiceT> cpu_shape(data_dimension);
+    cudaMemcpy(&cpu_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
+    TensorShape out_sh_shape = {(IndiceT) data_dimension};
+    OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
+    auto o_sh = out_shape->flat<IndiceT>();
+    for(size_t i = 0; i < data_dimension; ++i){
+      cpu_shape[i] = IndiceT(ceil(float(cpu_shape[i]) / stride[i]));
+    } 
+    cudaMemcpy(o_sh.data(), &cpu_shape[0], data_dimension * sizeof(IndiceT), cudaMemcpyHostToDevice);
+
     Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *out_block_mapping = NULL;
     if(data_entry_count <= 0){
       TensorShape out_ind_shape = {0};
@@ -211,18 +224,6 @@ namespace functor {
     allocate_tensor(context, batch_channel_count_tensor, &tmp_batch_channel_count, bcount);
     cudaMemcpy(strides_, &stride[0], data_dimension * sizeof(int32), cudaMemcpyHostToDevice);
     
-    /////
-    //2. write output shape
-    std::vector<IndiceT> cpu_shape(data_dimension);
-    cudaMemcpy(&cpu_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
-    TensorShape out_sh_shape = {(IndiceT) data_dimension};
-    OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
-    auto o_sh = out_shape->flat<IndiceT>();
-    for(size_t i = 0; i < data_dimension; ++i){
-      cpu_shape[i] = IndiceT(ceil(float(cpu_shape[i]) / stride[i]));
-    } 
-    cudaMemcpy(o_sh.data(), &cpu_shape[0], data_dimension * sizeof(IndiceT), cudaMemcpyHostToDevice);
-
     /////
     //3. compute hypercubes for pooling
     cudaStreamSynchronize(d.stream());
