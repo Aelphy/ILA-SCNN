@@ -181,7 +181,7 @@ write_conv_res(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, int
 
 //TODO: thread divergence... (find better approach with less idle threads)!
 template <typename dtype, typename itype, int data_dimension> __global__ void __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-write_conv_res2(CudaLaunchConfig config, const itype* in_buffer, const itype* in_ids, itype* out_ind, dtype* out_val, const itype* out_shape_ptr, int out_entries, int channel, int batch, int* count, int* offset_)
+write_conv_res2(CudaLaunchConfig config, const itype* in_buffer, const itype* in_ids, itype* out_ind, dtype* out_val, const itype* in_shape_ptr, const itype* out_shape_ptr, int out_entries, int channel, int batch, int* count, int* offset_)
 {
   itype offset = *offset_;
   itype idkd[data_dimension];
@@ -191,19 +191,17 @@ write_conv_res2(CudaLaunchConfig config, const itype* in_buffer, const itype* in
     itype idx = in_ids[x];
     dtype outval = dtype(in_buffer[x]) / 2048;
     itype* idkd_r = &idkd[1];
-    //map_channel_buffer_1d_to_kd<itype, data_dimension>(idx, out_shape_ptr, idkd_r);
+    //map_channel_buffer_1d_to_kd<itype, data_dimension>(idx, in_shape_ptr, idkd_r);
     itype fact[data_dimension- 2]; 
     fact[0] = 1;
     for(int i = 2; i < data_dimension; ++i){
-      fact[i - 1] = fact[i - 2] * out_shape_ptr[i - 1]; 
+      fact[i - 1] = fact[i - 2] * in_shape_ptr[i - 1]; 
     }
     itype r = idx;
     for(int i =  data_dimension - 3; i >= 0; --i){
       idkd_r[i] = r / fact[i];
       r = r % fact[i];
     }
-   
- 
     itype out_id_1d = 0;
     index_KDto1D_<itype, data_dimension>(&idkd[0], out_shape_ptr, &out_id_1d);
     int out_x = atomicAdd(count, 1);
@@ -222,6 +220,18 @@ abs_values(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, btype* 
     int out_x = atomicAdd(out_count, 1);
     out_buffer[out_x] = itype(abs(in_buffer[x] * 2048));
     out_ids[out_x] = x;
+  }
+}
+
+
+template <typename dtype, typename itype, typename btype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+reverse_abs_values(CudaLaunchConfig config, const dtype* __restrict__ in_buffer, const itype* __restrict__ in_ids, btype* out_buffer){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {
+      break;
+    }
+    if(out_buffer[x] == 0) continue;
+    out_buffer[x] = itype(in_buffer[in_ids[x]] * 2048);
   }
 }
 
@@ -330,7 +340,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   }
   const IndiceT batch_count = cpu_in_shape[0];
   const IndiceT in_channel_count = cpu_in_shape[data_dimension - 1];
-  const IndiceT batch_dense_size = in_channel_count * batch_count;
+  const IndiceT batch_dense_size = out_channel_count * batch_count;
   const IndiceT tensor_dense_size = channel_dense_size * batch_dense_size;
   const IndiceT result_count = ceil(tensor_dense_size * max_density);
   const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
@@ -373,6 +383,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   allocate_tensor(context, out_sh_tensor, &out_sh,  data_dimension);
   cudaMemcpy(out_sh, i_sh.data(), (data_dimension - 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(out_sh + data_dimension - 1, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_sh.data(), out_sh, data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   if(data_entry_count <= 0){
     LOG(WARNING) << "encountered zero tenso";
     return;
@@ -436,7 +447,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       } else if(filter_type == "K-RELU"){
         relu_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer, in_channel_ids_buffer, result_dense_count);
       } else {
-        //LOG(ERROR) << "unsupported filter type: " << filter_type << ". Only 'K-ABS' and 'K-RELU' are supported.";
+        LOG(ERROR) << "unsupported filter type: " << filter_type << ". Only 'K-ABS' and 'K-RELU' are supported.";
         return;
       }
       cudaStreamSynchronize(d.stream());
@@ -457,17 +468,16 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       }
       if(cpu_result_count > 0){
         CudaLaunchConfig config_dbuffer_ = GetCudaLaunchConfig(min(cpu_result_count, max_channel_count), d);
-        if(config_dbuffer_.virtual_thread_count > 0){
-          write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer_.block_count, config_dbuffer_.thread_per_block, 0, d.stream()>>>(config_dbuffer_, write_vals + start_offset, 
-              write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
-          cudaStreamSynchronize(d.stream());
+        if(filter_type == "K-ABS"){
+           reverse_abs_values<<<config_dbuffer_.block_count, config_dbuffer_.thread_per_block, 0, d.stream()>>>(config_dbuffer_, channel_buffer, write_ids + start_offset, write_vals + start_offset);
         }
+        write_conv_res2<T, IndiceT, data_dimension><<<config_dbuffer_.block_count, config_dbuffer_.thread_per_block, 0, d.stream()>>>(config_dbuffer_, write_vals + start_offset, write_ids + start_offset, o_ind.data(), o_val.data(), i_sh.data(), o_sh.data(), channel_dense_size * max_density, j, i, result_block_count, data_offset_ptr);
+        cudaStreamSynchronize(d.stream());
       }
       data_offset_ptr = data_offset.data() + i * out_channel_count + j + 1; //TODO
       cudaMemcpy(data_offset_ptr, result_block_count, sizeof(int), cudaMemcpyDeviceToDevice);
      }
   }
-  cudaMemcpy(o_sh.data(), out_sh, data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
 }
 
 
@@ -621,7 +631,7 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   }
   const IndiceT batch_count = cpu_in_shape[0];
   const IndiceT in_channel_count = cpu_in_shape[data_dimension - 1];
-  const IndiceT tensor_dense_size = channel_dense_size * batch_count * in_channel_count;
+  const IndiceT tensor_dense_size = channel_dense_size * batch_count * out_channel_count;
   const IndiceT result_count = ceil(tensor_dense_size * max_density);
   const int max_channel_count = floor(result_count / double(out_channel_count * batch_count));
 
