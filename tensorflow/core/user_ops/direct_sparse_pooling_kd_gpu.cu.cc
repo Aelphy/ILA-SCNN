@@ -186,6 +186,7 @@ namespace functor {
     
     /////
     //0. write output shape
+    Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *out_block_mapping = NULL;
     std::vector<IndiceT> cpu_shape(data_dimension);
     cudaMemcpy(&cpu_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
     TensorShape out_sh_shape = {(IndiceT) data_dimension};
@@ -196,7 +197,6 @@ namespace functor {
     } 
     cudaMemcpy(o_sh.data(), &cpu_shape[0], data_dimension * sizeof(IndiceT), cudaMemcpyHostToDevice);
 
-    Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *out_block_mapping = NULL;
     if(data_entry_count <= 0){
       TensorShape out_ind_shape = {0};
       TensorShape out_val_shape = {0};
