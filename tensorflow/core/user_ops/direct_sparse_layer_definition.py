@@ -32,18 +32,37 @@ def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, n
 
 def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, regularizer=None):
   with tf.variable_scope(name):
+    this_regularizer = regularizer
+    #1. define density based regularizer for filter weights
+    if regularizer == None:
+      reg_bias = tf.get_variable('regularisation_bias', initializer=tf.zeros_initializer(), shape=[1], trainable = False, dtype=tf.float32)
+      max_bias = tf.constant(-0.1)
+      min_bias = tf.constant(0.1)
+      max_de = tf.constant(max_density)
+      this_regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
+
+    #2. define initialization of sparse filter weights
     dense_filter_shape = np.prod(filter_in_sizes)
     sd = sparse_data
     dense_filter = tf.ones(filter_in_sizes)
     idx = tf.where(tf.not_equal(dense_filter, 0))
-    # Use tf.shape(a_t, out_type=tf.int64) instead of a_t.get_shape() if tensor shape is dynamic
     sparse_filter_tensor = tf.SparseTensor(idx, tf.gather_nd(dense_filter, idx), dense_filter.get_shape())
     sf = create_sparse_filter_to_direct_sparse(sparse_filter_tensor, sd.out_shape, dim, name);
     f_ind = tf.get_variable('filter_indices', initializer=sf.out_indices, trainable = False, validate_shape=False)
     f_sh = tf.get_variable('filter_shape', initializer=sf.out_shape, trainable = False, validate_shape=False)
     f_map = tf.get_variable('filter_channel_mapping', initializer=sf.out_channel_mapping, trainable = False, validate_shape=False)
-    f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=regularizer, shape=[dense_filter_shape], trainable = True, validate_shape=True)
-    return sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type);
+    f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=this_regularizer, shape=[dense_filter_shape], trainable = True, validate_shape=True)
+    #3. define convolutional layer
+    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type);
+    #4. update bias of density based regularizer based on output of conv_layer
+    if regularizer == None:
+      dense_val = tf.cumprod(conv_layer.out_shape)
+      max_density_var = tf.multiply(dense_val, max_de)
+      out_count = conv_layer.out_block_channel_mapping[-1]
+      density_ge = tf.greater_equal(out_count, max_density_var)
+      min_bias_reg =  tf.multiply(tf.divide(out_count, max_density_var), min_bias)
+      reg_bias = tf.cond(density_ge, lambda: max_bias, lambda: min_bias_reg)
+    return conv_layer
 
 def create_sparse_pooling_layer(sparse_data, pooling_sizes, dim):
   sd = sparse_data

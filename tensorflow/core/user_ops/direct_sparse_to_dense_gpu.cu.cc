@@ -89,6 +89,7 @@ namespace functor {
     std::vector<IndiceT> cpu_shape(data_dimension);
     cudaMemcpy(&cpu_shape[0], i_sh.data(), (data_dimension) * sizeof(IndiceT), cudaMemcpyDeviceToHost);
 
+    //LOG(INFO) << "sparse to dense backprop";
     /////
     //1. allocate output tensors
     TensorShape out_val_shape = {i_ind.dimension(0)};

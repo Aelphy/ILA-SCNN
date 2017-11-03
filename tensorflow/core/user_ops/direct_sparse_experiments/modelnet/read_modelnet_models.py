@@ -10,8 +10,8 @@ class ModelnetReader():
     self.res = res
     self.grid_size = grid_size
     if categories == None:
-      #self.categories = ["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"]
-      self.categories = ["desk", "dresser"]
+      self.categories = ["bathtub", "bed", "chair", "desk", "dresser", "monitor", "night_stand", "sofa", "table", "toilet"]
+      #self.categories = ["desk", "dresser"]
     else:
       self.categories = categories
     self.train_dir = "/train"

@@ -297,9 +297,15 @@ namespace functor {
     cudaMemcpy(&data_entry_count, i_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
     //LOG(DEBUG) << "pooling bp" << data_entry_count; 
    
-    //TODO: filter (per channel)
-    //TODO: no atomic max for floating point values! (suboptimal implementation with radix sort) :/
- 
+    /////
+    //4. allocate output tensors 
+    Tensor *bp;
+    TensorShape out_bp_shape = {(IndiceT) i_val.dimension(0)};
+    OP_REQUIRES_OK(context, context->allocate_output("backprops", out_bp_shape, &bp));
+    auto backprops = bp->flat<T>();
+    cudaMemset(backprops.data(), 0, backprops.dimension(0) * sizeof(T));
+    if(data_entry_count <= 0) return;
+
     /////
     //1. allocate temp buffer
     Tensor in_out_map_tensor, in_out_map_ids_sorted_tensor, out_sorted_values_tensor, strides_tensor, offset_tensor, batch_channel_count_tensor, idx_tensor, idx_sorted_tensor; 
@@ -340,13 +346,6 @@ namespace functor {
     CudaLaunchConfig config1 = GetCudaLaunchConfig(data_entry_count + 1, d);
     compute_coresponces<IndiceT, data_dimension><<<config1.block_count, config1.thread_per_block, 0, d.stream()>>>(config1, unique_mask, offset, data_cor, out_count);
 
-    /////
-    //4. allocate output tensors 
-    Tensor *bp;
-    TensorShape out_bp_shape = {(IndiceT) i_val.dimension(0)};
-    OP_REQUIRES_OK(context, context->allocate_output("backprops", out_bp_shape, &bp));
-    auto backprops = bp->flat<T>();
-    cudaMemset(backprops.data(), 0, backprops.dimension(0) * sizeof(T));
 
     /////
     //5. perform pooling within hypercubes

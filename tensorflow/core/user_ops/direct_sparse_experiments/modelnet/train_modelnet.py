@@ -31,8 +31,9 @@ if res == 8:
   model_location = '/home/thackel/cnn_models/modelnet10_8'
 elif res == 256:
   model_location = '/home/thackel/cnn_models/modelnet10_256'
-learning_rate = 0.01
-approx = True
+global_step = tf.Variable(0, trainable=False)
+learning_rate = tf.train.exponential_decay(0.1, global_step, 1000, 0.96, staircase=True)
+
 rho_data = 1 / (3 * res)
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
@@ -40,10 +41,11 @@ print("started construction data reader")
 reader = ModelnetReader(data_location, res, 0, batch_size)
 print("data reader constructed")
 num_classes = reader.getNumClasses()
+print("number of classes", num_classes)
 batch_label_sizes = [batch_size, num_classes]
 max_epochs = 1000
 dim = 5
-initializer = tf.truncated_normal_initializer(0.01, 0.5)
+initializer = tf.truncated_normal_initializer(0.35, 0.5)
 regularizer =  reg.biased_l2_regularizer(0.005, -0.005)
 
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
@@ -55,10 +57,10 @@ print("started model generation")
 if res == 8:
   [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
 elif res == 256:
-  [sd_loss, test_loss, n1, n2, n3, n4, n5] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
+  [sd_loss, test_loss] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
 print("model generated")
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
-sd_train =  sd_train_op.minimize(sd_loss)
+sd_train =  sd_train_op.minimize(sd_loss, global_step=global_step)
 sd_grads = sd_train_op.compute_gradients(sd_loss)
 
 config = tf.ConfigProto(
@@ -106,7 +108,7 @@ with tf.Session(config=config) as sess:
       feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
       t_train1 = time.time()
       #perform training
-      [_, loss_val, test_loss_, r1, r2, r3, r4, r5] = sess.run([sd_train, sd_loss, test_loss, n1, n2, n3, n4, n5], feed_dict=feed_dict)
+      [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
       t_train2 = time.time()
       #print(r1, r2)
       #print("loss val: ", loss_val)
