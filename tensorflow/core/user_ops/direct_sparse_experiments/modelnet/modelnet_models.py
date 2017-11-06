@@ -79,7 +79,7 @@ def model_modelnet_16(sparse_data, tensor_in_sizes, train_labels = None, num_cla
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d1, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d1, "K-ABS", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
   sd = ld.create_direct_sparse_to_dense(net, dim)
-  sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
+  sd_flat = tf.reshape(sd, [batch_size, total_size * 16 / 8])
   if train_labels != None:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
   else:
