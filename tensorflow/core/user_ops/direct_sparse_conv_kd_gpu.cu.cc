@@ -425,6 +425,14 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       cudaStreamSynchronize(d.stream());
       cudaMemset(channel_buffer, 0, channel_dense_size * sizeof(T)); //stores the dense result of the computed output channel in buffer
       for(int k = 0; k < in_channel_count; ++k){
+        if(i * in_channel_count + k + 1 >= i_mapping.dimension(0)){
+          LOG(WARNING) << "index out of mapping bounds";
+          continue;
+        }
+        if(j * in_channel_count + k + 1 >= f_mapping.dimension(0)){
+          LOG(WARNING) << "index out of mapping bounds";
+          continue;
+        }
         int block_start_ = cpu_input_block_mapping[i * in_channel_count + k];
         int block_end_ = cpu_input_block_mapping[i * in_channel_count + k + 1]; //all blocks for batch
         int filter_start = cpu_filter_channel_mapping[j * in_channel_count + k];

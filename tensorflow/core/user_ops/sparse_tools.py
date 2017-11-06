@@ -38,7 +38,7 @@ def idkD_to_id1D(idx, shape):
    for i in reversed(range(0,len(shape))):
      index_1d += idx[i] * mult;
      mult = mult * shape[i];
-   assert(np.all(id1D_to_idkD(index_1d, shape) - idx == 0))
+   #assert(np.all(id1D_to_idkD(index_1d, shape) - idx == 0))
    return index_1d
 
 def id1D_to_idkD(inid, shape):

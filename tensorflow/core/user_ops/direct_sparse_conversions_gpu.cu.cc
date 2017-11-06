@@ -41,7 +41,6 @@ coo_to_blocks(  OpKernelContext* context, DeviceT d, const IndiceT* in_ids_kd, c
   IndiceT block_count_ = 0;
   cudaMemcpy(&block_count_, unique_count + data_entry_count - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   block_count = block_count_;
-  checkCuda(cudaMalloc(block_pointer, (block_count_ + 1) * sizeof(IndiceT)));
   allocate_tensor(context, ibp_tensor, block_pointer,  block_count_ + 1);
   IndiceT dec = data_entry_count;
   cudaMemcpy(&(*block_pointer)[block_count_], &dec, sizeof(IndiceT), cudaMemcpyHostToDevice);
@@ -175,6 +174,7 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto o_ind = out_indices->flat<IndiceT>();
   auto o_b_ptr = out_block_pointer->flat<int>();
   auto o_val = out_values->flat<T>();
+  LOG(INFO) << "s2s data: " << data_entry_count << " " << batch_count << " " << in_channel_count << std::endl;
   cudaMemcpy(o_ind.data(), in_block_ids, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_b_ptr.data(), input_block_mapping, (batch_count * in_channel_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_val.data(), in_block_vals, data_entry_count * sizeof(T), cudaMemcpyDeviceToDevice);

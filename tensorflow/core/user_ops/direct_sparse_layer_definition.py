@@ -22,8 +22,8 @@ import direct_sparse_grad_ops
 from tensorflow.python import debug as tf_debug
 from direct_sparse_module import sparse_nn_ops as sc_module
 
-def create_sparse_data_to_direct_sparse(sparse_data, dim):
-  sd = sparse_data
+def create_sparse_data_to_direct_sparse(sd, dim):
+  print(sd.indices)
   return sc_module.direct_sparse_data_conversion(sd.indices, sd.values, sd.dense_shape, dim)
 
 def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, name = ""):
