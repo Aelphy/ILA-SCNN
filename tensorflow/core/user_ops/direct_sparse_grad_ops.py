@@ -114,6 +114,7 @@ def _DirectSparseMaxPoolingKDGrad(op, *grads):
                                          op.outputs[3],
                                          grads[1],
                                          strides=op.get_attr("strides"),
+                                         max_density=op.get_attr("max_density"),
                                          dim=op.get_attr("dim")),
           None,
           None]
@@ -131,6 +132,7 @@ def _DirectSparseUnpoolingKDGrad(op, *grads):
                                          op.inputs[6],
                                          grads[1],
                                          strides=op.get_attr("strides"),
+                                         max_density=op.get_attr("max_density"),
                                          dim=op.get_attr("dim")),
           None,
           None,

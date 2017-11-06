@@ -33,6 +33,7 @@ REGISTER_OP("DirectSparseMaxPoolingKD")
   .Output("out_shape: Tindices")
   .Output("out_block_channel_mapping: int32")
   .Attr("strides: list(int)")
+  .Attr("max_density: float = 0.0")
   .Attr("dim: int = 5");
 
 REGISTER_OP("DirectSparseMaxPoolingKDBackprop")
@@ -49,6 +50,7 @@ REGISTER_OP("DirectSparseMaxPoolingKDBackprop")
   .Input("grads: T")
   .Output("backprops: T")
   .Attr("strides: list(int)")
+  .Attr("max_density: float = 0.0")
   .Attr("dim: int = 5");
 
 REGISTER_OP("DirectSparseUnpoolingKD")
@@ -63,6 +65,7 @@ REGISTER_OP("DirectSparseUnpoolingKD")
   .Input("out_block_channel_mapping: int32")
   .Output("out_values: T")
   .Attr("strides: list(int)")
+  .Attr("max_density: float = 0.0")
   .Attr("dim: int = 5");
 
 REGISTER_OP("DirectSparseUnpoolingKDBackprop")
@@ -79,6 +82,7 @@ REGISTER_OP("DirectSparseUnpoolingKDBackprop")
   .Input("grads: T")
   .Output("backprops: T")
   .Attr("strides: list(int)")
+  .Attr("max_density: float = 0.0")
   .Attr("dim: int = 5");
 
 #include "tensorflow/core/framework/op_kernel.h"
@@ -92,18 +96,20 @@ class DirectSparsePoolingKD : public OpKernel {
  public:
  explicit DirectSparsePoolingKD(OpKernelConstruction* context) : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("strides", &stride_));
+    OP_REQUIRES_OK(context, context->GetAttr("max_density", &max_density));
     OP_REQUIRES_OK(context, context->GetAttr("dim", &dim));
   }
 
   void Compute(OpKernelContext* context) override {
     //functor requires kernel context since output shape is not known befor computing results
     if(dim == 5){
-      FunctorT<DeviceT, T, Tindices, 5>()(context, stride_);
+      FunctorT<DeviceT, T, Tindices, 5>()(context, stride_, max_density);
     } //TODO: add more dimensions
   }
 
  private:
   std::vector<int32> stride_;
+  float max_density;
   int dim;
 };
 

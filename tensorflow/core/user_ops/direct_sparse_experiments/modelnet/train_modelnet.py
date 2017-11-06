@@ -45,8 +45,9 @@ print("number of classes", num_classes)
 batch_label_sizes = [batch_size, num_classes]
 max_epochs = 1000
 dim = 5
-initializer = tf.truncated_normal_initializer(0.35, 0.5)
-regularizer =  reg.biased_l2_regularizer(0.005, -0.005)
+initializer = tf.truncated_normal_initializer(0, 0.5)
+#regularizer =  reg.biased_l2_regularizer(0.005, -0.005)
+regularizer =  None
 
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
 sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="sparse_placeholder")

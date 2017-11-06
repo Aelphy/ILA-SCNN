@@ -63,17 +63,17 @@ def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_
   net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
-  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 0.06)
   d2 = 0.03
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
-  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 0.18)
   d3 = 0.07
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)
-  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 0.50)
   net = ld.create_direct_sparse_to_dense(net, dim)
   net = tf.reshape(net, [batch_size, 32, 32, 32, 24])
   #dense layers

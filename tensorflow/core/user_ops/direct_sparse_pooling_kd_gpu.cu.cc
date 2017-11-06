@@ -165,7 +165,7 @@ compute_out_mapping(CudaLaunchConfig config, const dtype* __restrict__ in_offset
 
 namespace functor {
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-  void DirectSparseMaxPoolingFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
+  void DirectSparseMaxPoolingFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const float& max_density) const {
     const Tensor *in_indices, *in_values, *in_shape, *in_block_channel_mapping;
     OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
     OP_REQUIRES_OK(context, context->input("in_values", &in_values));
@@ -192,9 +192,12 @@ namespace functor {
     TensorShape out_sh_shape = {(IndiceT) data_dimension};
     OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
     auto o_sh = out_shape->flat<IndiceT>();
+    IndiceT dense_tensor_count = 1;
     for(size_t i = 0; i < data_dimension; ++i){
       cpu_shape[i] = IndiceT(ceil(float(cpu_shape[i]) / stride[i]));
-    } 
+      dense_tensor_count = dense_tensor_count * cpu_shape[i];
+    }
+    IndiceT max_tensor_count = (IndiceT) double(dense_tensor_count) * max_density;
     cudaMemcpy(o_sh.data(), &cpu_shape[0], data_dimension * sizeof(IndiceT), cudaMemcpyHostToDevice);
 
     if(data_entry_count <= 0){
@@ -247,9 +250,12 @@ namespace functor {
     cudaStreamSynchronize(d.stream());
 
     /////
-    //4. allocate output tensors 
-    TensorShape out_ind_shape = {(IndiceT) out_count};
-    TensorShape out_val_shape = {(IndiceT) out_count};
+    //4. allocate output tensors
+    if(max_density == 0){
+      max_tensor_count = out_count;
+    }
+    TensorShape out_ind_shape = {(IndiceT) max_tensor_count};
+    TensorShape out_val_shape = {(IndiceT) max_tensor_count};
     TensorShape out_block1_shape = {(IndiceT) bcount};
     OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
     OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_block1_shape, &out_block_mapping));
@@ -257,6 +263,13 @@ namespace functor {
     auto o_ind = out_indices->flat<IndiceT>();
     auto o_mapping = out_block_mapping->flat<int>();
     auto o_val = out_values->flat<T>();
+
+    /////
+    //4a. TODO: Filter if exceedes density:
+    if(out_count > max_tensor_count){
+      LOG(ERROR) << "filter functions not implemented yet; please set a reasonable large density" << std::endl; //TODO
+      return;
+    }
 
     /////
     //5. perform pooling within hypercubes
@@ -270,7 +283,7 @@ namespace functor {
 
 
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-  void DirectSparseMaxPoolingBackpropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
+  void DirectSparseMaxPoolingBackpropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const float& max_density) const {
     const Tensor *in_indices, *in_values, *in_shape, *in_block_channel_mapping, *gradients;
     const Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *out_block_mapping = NULL;
     OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
@@ -356,7 +369,7 @@ namespace functor {
   }
 
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-  void DirectSparseUnpoolingFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
+  void DirectSparseUnpoolingFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const float& max_density) const {
     const Tensor *in_indices, *in_values, *in_shape, *in_block_channel_mapping;
     const Tensor *out_indices, *out_shape, *out_block_channel_mapping;
     OP_REQUIRES_OK(context, context->input("out_indices", &out_indices));
@@ -377,6 +390,8 @@ namespace functor {
     auto bcount = o_mapping.dimension(0);
     int data_entry_count;
     cudaMemcpy(&data_entry_count, o_mapping.data() + bcount - 1, sizeof(int), cudaMemcpyDeviceToHost);
+    int input_entry_count;
+    cudaMemcpy(&input_entry_count, i_mapping.data() + i_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
     
     /////
     //4. allocate output tensors 
@@ -389,7 +404,7 @@ namespace functor {
     //1. create hash table
     HashConfig hc;
     Tensor hash_table, hash_values;
-    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) i_ind.dimension(0), hc);
+    initialize_table<DeviceT, IndiceT, IndiceT>(context, d, hash_table, hash_values, i_ind.data(), i_ind.data(), (IndiceT) input_entry_count, hc);
    
     /////
     //2. allocate temp buffer
@@ -415,7 +430,7 @@ namespace functor {
     cudaStreamSynchronize(d.stream());
     auto hashv = (IndiceT*) hash_values.flat<int8>().data();
     auto hasht = (IndiceT*) hash_table.flat<int8>().data();
-    CudaLaunchConfig configo = GetCudaLaunchConfig(o_ind.dimension(0), d);
+    CudaLaunchConfig configo = GetCudaLaunchConfig(data_entry_count, d);
     compute_coresponces_values<T, IndiceT, data_dimension><<<configo.block_count, configo.thread_per_block, 0, d.stream()>>>(configo, in_out_map_ids, i_sh.data(), i_val.data(), hasht, hashv, hc, o_val.data());
   }
   
@@ -449,7 +464,7 @@ namespace functor {
   }
 
   template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
-  void DirectSparseUnpoolingBackpropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride) const {
+  void DirectSparseUnpoolingBackpropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const float& max_density) const {
     const Tensor *in_indices, *in_values, *in_shape, *in_block_channel_mapping;
     const Tensor *out_indices, *out_values, *out_shape, *out_block_channel_mapping, *gradients;
     OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
