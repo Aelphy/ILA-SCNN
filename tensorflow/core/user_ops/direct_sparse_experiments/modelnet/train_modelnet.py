@@ -24,7 +24,7 @@ import modelnet_models as models
 from read_modelnet_models import ModelnetReader
 #just a quick test, no nice code
 
-res = 256
+res = 8
 data_location = '/scratch/thackel/ModelNet10'
 pretrained_model = ''
 model_location = '/home/thackel/cnn_models/modelnet10'
