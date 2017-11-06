@@ -27,10 +27,7 @@ from read_modelnet_models import ModelnetReader
 res = 256
 data_location = '/scratch/thackel/ModelNet10'
 pretrained_model = ''
-if res == 8:
-  model_location = '/home/thackel/cnn_models/modelnet10_8'
-elif res == 256:
-  model_location = '/home/thackel/cnn_models/modelnet10_256'
+model_location = '/home/thackel/cnn_models/modelnet10'
 global_step = tf.Variable(0, trainable=False)
 learning_rate = tf.train.exponential_decay(0.1, global_step, 1000, 0.96, staircase=True)
 
@@ -55,10 +52,7 @@ sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="spa
 #initialize graph
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
 print("started model generation")
-if res == 8:
-  [sd_loss, test_loss] = models.model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
-elif res == 256:
-  [sd_loss, test_loss] = models.model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
+[sd_loss, test_loss] = models.model_modelnet_res(res, sparse_data, tensor_in_sizes, train_labels = dense_labels, num_classes = num_classes, initializer = initializer, regularizer = regularizer)
 print("model generated")
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss, global_step=global_step)

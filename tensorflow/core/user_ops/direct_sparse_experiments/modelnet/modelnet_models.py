@@ -21,7 +21,16 @@ import direct_sparse_grad_ops
 from tensorflow.python import debug as tf_debug
 import direct_sparse_layer_definition as ld
 
-def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn8-", initializer = None, regularizer = None):
+
+def model_modelnet_res(res, sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn", initializer = None, regularizer = None):
+  if res == 8:
+    return model_modelnet_8(sparse_data, tensor_in_sizes, train_labels, num_classes, scope, initializer, regularizer)
+  elif res == 16:
+    return model_modelnet_16(sparse_data, tensor_in_sizes, train_labels, num_classes, scope, initializer, regularizer)
+  elif res == 256:
+    return model_modelnet_256(sparse_data, tensor_in_sizes, train_labels, num_classes, scope, initializer, regularizer)
+
+def model_modelnet_8(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn8-", initializer = None, regularizer = None):
   strides = [1,1,1,1,1]
   padding = "SAME"
   dim = 5
@@ -31,8 +40,11 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_cl
   for i in range(1, len(tensor_in_sizes)): #skip batch size
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
-  sc1 = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, 0.8, "K-ABS", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
-  sd = ld.create_direct_sparse_to_dense(sc1, dim)
+  d1 = 0.25
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-ABS", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
+  sd = ld.create_direct_sparse_to_dense(net, dim)
   sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
   if train_labels != None:
     conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
@@ -48,7 +60,41 @@ def model_modelnet10_8(sparse_data, tensor_in_sizes, train_labels = None, num_cl
   p_sd_out = tf.nn.softmax(logits=fc10)
   return [sd_out, p_sd_out]
 
-def model_modelnet10_256(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn256-", initializer = None, regularizer = None):
+def model_modelnet_16(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn16-", initializer = None, regularizer = None):
+  strides = [1,1,1,1,1]
+  padding = "SAME"
+  dim = 5
+  pooling_sizes = [1,2,2,2,1]
+  batch_size = tensor_in_sizes[0]
+  total_size = 1
+  for i in range(1, len(tensor_in_sizes)): #skip batch size
+    total_size = total_size * tensor_in_sizes[i]
+  sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
+  d1 = 0.125
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 6 * d1)
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,8,16], strides, padding, dim, d1, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d1, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d1, "K-ABS", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
+  sd = ld.create_direct_sparse_to_dense(net, dim)
+  sd_flat = tf.reshape(sd, [batch_size, total_size * 8])
+  if train_labels != None:
+    conv_out = tf.nn.dropout(sd_flat, 0.5, name="dropout")
+  else:
+    conv_out = sd_flat
+  fc512 = tf.layers.dense(conv_out, 1024, name="dense2")
+  fc10 = tf.layers.dense(fc512, num_classes, name="dense1")
+  #if train:
+  if train_labels != None:
+    sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fc10, labels=train_labels, name = "softmax_loss"))
+  else:
+    sd_out = None
+  p_sd_out = tf.nn.softmax(logits=fc10)
+  return [sd_out, p_sd_out]
+
+def model_modelnet_256(sparse_data, tensor_in_sizes, train_labels = None, num_classes = 10, scope = "mn256-", initializer = None, regularizer = None):
   strides = [1,1,1,1,1]
   padding = "SAME"
   dim = 5

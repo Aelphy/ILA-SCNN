@@ -40,7 +40,8 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
       max_bias = tf.constant(-0.1, dtype=tf.float64)
       min_bias = tf.constant(0.1, dtype=tf.float64)
       max_de = tf.constant(max_density, dtype=tf.float64)
-      this_regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
+      #this_regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
+      this_regularizer = None #TODO: work on density based regularisation
 
     #2. define initialization of sparse filter weights
     dense_filter_shape = np.prod(filter_in_sizes)
