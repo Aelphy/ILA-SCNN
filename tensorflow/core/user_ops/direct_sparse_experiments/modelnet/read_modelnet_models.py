@@ -91,13 +91,11 @@ class ModelnetReader():
   def randomRotation2D(self, points, angle = None):
     if angle == None:
       angle = random.uniform(0, math.pi)
-    for point in points:
-      x = point[0]
-      y = point[1]
-      s = math.sin(angle)
-      c = math.cos(angle)
-      points[0] = x * c - y * s
-      points[1] = y * c + x * s
+   
+    x = points[:, 0].copy()
+    y = points[:, 1].copy()
+    points[:, 0] = x * np.cos(angle) - y * np.sin(angle)
+    points[:, 1] = y * np.cos(angle) + x * np.sin(angle)
     return points
 
   def getData(self, data_path, batch = 0, angle = None):
@@ -115,6 +113,7 @@ class ModelnetReader():
     max_size = max([max_x + off_x, max_y + off_y, max_z + off_z, self.grid_size])
     scale = float(max_size) / self.res + 1 
     sparse_grid = {}
+      
     for point in points:
       bin_x = int((point[0] + off_x) / scale)
       bin_y = int((point[1] + off_y) / scale)
@@ -135,17 +134,12 @@ class ModelnetReader():
     max_y = -100000
     min_z = 100000
     max_z = -100000
-    for point in points:
-      if point[0] > max_x:
-        max_x = point[0]
-      if point[1] > max_y:
-        max_y = point[1]
-      if point[2] > max_z:
-        max_z = point[2]
-      if point[0] < min_x:
-        min_x = point[0]
-      if point[1] < min_y:
-        min_y = point[1]
-      if point[2] < min_z:
-        min_z = point[2]
+    
+    max_x = points[:, 0].max()
+    max_y = points[:, 1].max()
+    max_z = points[:, 2].max()
+    min_x = points[:, 0].min()
+    min_y = points[:, 1].min()
+    min_z = points[:, 2].min()
+
     return [min_x, min_y, min_z, max_x, max_y, max_z]

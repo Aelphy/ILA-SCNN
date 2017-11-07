@@ -93,20 +93,23 @@ with tf.Session(config=config) as sess:
     av_loss = 0
     batches = 0
     t1 = time.time()
+    t_train1 = 0
+    t_train2 = 0
     while has_data:
       #create random training data
+      tt0 = time.time()
       [batch, has_data] = reader.next_batch()
       reader.start()
       values_ = np.array(batch[1], dtype=np.float32)
       indices_ = np.array(batch[0], dtype =np.int64)
       #print(indices_, values_, batch[2])
       feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
-      t_train1 = time.time()
+      tt1 = time.time()
       #perform training
       [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
-      t_train2 = time.time()
-      #print(r1, r2)
-      #print("loss val: ", loss_val)
+      tt2 = time.time()
+      print(tt2 - tt1, tt2 - tt0)
+      print("loss val: ", loss_val)
       av_loss = av_loss + loss_val
       batches = batches + 1
     t2 = time.time()
