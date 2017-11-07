@@ -41,7 +41,7 @@ def model_modelnet_8(sparse_data, tensor_in_sizes, train_labels = None, num_clas
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   d1 = 0.25
-  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-ABS", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-ABS", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
   sd = ld.create_direct_sparse_to_dense(net, dim)
@@ -71,11 +71,11 @@ def model_modelnet_16(sparse_data, tensor_in_sizes, train_labels = None, num_cla
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   d1 = 0.125
-  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-ABS", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 6 * d1)
-  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,8,16], strides, padding, dim, d1, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d1, "K-ABS", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d1, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d1, "K-ABS", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
   sd = ld.create_direct_sparse_to_dense(net, dim)
@@ -106,17 +106,17 @@ def model_modelnet_256(sparse_data, tensor_in_sizes, train_labels = None, num_cl
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   d1 = 0.01
-  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-ABS", name = scope + "sc1", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,8,8], strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 0.06)
   d2 = 0.03
-  net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,8,16], strides, padding, dim, d2, "K-ABS", name = scope + "sc4", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,16,16], strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 0.18)
   d3 = 0.07
-  net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
+  net = ld.create_sparse_conv_layer(net, [3,3,3,16,24], strides, padding, dim, d3, "K-ABS", name = scope + "sc7", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_conv_layer(net, [3,3,3,24,24], strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer, regularizer=regularizer)
   net = ld.create_sparse_pooling_layer(net, pooling_sizes, dim, 0.50)
