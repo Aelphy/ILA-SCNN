@@ -176,7 +176,7 @@ void DirectSparseDataConversionFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto o_val = out_values->flat<T>();
   LOG(INFO) << "s2s data: " << data_entry_count << " " << batch_count << " " << in_channel_count << std::endl;
   cudaMemcpy(o_ind.data(), in_block_ids, data_entry_count * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
-  cudaMemcpy(o_b_ptr.data(), input_block_mapping, (batch_count * in_channel_count + 1) * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
+  cudaMemcpy(o_b_ptr.data(), input_block_mapping, (batch_count * in_channel_count + 1) * sizeof(int), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_val.data(), in_block_vals, data_entry_count * sizeof(T), cudaMemcpyDeviceToDevice);
   cudaMemcpy(o_sh.data(), i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToDevice);
 }

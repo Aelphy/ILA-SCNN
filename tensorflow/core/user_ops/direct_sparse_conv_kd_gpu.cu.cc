@@ -664,8 +664,8 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   OP_REQUIRES_OK(context, context->allocate_output("filter_grads", out_f_shape, &filter_grads));
   auto in_grads = input_grads->flat<T>();
   auto f_grads = filter_grads->flat<T>();
-  cudaMemset(in_grads.data(), 0, i_val.dimension(0) * sizeof(T));
-  cudaMemset(f_grads.data(), 0, f_val.dimension(0) * sizeof(T));
+  cudaMemset(in_grads.data(), 0, in_grads.dimension(0) * sizeof(T));
+  cudaMemset(f_grads.data(), 0, f_grads.dimension(0) * sizeof(T));
   
   if(data_entry_count <= 0){
     return;

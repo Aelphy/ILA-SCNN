@@ -164,7 +164,7 @@ namespace functor {
     int *block_count = 0;
     Tensor block_count_tensor;
     allocate_tensor(context, block_count_tensor, &block_count, channel_count * batch_count + 1);
-    cudaMemset(block_count, 0, (batch_count * channel_count + 1) * sizeof(IndiceT));
+    cudaMemset(block_count, 0, (batch_count * channel_count + 1) * sizeof(int));
     if(dense_entry_count <= 0){
       Tensor *out_indices, *out_values;
       TensorShape out_val_shape = {(IndiceT) 0};
@@ -189,7 +189,7 @@ namespace functor {
     OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
     auto o_val = out_values->flat<T>();
     auto o_ind = out_indices->flat<IndiceT>();
-    cudaMemset(block_count, 0, (batch_count * channel_count + 1) * sizeof(IndiceT));
+    cudaMemset(block_count, 0, (batch_count * channel_count + 1) * sizeof(int));
     dense_to_sparse<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_val.data(),  o_sh.data(), o_mapping.data(), block_count, o_ind.data(), o_val.data());
   }
   

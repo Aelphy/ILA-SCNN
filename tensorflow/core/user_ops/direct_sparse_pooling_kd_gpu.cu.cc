@@ -208,7 +208,7 @@ namespace functor {
       OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_block1_shape, &out_block_mapping));
       OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
       auto o_mapping = out_block_mapping->flat<int>();
-      cudaMemset(o_mapping.data(), 0, bcount * sizeof(IndiceT));
+      cudaMemset(o_mapping.data(), 0, bcount * sizeof(int));
       LOG(WARNING) << "zero tensor encounterd";
       return;
     }
