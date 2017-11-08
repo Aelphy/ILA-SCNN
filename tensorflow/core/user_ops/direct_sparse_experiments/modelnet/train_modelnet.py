@@ -24,12 +24,13 @@ import modelnet_models as models
 from read_modelnet_models import ModelnetReader
 #just a quick test, no nice code
 
-res = 8
+res = 256
 data_location = '/scratch/thackel/ModelNet10'
 pretrained_model = ''
-model_location = '/home/thackel/cnn_models/modelnet10'
+model_location = '/home/thackel/cnn_models/modelnet10_256'
 global_step = tf.Variable(0, trainable=False)
-learning_rate = tf.train.exponential_decay(0.1, global_step, 1000, 0.96, staircase=True)
+learning_rate = tf.train.exponential_decay(0.01, global_step, 1000, 0.96, staircase=True)
+initializer = tf.truncated_normal_initializer(0, 0.1)
 
 rho_data = 1 / (3 * res)
 batch_size = 32
@@ -42,7 +43,6 @@ print("number of classes", num_classes)
 batch_label_sizes = [batch_size, num_classes]
 max_epochs = 1000
 dim = 5
-initializer = tf.truncated_normal_initializer(0, 0.5)
 #regularizer =  reg.biased_l2_regularizer(0.005, -0.005)
 regularizer =  None
 
@@ -107,7 +107,8 @@ with tf.Session(config=config) as sess:
       #perform training
       [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
       tt2 = time.time()
-      print("loss val: ", loss_val)
+      if batches < 20 or (batches % 20) == 0:
+        print("loss val: ", loss_val)
       av_loss = av_loss + loss_val
       batches = batches + 1
       t_train = t_train + tt2 - tt1
