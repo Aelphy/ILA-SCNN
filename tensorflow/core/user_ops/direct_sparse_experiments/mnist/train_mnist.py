@@ -10,7 +10,6 @@ import numpy as np
 
 import direct_sparse_layer_definition as ld
 import sys
-sys.path.append('./tensorflow/tensorflow/core/user_ops/direct_sparse_experiments/modelnet')
 import tensorflow as tf
 import direct_sparse_regularizers as reg
 import time
@@ -77,6 +76,7 @@ X_train, y_train, X_val, y_val, X_test, y_test = load_dataset()
 (X_train * 255 < 50).sum() / (np.prod(X_train.shape) + 1e-7)
 
 model_location = '/home/thackel/cnn_models/mnist'
+pretrained_model = '/scratch/thackel/cnn_models/mnist_8'
 
 dim = 5 
 batch_size = 32
@@ -128,7 +128,7 @@ def model_mnist(sparse_data, tensor_in_sizes, train_labels = None, num_classes =
 
 print("initializing model")
 
-[sd_loss, test_loss, do] = model_mnist(
+[sd_loss, test_pred, do] = model_mnist(
     sparse_data=sparse_data, 
     tensor_in_sizes=tensor_in_sizes, 
     train_labels=dense_labels,
@@ -141,6 +141,9 @@ learning_rate = tf.train.exponential_decay(0.01, global_step, 1000, 0.96, stairc
 
 sd_train_op = tf.train.AdagradOptimizer(learning_rate)
 sd_train =  sd_train_op.minimize(sd_loss, global_step=global_step)
+
+
+
 
 print("model initialized")
 
@@ -164,14 +167,18 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 
 saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES), max_to_keep=20)
 
-max_epochs = 2
+max_epochs = 50
 
 with tf.Session() as sess:
   print("writing graph")
   trainable = tf.trainable_variables()
   print("trainable: ", trainable)
   sess.run(tf.global_variables_initializer())
+  if len(pretrained_model) > 0:
+    saver.restore(sess,pretrained_model)
   print("data initialized")
+
+
   
   for epoch in range(1, max_epochs):
     t1 = time.time()
@@ -180,7 +187,7 @@ with tf.Session() as sess:
     av_loss = 0
     batches = 0
     
-    for batch in iterate_minibatches(X_train.reshape(-1, 1, 28, 28, 1), y_train_softmax, 32):
+    for batch in iterate_minibatches(X_train.reshape(-1, 1, 28, 28, 1), y_train_softmax, batch_size):
       #create random training data
       tt0 = time.time()
 
@@ -195,7 +202,8 @@ with tf.Session() as sess:
       tt1 = time.time()
       #perform training
       [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
-      print("loss_val", loss_val)
+      if (batches % 100) == 0:
+        print("loss_val", loss_val)
       tt2 = time.time()
       av_loss = av_loss + loss_val
       batches = batches + 1
@@ -211,9 +219,12 @@ with tf.Session() as sess:
 
   do.training = False
 
-  sum_loss = 0
+  sum_correct = 0
   batches = 0
-  for batch in iterate_minibatches(X_test.reshape(-1, 1, 28, 28, 1), y_test_softmax, 32):
+
+  correct_prediction = tf.equal(tf.argmax(test_pred, 1), tf.argmax(dense_labels, 1))
+  accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+  for batch in iterate_minibatches(X_test.reshape(-1, 1, 28, 28, 1), y_test_softmax, batch_size):
     feed_dict = {
       sparse_data: tf.SparseTensorValue(
         [cl for cl in zip(*[arr.astype(np.int64) for arr in batch[0].nonzero()])],
@@ -222,10 +233,10 @@ with tf.Session() as sess:
       ),
       dense_labels: batch[1]
     }
-    loss_val = sess.run(test_loss, feed_dict=feed_dict)
-    sum_loss = sum_loss + loss_val
+    accuracy_batch = sess.run(accuracy, feed_dict=feed_dict)
+    sum_correct = sum_correct + accuracy_batch * batch_size
     batches = batches + 1
-  mean_loss = sum_loss / batches
-  print("mean loss", mean_loss)
+  accuracy_all = sum_correct / (batches * batch_size)
+  print("accuracy", accuracy_all)
 
 
