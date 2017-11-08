@@ -44,17 +44,17 @@ saver.restore(sess,model_location)
 
 writer = tf.summary.FileWriter("/tmp/test", sess.graph)
 reader.init()
-reader.start()
 has_data = True
 av_loss = 0 
 batches = 0
 
 all_conf_mat = tf.zeros([num_classes, num_classes], dtype=tf.int32)
 
-while has_data:
+while True:
   t1 = time.time()
   [batch, has_data] = reader.next_batch()
-  reader.start()
+  if has_data == False:
+    break
   t2 = time.time()
   print("time: ", t2 - t1) 
   values_ = np.array(batch[1], dtype=np.float32)

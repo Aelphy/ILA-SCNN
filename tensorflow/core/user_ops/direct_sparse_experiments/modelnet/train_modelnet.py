@@ -35,7 +35,7 @@ rho_data = 1 / (3 * res)
 batch_size = 32
 tensor_in_sizes_=[batch_size, res, res, res, 1] #[batch, depth, height, width, in_channels]
 print("started construction data reader")
-reader = ModelnetReader(data_location, res, 0, batch_size)
+reader = ModelnetReader(data_location, res, 0, batch_size, preprocess=True)
 print("data reader constructed")
 num_classes = reader.getNumClasses()
 print("number of classes", num_classes)
@@ -86,40 +86,38 @@ with tf.Session(config=config) as sess:
   if len(pretrained_model) > 0:
     saver.restore(sess,pretrained_model)
   for epoch in range(1, max_epochs):
-    reader = ModelnetReader(data_location, res, 0, batch_size)
     reader.init()
-    reader.start()
     has_data = True
     av_loss = 0
     batches = 0
     t1 = time.time()
-    t_train1 = 0
-    t_train2 = 0
-    while has_data:
+    t_train = 0
+    t_data_read = 0
+    while True:
       #create random training data
       tt0 = time.time()
       [batch, has_data] = reader.next_batch()
-      reader.start()
+      if has_data == False:
+        break
       values_ = np.array(batch[1], dtype=np.float32)
       indices_ = np.array(batch[0], dtype =np.int64)
       #print(indices_, values_, batch[2])
-      feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
       tt1 = time.time()
+      feed_dict={sparse_data: tf.SparseTensorValue(indices_, values_, batch[2]), dense_labels: batch[3]}
       #perform training
       [_, loss_val] = sess.run([sd_train, sd_loss], feed_dict=feed_dict)
       tt2 = time.time()
-      print(tt2 - tt1, tt2 - tt0)
       print("loss val: ", loss_val)
       av_loss = av_loss + loss_val
       batches = batches + 1
+      t_train = t_train + tt2 - tt1
+      t_data_read = t_data_read + tt1 - tt0
     t2 = time.time()
     av_loss = av_loss / batches
     print("epoch: ", epoch)
     print("average loss: ", av_loss)
-    print("time all: ", t2 - t1)
-    print("time train: ", t_train2 - t_train1)
+    print("time data read: ", t_data_read)
+    print("time train: ", t_train)
     saver.save(sess, model_location + "_" + str(epoch))
   saver.save(sess, model_location)
-
-
 
