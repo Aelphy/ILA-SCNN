@@ -37,11 +37,11 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
     #1. define density based regularizer for filter weights
     if regularizer == None:
       reg_bias = tf.get_variable('regularisation_bias', initializer=tf.zeros_initializer(), shape=[1], trainable = False, dtype=tf.float32)
-      max_bias = tf.constant(-0.1, dtype=tf.float64)
-      min_bias = tf.constant(0.1, dtype=tf.float64)
+      max_bias = tf.constant(-0.001, dtype=tf.float64)
+      min_bias = tf.constant(0.001, dtype=tf.float64)
       max_de = tf.constant(max_density, dtype=tf.float64)
-      #this_regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
-      this_regularizer = None #TODO: work on density based regularisation
+      this_regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
+      #this_regularizer = None #TODO: work on density based regularisation
 
     #2. define initialization of sparse filter weights
     dense_filter_shape = np.prod(filter_in_sizes)
@@ -58,14 +58,14 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
     conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type);
     #4. update bias of density based regularizer based on output of conv_layer
     if regularizer == None:
-      '''dense_val = tf.cumprod(conv_layer.out_shape)
+      dense_val = tf.cumprod(conv_layer.out_shape)
       max_density_var = tf.multiply(tf.cast(dense_val, dtype=tf.float64), max_de)
       out_count = tf.cast(conv_layer.out_block_channel_mapping[-1], dtype=tf.float64)
       density_ge = tf.greater_equal(tf.cast(out_count, dtype=tf.float32, max_density_var)
       factor_reg = tf.divide(out_count, max_density_var)
       min_bias_reg = tf.multiply(factor_reg, min_bias)
       reg_bias = tf.cast(tf.cond(density_ge, lambda: max_bias, lambda: min_bias_reg), dtype=tf.float32)
-      '''
+      
     return conv_layer
 
 def create_sparse_pooling_layer(sparse_data, pooling_sizes, dim, max_density = 0.):
