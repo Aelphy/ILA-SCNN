@@ -22,7 +22,7 @@ from load_mnist_dataset import load_dataset
 
 
 def model_mnist(
-    sparse_data, 
+    sparse_data,
     tensor_in_sizes,
     keep_prob,
     train_labels=None,
@@ -40,9 +40,9 @@ def model_mnist(
     pooling_sizes = [1,1,2,2,1]
     batch_size = tensor_in_sizes[0]
     total_size = np.prod(tensor_in_sizes)
-    
+
     net = {}
-    
+
     net['sd_converted'] = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
     net['conv1_1'] = ld.create_sparse_conv_layer(
         net['sd_converted'],
@@ -128,14 +128,14 @@ def model_mnist(
       'classes': tf.argmax(net['dense2'], axis=1),
       'probabilities': tf.nn.softmax(net['dense2'])
     }
-    
+
     loss = tf.losses.softmax_cross_entropy(
         onehot_labels=train_labels,
         logits=net['dense2']
     )
-    
+
     accuracy = tf.metrics.accuracy(tf.argmax(train_labels, axis=1), predictions['classes'])
-    
+
     return loss, predictions, accuracy, net
 
 
@@ -193,12 +193,12 @@ keep_prob = tf.placeholder(tf.float32)
 for d1 in [0.03, 0.035, 0.04, 0.045, 0.065, 0.075, 0.085, 0.095, 0.15, 0.2]:
     print('===============================================================')
     print('===============================================================')
-    
+
     print(d1)
-    
+
     print('===============================================================')
     print('===============================================================')
-    
+
     with tf.Session() as sess:
         loss, predictions, accuracy, net = model_mnist(
             sparse_data,
@@ -208,19 +208,19 @@ for d1 in [0.03, 0.035, 0.04, 0.045, 0.065, 0.075, 0.085, 0.095, 0.15, 0.2]:
             num_classes,
             scope='mn256_d{}-'.format(d1),
             regularize=False,
-            d1 = 0.1,
+            d1 = d1,
             d2 = 2*d1,
             d3 = 4*d1
         )
-        
+
         print('initializing model')
 
         optimizer = tf.train.AdagradOptimizer(learning_rate=0.01)
         train_op = optimizer.minimize(loss)
-        
+
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-        
+
         print('data initialized')
 
         print('model initialized')
