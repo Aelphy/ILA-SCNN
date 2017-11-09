@@ -13,12 +13,12 @@ typedef Eigen::GpuDevice GPUDevice;
   namespace functor {
     template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
     struct DirectSparseConcatFunctor {
-      void operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, const float max_density, const std::string& filter_type) const;
+      void operator()(OpKernelContext* context) const;
     };
 
     template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
     struct DirectSparseConcatBackPropFunctor {
-      void operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, const float max_density, const std::string& filter_type) const;
+      void operator()(OpKernelContext* context) const;
     };
   } //namespace functor
 } //namespace tensorflow

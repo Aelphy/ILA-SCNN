@@ -4,7 +4,7 @@
 
 #include <time.h>
 #include <sstream>
-#include "direct_sparse_conv_kd_gpu.h"
+#include "direct_sparse_concat_gpu.h"
 #include "direct_sparse_cuda_helpers_gpu.h"
 
 //TODO: support same SAME and UNPADDED convolutions
@@ -56,7 +56,7 @@ void DirectSparseConcatBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto o_mapping = out_block_ptr_t->flat<int>();
   const int* output_block_mapping = o_mapping.data();
   auto grads = gradients->flat<T>(); 
-  int data_entry_count, filter_weight_count, output_entry_count;
+  int data_entry_count;
   cudaMemcpy(&data_entry_count, i_mapping.data() + i_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
 }
 
@@ -65,8 +65,8 @@ void DirectSparseConcatBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::ope
 // Instantiate the GPU implementation for float.
 //template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, int, int>;
 #define INIT_GPU_TYPE(type, indice_type, dim) \
- template struct functor::DirectSparseConvFunctor<GPUDevice, type, indice_type, dim>; \
- template struct functor::DirectSparseConvBackPropFunctor<GPUDevice, type, indice_type, dim>;
+ template struct functor::DirectSparseConcatFunctor<GPUDevice, type, indice_type, dim>; \
+ template struct functor::DirectSparseConcatBackPropFunctor<GPUDevice, type, indice_type, dim>;
 #define INIT_GPU_ALL(type, dim)    \
   INIT_GPU_TYPE(type, int64, dim); \
   INIT_GPU_TYPE(type, int32, dim);

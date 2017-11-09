@@ -76,14 +76,14 @@ X_train, y_train, X_val, y_val, X_test, y_test = load_dataset()
 (X_train * 255 < 50).sum() / (np.prod(X_train.shape) + 1e-7)
 
 model_location = '/home/thackel/cnn_models/mnist'
-pretrained_model = '/scratch/thackel/cnn_models/mnist_8'
+pretrained_model = ''
 
-dim = 5 
+dim = 5
 batch_size = 32
 tensor_in_sizes_=[batch_size, 1, 28, 28, 1] #[batch, depth, height, width, in_channels]
 
 num_classes = 10
-batch_label_sizes = [batch_size, num_classes] 
+batch_label_sizes = [batch_size, num_classes]
 tensor_in_sizes = np.array(tensor_in_sizes_, dtype=np.int64)
 sparse_data = tf.sparse_placeholder(tf.float32, shape=tensor_in_sizes, name="sparse_placeholder")
 dense_labels = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
@@ -129,8 +129,8 @@ def model_mnist(sparse_data, tensor_in_sizes, train_labels = None, num_classes =
 print("initializing model")
 
 [sd_loss, test_pred, do] = model_mnist(
-    sparse_data=sparse_data, 
-    tensor_in_sizes=tensor_in_sizes, 
+    sparse_data=sparse_data,
+    tensor_in_sizes=tensor_in_sizes,
     train_labels=dense_labels,
     num_classes=num_classes,
     regularizer = None
@@ -167,7 +167,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 
 saver = tf.train.Saver(var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES), max_to_keep=20)
 
-max_epochs = 50
+max_epochs = 10
 
 with tf.Session() as sess:
   print("writing graph")
@@ -179,14 +179,14 @@ with tf.Session() as sess:
   print("data initialized")
 
 
-  
+
   for epoch in range(1, max_epochs):
     t1 = time.time()
     t_train1 = 0
     t_train2 = 0
     av_loss = 0
     batches = 0
-    
+
     for batch in iterate_minibatches(X_train.reshape(-1, 1, 28, 28, 1), y_train_softmax, batch_size):
       #create random training data
       tt0 = time.time()
@@ -214,12 +214,12 @@ with tf.Session() as sess:
     print("average loss: ", av_loss)
     print("time all: ", t2 - t1)
     print("time train: ", t_train2 - t_train1)
-    saver.save(sess, model_location + "_" + str(epoch))
+#    saver.save(sess, model_location + "_" + str(epoch))
 
 
   do.training = False
 
-  sum_correct = 0
+  accurecy_all = 0
   batches = 0
 
   correct_prediction = tf.equal(tf.argmax(test_pred, 1), tf.argmax(dense_labels, 1))
@@ -234,9 +234,10 @@ with tf.Session() as sess:
       dense_labels: batch[1]
     }
     accuracy_batch = sess.run(accuracy, feed_dict=feed_dict)
-    sum_correct = sum_correct + accuracy_batch * batch_size
     batches = batches + 1
-  accuracy_all = sum_correct / (batches * batch_size)
-  print("accuracy", accuracy_all)
+
+    print(accuracy_batch)
+    accuracy_all += accuracy_batch
+  print("accuracy", accuracy_all / batches)
 
 

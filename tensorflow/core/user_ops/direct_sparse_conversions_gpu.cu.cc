@@ -200,7 +200,9 @@ void DirectSparseFilterConversionFunctor<DeviceT, T, IndiceT, data_dimension>::o
   cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
   std::vector<IndiceT> cpu_in_shape(data_dimension);
   cudaMemcpy(&cpu_in_shape[0], i_sh.data(), data_dimension * sizeof(IndiceT), cudaMemcpyDeviceToHost);
-  const int in_channel_count = cpu_in_shape[data_dimension - 1];
+  IndiceT in_channel_count_ = -1; 
+  cudaMemcpy(&in_channel_count_, f_sh.data() + data_dimension - 2, sizeof(IndiceT), cudaMemcpyDeviceToHost);
+  const int in_channel_count = in_channel_count_;
 
   Tensor fcm_tensor, fss_tensor, fse_tensor, fsw_tensor, fsi_tensor;
   int* filter_channel_mapping = 0;

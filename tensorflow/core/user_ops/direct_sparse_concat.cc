@@ -6,7 +6,7 @@
 #include "tensorflow/core/framework/common_shape_fns.h"
 
 #if GOOGLE_CUDA
-#include "direct_sparse_conv_kd_gpu.h"
+#include "direct_sparse_concat_gpu.h"
 #endif //GOOGLE_CUDA
 
 
@@ -61,32 +61,21 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 using namespace tensorflow;
 
 template <typename T, typename Tindices, template<typename, typename, typename, int> class FunctorT>
-class DirectSparseConvKD : public OpKernel {
+class DirectSparseConcat : public OpKernel {
  public:
- explicit DirectSparseConvKD(OpKernelConstruction* context) : OpKernel(context) {
-    OP_REQUIRES_OK(context, context->GetAttr("strides", &stride_));
+ explicit DirectSparseConcat(OpKernelConstruction* context) : OpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("dim", &dim));
-    OP_REQUIRES(context, stride_.size() >= 4,
-                errors::InvalidArgument("Sliding window strides field must "
-                                        "at least specify 4 dimensions"));
-    OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
-    OP_REQUIRES_OK(context, context->GetAttr("max_density", &max_density));
-    OP_REQUIRES_OK(context, context->GetAttr("filter_type", &filter_type));
   }
 
   void Compute(OpKernelContext* context) override {
     //functor requires kernel context since output shape is not known befor computing results
     if(dim == 5){
-      FunctorT<GPUDevice, T, Tindices, 5>()(context, stride_, padding, max_density, filter_type);
+      FunctorT<GPUDevice, T, Tindices, 5>()(context);
     } //TODO: add more dimensions
   }
 
  private:
-  std::vector<int32> stride_;
   int dim;
-  std::string padding;
-  std::string filter_type;
-  float max_density;
 };
 
 #if GOOGLE_CUDA
@@ -94,7 +83,7 @@ class DirectSparseConvKD : public OpKernel {
   REGISTER_KERNEL_BUILDER(Name("DirectSparseConcat").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
                           DirectSparseConcat<type, indice_type, functor::DirectSparseConcatFunctor>); \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseConcatBackprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseConcatKD<type, indice_type, functor::DirectSparseConcatBackPropFunctor>);
+                          DirectSparseConcat<type, indice_type, functor::DirectSparseConcatBackPropFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \
