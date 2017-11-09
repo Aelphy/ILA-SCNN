@@ -515,7 +515,7 @@ compute_voxel_id1D(CudaLaunchConfig config, const dtype* __restrict__ in_ptr, co
 
 //Hash Table
 struct HashConfig {
-  HashConfig() : bucket_size(1024), cuckoo_max_iterations(300), average_bucket_density(0.5), max_bucket_density(0.9) {}
+  HashConfig() : bucket_size(1024), cuckoo_max_iterations(4096), max_iterations(100), average_bucket_density(0.3), max_bucket_density(0.8) {}
   int c0_0;
   int c0_i;
   int c1_0;
@@ -526,6 +526,7 @@ struct HashConfig {
   int c3_i;
   int bucket_count;
   int bucket_size;
+  int max_iterations;
   int cuckoo_max_iterations;
   float average_bucket_density;
   float max_bucket_density;
@@ -802,7 +803,7 @@ int initialize_table(OpKernelContext* ctx, const Device& d, Tensor& hash_table_t
 
   itype result_kernel = 1;
   int count = 0;
-  while(result_kernel == 1 && count < hc.cuckoo_max_iterations){
+  while(result_kernel == 1 && count < hc.max_iterations){
     count = count + 1;
     cudaMemset(hash_table, 0, hc.bucket_count * hc.bucket_size * sizeof(itype));
     cudaMemset(hash_values, 0, hc.bucket_count * hc.bucket_size * sizeof(dtype));
