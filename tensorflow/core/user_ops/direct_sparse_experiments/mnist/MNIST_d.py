@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import sys
@@ -18,7 +18,7 @@ from direct_sparse_module import sparse_nn_ops as sc_module
 from load_mnist_dataset import load_dataset
 
 
-# In[2]:
+# In[ ]:
 
 
 def model_mnist(
@@ -152,7 +152,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
         yield inputs[excerpt], targets[excerpt]
 
 
-# In[3]:
+# In[ ]:
 
 
 X_train, y_train, X_val, y_val, X_test, y_test = load_dataset()
@@ -190,17 +190,6 @@ keep_prob = tf.placeholder(tf.float32)
 # In[ ]:
 
 
-print('initializing model')
-
-optimizer = tf.train.AdagradOptimizer(learning_rate=0.01)
-train_op = optimizer.minimize(loss)
-
-print('model initialized')
-
-
-# In[5]:
-
-
 for d1 in [0.03, 0.035, 0.04, 0.045, 0.065, 0.075, 0.085, 0.095, 0.15, 0.2]:
     print('===============================================================')
     print('===============================================================')
@@ -211,11 +200,6 @@ for d1 in [0.03, 0.035, 0.04, 0.045, 0.065, 0.075, 0.085, 0.095, 0.15, 0.2]:
     print('===============================================================')
     
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.local_variables_initializer())
-        print('data initialized')
-        writer = tf.summary.FileWriter('/scratch/home/aelphy/projects/timo_tf/graphs', sess.graph)
-
         loss, predictions, accuracy, net = model_mnist(
             sparse_data,
             tensor_in_sizes,
@@ -228,6 +212,18 @@ for d1 in [0.03, 0.035, 0.04, 0.045, 0.065, 0.075, 0.085, 0.095, 0.15, 0.2]:
             d2 = 2*d1,
             d3 = 4*d1
         )
+        
+        print('initializing model')
+
+        optimizer = tf.train.AdagradOptimizer(learning_rate=0.01)
+        train_op = optimizer.minimize(loss)
+        
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+        
+        print('data initialized')
+
+        print('model initialized')
 
         num_epochs = 10
 

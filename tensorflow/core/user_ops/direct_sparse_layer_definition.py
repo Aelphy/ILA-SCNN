@@ -32,7 +32,7 @@ def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, n
     return sc_module.direct_sparse_filter_conversion(sd.indices, sd.values, sd.dense_shape, sd.dense_shape, dim=dim)
 
 def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, regularize=None):
-  with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
+  with tf.variable_scope(name):
     regularizer = None
     #1. define density based regularizer for filter weights
     if regularize:
