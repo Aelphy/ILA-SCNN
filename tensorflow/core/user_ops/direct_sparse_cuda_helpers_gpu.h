@@ -103,7 +103,8 @@ allocate_tensor(OpKernelContext* ctx, Tensor& t, T** data, int count){
 }
 
 template<typename T> void 
-debug_out(T* data, int count, std::stringstream& dout_s, std::string name = "dbg"){
+debug_out(const T* data, int count, std::string name = "dbg"){
+  std::stringstream dout_s;
   std::vector<T> dbg_v2(count);
   dout_s << name << std::endl;
   cudaMemcpy(&dbg_v2[0], data, dbg_v2.size() * sizeof(T), cudaMemcpyDeviceToHost);
@@ -111,6 +112,7 @@ debug_out(T* data, int count, std::stringstream& dout_s, std::string name = "dbg
     dout_s << dbg_v2[i] << " "; 
   }
   dout_s << std::endl;
+  LOG(INFO) << dout_s.str();
 }
 
 
@@ -442,9 +444,7 @@ compute_filter_channel_index(CudaLaunchConfig config, dtype* filter_in_ch, dtype
     if(x < 0 || x > ch_dim){  //x might overflow when testing extreme case
       break;
     }
-    if(x < ch_dim){
-      out_index_ptr[x] = -1; //initialize
-    } else if(x == ch_dim){
+    if(x <= ch_dim){
       out_index_ptr[x] = filter_weight_count;
     }
   }
@@ -467,9 +467,9 @@ compute_filter_channel_index(CudaLaunchConfig config, dtype* filter_in_ch, dtype
     if (x < 0 || x >= ch_dim) {  //x might overflow when testing extreme case
       break;
     }
-    if(out_index_ptr[x] == -1){
+    if(out_index_ptr[x] == filter_weight_count){
       for(int i = x + 1; i <= ch_dim; ++i){ //linear search to the end until valid entry is found or number_blocks
-        if(out_index_ptr[i] != -1){
+        if(out_index_ptr[i] != filter_weight_count){
           out_index_ptr[x] = out_index_ptr[i];
           break;
         }
