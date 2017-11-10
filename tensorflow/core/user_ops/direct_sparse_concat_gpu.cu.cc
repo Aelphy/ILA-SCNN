@@ -12,47 +12,89 @@
 namespace tensorflow {
 
 template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-concat_values1(CudaLaunchConfig config, const itype* __restrict__ in_id_ptr, const dtype* __restrict__ in_val_ptr, 
-  const itype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/, itype* out_ind_ptr, dtype* out_val_ptr)
+concat_values(CudaLaunchConfig config, const itype* __restrict__ in_id_ptr, const dtype* __restrict__ in_val1_ptr, 
+  const dtype* __restrict__ in_val2_ptr, const itype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/,
+  const itype* __restrict__ out_shape_ptr,  const int* __restrict__ in_mapping_ptr, const int* __restrict__ out_mapping_ptr,
+  itype* out_ind_ptr, dtype* out_val_ptr)
 {
-  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
-    if (x < 0) {  //x might overflow when testing extreme case
-      break;
-    }
-    out_val_ptr[x] = in_val_ptr[x];
-    out_ind_ptr[x] = in_id_ptr[x];
-  }
-}
-
-template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-concat_values2(CudaLaunchConfig config, const itype* __restrict__ in_id_ptr, const dtype* __restrict__ in_val_ptr, 
-  const itype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/, const itype* __restrict__ out_shape_ptr,
-  itype* out_ind_ptr, dtype* out_val_ptr, int offset)
-{
+  int in_channel_count = in_shape_ptr[data_dimension - 1];
+  int out_channel_count = 2 * in_channel_count;
   itype id_kd[data_dimension];
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
     itype in_index_1d = in_id_ptr[x];
-    dtype in_val = in_val_ptr[x];
     index_1DtoKD<itype, data_dimension>(0, in_index_1d, in_shape_ptr, &id_kd[0]);
-    id_kd[data_dimension - 1] = id_kd[data_dimension - 1] + in_shape_ptr[data_dimension - 1];
-    itype out_ind = -1;
-    index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape_ptr, &out_ind);
-    out_val_ptr[x + offset] = in_val_ptr[x];
-    out_ind_ptr[x + offset] = out_ind;
+    itype channel1 = id_kd[data_dimension - 1];
+    itype channel2 = in_channel_count + channel1;
+    itype batch = id_kd[data_dimension - 1];
+    int in_channel_start_ptr = in_mapping_ptr[batch * in_channel_count + channel1];
+    int offset = x - in_channel_start_ptr;
+    int out_channel_start1_ptr = out_mapping_ptr[batch * out_channel_count + channel1];
+    int out_channel_start2_ptr = out_mapping_ptr[batch * out_channel_count + channel2];
+    itype in_id;
+    index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape_ptr, &in_id);
+    out_val_ptr[out_channel_start1_ptr + offset] = in_val1_ptr[x];
+    out_ind_ptr[out_channel_start1_ptr + offset] = in_id;
+    itype in_id2;
+    id_kd[data_dimension - 1] = id_kd[data_dimension - 1] + in_channel_count;
+    index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape_ptr, &in_id2);
+    out_val_ptr[out_channel_start2_ptr + offset] = in_val2_ptr[x];
+    out_ind_ptr[out_channel_start2_ptr + offset] = in_id2;
   }
 }
 
-
-template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
-vector_add(CudaLaunchConfig config, dtype*__restrict__ values, dtype add_value){
+template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+concat_backprop_values(CudaLaunchConfig config, const itype* __restrict__ out_id_ptr, const itype* __restrict__ in_shape_ptr /*[batch, dim1, ..., dimx, channel_nr]*/, const itype* __restrict__ out_shape_ptr, const int* __restrict__ in_mapping_ptr, const int* __restrict__ out_mapping_ptr,
+  const dtype* __restrict__ in_grads, dtype* out_grads1, dtype* out_grads2)
+{
+  int in_channel_count = in_shape_ptr[data_dimension - 1];
+  int out_channel_count = 2 * in_channel_count;
+  itype id_kd[data_dimension];
   CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
     if (x < 0) {  //x might overflow when testing extreme case
       break;
     }
-    values[x] += add_value; 
+    itype out_index_1d = out_id_ptr[x];
+    index_1DtoKD<itype, data_dimension>(0, out_index_1d, out_shape_ptr, &id_kd[0]);
+    itype channel = id_kd[data_dimension - 1];
+    itype bp_channel = channel;
+    bool bp2 = false;
+    if(channel >= in_channel_count){
+      bp_channel -= in_channel_count;
+      bp2 = true;
+    }
+    itype batch = id_kd[data_dimension - 1];
+    int in_channel_start_ptr = in_mapping_ptr[batch * in_channel_count + bp_channel];
+    int out_channel_start_ptr = out_mapping_ptr[batch * out_channel_count + channel];
+    int offset = x - out_channel_start_ptr;
+    if(bp2 != true){
+      out_grads1[in_channel_start_ptr + offset] = in_grads[x];
+    } else {
+      out_grads2[in_channel_start_ptr + offset] = in_grads[x];
+    }
+  }
+}
+
+template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+compute_out_mapping(CudaLaunchConfig config, const dtype*__restrict__ in_mapping, dtype in_channel_count, dtype in_batch_count, dtype* out_channel_mapping){
+  int out_channel_count = 2 * in_channel_count;
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count){
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    int channel =  x % in_channel_count;
+    int channel2 = in_channel_count + channel; //concatinated channels
+    int batch = (x - channel) / in_channel_count;
+    int in_chanel_ptr = in_mapping[batch * in_channel_count + channel];
+    int in_batch_start_ptr = in_mapping[batch * in_channel_count];
+    int in_batch_end_ptr = in_mapping[(batch + 1) * in_channel_count];
+    int batch_size = in_batch_end_ptr - in_batch_start_ptr;
+    int channel_offset = in_chanel_ptr - in_batch_start_ptr;
+    out_channel_mapping[batch * out_channel_count + channel] = 2 * in_batch_start_ptr + channel_offset;
+    if(batch * out_channel_count + channel2 >= config.virtual_thread_count * 2 - 1) continue;
+    out_channel_mapping[batch * out_channel_count + channel2] = 2 * in_batch_start_ptr + batch_size + channel_offset;
   }
 }
 
@@ -80,7 +122,7 @@ void DirectSparseConcatFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(
 	Tensor *out_shape, *out_block_channel_mapping;
 	Tensor *out_indices, *out_values;
 	TensorShape out_sh_shape = {(IndiceT) data_dimension};
-	TensorShape out_bcm_shape = {(IndiceT) 2 * i_mapping.dimension(0)}; 
+	TensorShape out_bcm_shape = {(IndiceT) 2 * i_mapping.dimension(0) - 1}; 
 	TensorShape out_val_shape = {(IndiceT) 2 * i_val1.dimension(0)}; 
 	TensorShape out_ind_shape = {(IndiceT) 2 * i_ind.dimension(0)}; 
 	OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
@@ -92,22 +134,18 @@ void DirectSparseConcatFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(
   auto o_val = out_values->flat<T>();
   auto o_mapping = out_block_channel_mapping->flat<int>();
   cudaMemset(o_mapping.data(), 0, o_mapping.dimension(0) * sizeof(int));
+  cudaMemset(o_ind.data(), 0, o_ind.dimension(0) * sizeof(IndiceT));
   if(data_entry_count > 0){
-    CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
-    //fill first half
-    concat_values1<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), i_val1.data(), i_sh.data(), o_ind.data(), o_val.data());
-    //output shape
     std::vector<IndiceT> cpu_shape(data_dimension);
     cudaMemcpy(&cpu_shape[0], i_sh.data(), (data_dimension) * sizeof(IndiceT), cudaMemcpyDeviceToHost);
-    cpu_shape[data_dimension - 1] =  cpu_shape[data_dimension - 1] * 2;
+    int in_channel_count = cpu_shape[data_dimension - 1];
+    int in_batch_count = cpu_shape[0];
+    cpu_shape[data_dimension - 1] = cpu_shape[data_dimension - 1] * 2;
     cudaMemcpy(o_sh.data(), &cpu_shape[0], (data_dimension) * sizeof(IndiceT), cudaMemcpyHostToDevice);
-
-    concat_values2<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), i_val2.data(), i_sh.data(), o_sh.data(), o_ind.data(), o_val.data(), data_entry_count);
-    
-    cudaMemcpy(o_mapping.data(), i_mapping.data(), i_mapping.dimension(0) * sizeof(int), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(o_mapping.data() + data_entry_count, i_mapping.data(), i_mapping.dimension(0) * sizeof(int), cudaMemcpyDeviceToDevice);
-    
-    vector_add<<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, o_mapping.data() + data_entry_count, data_entry_count);
+    CudaLaunchConfig configm = GetCudaLaunchConfig(i_mapping.dimension(0), d);
+    compute_out_mapping<<<configm.block_count, configm.thread_per_block, 0, d.stream()>>>(configm, i_mapping.data(), in_channel_count, in_batch_count, o_mapping.data());
+    CudaLaunchConfig config = GetCudaLaunchConfig(data_entry_count, d);
+    concat_values<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, i_ind.data(), i_val1.data(), i_val2.data(), i_sh.data(), o_sh.data(), i_mapping.data(), o_mapping.data(), o_ind.data(), o_val.data());
   }
 }
 
@@ -141,6 +179,21 @@ void DirectSparseConcatBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::ope
   auto grads = gradients->flat<T>(); 
   int data_entry_count;
   cudaMemcpy(&data_entry_count, i_mapping.data() + i_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
+  int out_entry_count;
+  cudaMemcpy(&out_entry_count, o_mapping.data() + o_mapping.dimension(0) - 1, sizeof(int), cudaMemcpyDeviceToHost);
+	Tensor *backprop1, *backprop2;
+	TensorShape out_bp1_shape = {(IndiceT) i_val1.dimension(0)}; 
+	TensorShape out_bp2_shape = {(IndiceT) i_val2.dimension(0)}; 
+	OP_REQUIRES_OK(context, context->allocate_output("backprop1", out_bp1_shape, &backprop1));
+	OP_REQUIRES_OK(context, context->allocate_output("backprop2", out_bp2_shape, &backprop2));
+  auto bp1 = backprop1->flat<T>();
+  auto bp2 = backprop2->flat<T>();
+  cudaMemset(bp1.data(), 0, bp1.dimension(0) * sizeof(T));
+  cudaMemset(bp2.data(), 0, bp2.dimension(0) * sizeof(T));
+  if(out_entry_count > 0){
+    CudaLaunchConfig config = GetCudaLaunchConfig(out_entry_count, d);
+    concat_backprop_values<T, IndiceT, data_dimension><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, o_ind.data(), i_sh.data(), o_sh.data(), i_mapping.data(), o_mapping.data(), grads.data(), bp1.data(), bp2.data());
+  }
 }
 
 }  // end namespace functor

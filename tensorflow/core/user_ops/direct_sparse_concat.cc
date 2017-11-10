@@ -50,8 +50,8 @@ REGISTER_OP("DirectSparseConcatBackprop")
   .Input("out_shape: Tindices")
   .Input("out_block_channel_mapping: int32")
   .Input("grads: T")
-  .Output("input_grads1: T")
-  .Output("input_grads2: T")
+  .Output("backprop1: T")
+  .Output("backprop2: T")
   .Attr("dim: int = 5");
 
 #include "tensorflow/core/framework/op_kernel.h"
