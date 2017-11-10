@@ -37,8 +37,8 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
     #1. define density based regularizer for filter weights
     if regularize:
       reg_bias = tf.get_variable('regularisation_bias', initializer=tf.zeros_initializer(), shape=[1], trainable = False, dtype=tf.float32)
-      max_bias = tf.constant(-0.001, dtype=tf.float64)
-      min_bias = tf.constant(0.001, dtype=tf.float64)
+      min_bias = tf.constant(-0.001, dtype=tf.float64)
+      max_bias = tf.constant(0.001, dtype=tf.float64)
       max_de = tf.constant(max_density, dtype=tf.float64)
       regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
 
@@ -62,8 +62,8 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
       out_count = tf.cast(conv_layer.out_block_channel_mapping[-1], dtype=tf.float64)
       density_ge = tf.greater_equal(out_count, max_density_var)
       factor_reg = tf.divide(out_count, max_density_var)
-      min_bias_reg = tf.multiply(factor_reg, min_bias)
-      tf.assign(reg_bias, tf.cast(tf.cond(density_ge, lambda: max_bias, lambda: min_bias_reg), dtype=tf.float32))
+      max_bias_reg = tf.multiply(factor_reg, max_bias)
+      tf.assign(reg_bias, tf.cast(tf.cond(density_ge, lambda: min_bias, lambda: max_bias_reg), dtype=tf.float32))
 
     return conv_layer
 
