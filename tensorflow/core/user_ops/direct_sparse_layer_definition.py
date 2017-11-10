@@ -49,10 +49,10 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
     idx = tf.where(tf.not_equal(dense_filter, 0))
     sparse_filter_tensor = tf.SparseTensor(idx, tf.gather_nd(dense_filter, idx), dense_filter.get_shape())
     sf = create_sparse_filter_to_direct_sparse(sparse_filter_tensor, sd.out_shape, dim, name);
-    f_ind = tf.get_variable('filter_indices', initializer=sf.out_indices, trainable = False, validate_shape=False)
-    f_sh = tf.get_variable('filter_shape', initializer=sf.out_shape, trainable = False, validate_shape=False)
-    f_map = tf.get_variable('filter_channel_mapping', initializer=sf.out_channel_mapping, trainable = False, validate_shape=False)
-    f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=regularizer, shape=[dense_filter_shape], trainable = True, validate_shape=True)
+    f_ind = tf.get_variable('filter_indices', initializer=sf.out_indices, trainable=False, validate_shape=False)
+    f_sh = tf.get_variable('filter_shape', initializer=sf.out_shape, trainable=False, validate_shape=False)
+    f_map = tf.get_variable('filter_channel_mapping', initializer=sf.out_channel_mapping, trainable=False, validate_shape=False)
+    f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=regularizer, shape=[dense_filter_shape], trainable=True, validate_shape=True)
     #3. define convolutional layer
     conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type);
     #4. update bias of density based regularizer based on output of conv_layer
