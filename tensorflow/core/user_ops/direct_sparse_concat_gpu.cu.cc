@@ -33,8 +33,10 @@ concat_values(CudaLaunchConfig config, const itype* __restrict__ in_id_ptr, cons
     int offset = x - in_channel_start_ptr;
     int out_channel_start1_ptr = out_mapping_ptr[batch * out_channel_count + channel1];
     int out_channel_start2_ptr = out_mapping_ptr[batch * out_channel_count + channel2];
+    itype in_id;
+    index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape_ptr, &in_id);
     out_val_ptr[out_channel_start1_ptr + offset] = in_val1_ptr[x];
-    out_ind_ptr[out_channel_start1_ptr + offset] = in_id_ptr[x];
+    out_ind_ptr[out_channel_start1_ptr + offset] = in_id;
     itype in_id2;
     id_kd[data_dimension - 1] = id_kd[data_dimension - 1] + in_channel_count;
     index_KDto1D_<itype, data_dimension>(&id_kd[0], out_shape_ptr, &in_id2);
@@ -83,7 +85,7 @@ compute_out_mapping(CudaLaunchConfig config, const dtype*__restrict__ in_mapping
       break;
     }
     int channel =  x % in_channel_count;
-    int channel2 = out_channel_count + channel; //concatinated channels
+    int channel2 = in_channel_count + channel; //concatinated channels
     int batch = (x - channel) / in_channel_count;
     int in_chanel_ptr = in_mapping[batch * in_channel_count + channel];
     int in_batch_start_ptr = in_mapping[batch * in_channel_count];
@@ -91,6 +93,7 @@ compute_out_mapping(CudaLaunchConfig config, const dtype*__restrict__ in_mapping
     int batch_size = in_batch_end_ptr - in_batch_start_ptr;
     int channel_offset = in_chanel_ptr - in_batch_start_ptr;
     out_channel_mapping[batch * out_channel_count + channel] = 2 * in_batch_start_ptr + channel_offset;
+    if(batch * out_channel_count + channel2 >= config.virtual_thread_count * 2 - 1) continue;
     out_channel_mapping[batch * out_channel_count + channel2] = 2 * in_batch_start_ptr + batch_size + channel_offset;
   }
 }
@@ -119,7 +122,7 @@ void DirectSparseConcatFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(
 	Tensor *out_shape, *out_block_channel_mapping;
 	Tensor *out_indices, *out_values;
 	TensorShape out_sh_shape = {(IndiceT) data_dimension};
-	TensorShape out_bcm_shape = {(IndiceT) 2 * i_mapping.dimension(0)}; 
+	TensorShape out_bcm_shape = {(IndiceT) 2 * i_mapping.dimension(0) - 1}; 
 	TensorShape out_val_shape = {(IndiceT) 2 * i_val1.dimension(0)}; 
 	TensorShape out_ind_shape = {(IndiceT) 2 * i_ind.dimension(0)}; 
 	OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
@@ -131,6 +134,7 @@ void DirectSparseConcatFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(
   auto o_val = out_values->flat<T>();
   auto o_mapping = out_block_channel_mapping->flat<int>();
   cudaMemset(o_mapping.data(), 0, o_mapping.dimension(0) * sizeof(int));
+  cudaMemset(o_ind.data(), 0, o_ind.dimension(0) * sizeof(IndiceT));
   if(data_entry_count > 0){
     std::vector<IndiceT> cpu_shape(data_dimension);
     cudaMemcpy(&cpu_shape[0], i_sh.data(), (data_dimension) * sizeof(IndiceT), cudaMemcpyDeviceToHost);
