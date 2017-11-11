@@ -374,6 +374,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   auto data_offset = data_count->flat<int>();
   int* data_offset_ptr = data_offset.data();
   cudaMemset(data_offset_ptr, 0, (batch_count * out_channel_count + 1) * sizeof(int)); //stores the dense result of the computed output channel in buffer
+  cudaMemset(o_val.data(), 0, o_val.dimension(0) * sizeof(T));
 
   /////
   //1. Compute out shape
