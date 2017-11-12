@@ -22,6 +22,13 @@ import direct_sparse_grad_ops
 from tensorflow.python import debug as tf_debug
 from direct_sparse_module import sparse_nn_ops as sc_module
 
+class DirectSparseData:
+  def __init__(self, indices, values, shape, mapping):
+    self.out_indices = indices
+    self.out_values = values
+    self.out_shape = shape
+    self.out_block_channel_mapping = mapping
+
 def create_sparse_data_to_direct_sparse(sd, dim):
   print(sd.indices)
   return sc_module.direct_sparse_data_conversion(sd.indices, sd.values, sd.dense_shape, dim)
@@ -31,6 +38,7 @@ def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, n
     sd = sparse_filter
     return sc_module.direct_sparse_filter_conversion(sd.indices, sd.values, sd.dense_shape, sd.dense_shape, dim=dim)
 
+#TODO: bias in conv layer! covered in batchnorm? TODO: directly integraded in conv layer?
 def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None):
   with tf.variable_scope(name):
     #2. define initialization of sparse filter weights
@@ -94,7 +102,7 @@ def create_sparse_unpooling_layer(sparse_data, pooling_data, pooling_sizes, dim)
   sd = sparse_data
   pd = pooling_data
   unpooled_values = sc_module.direct_sparse_unpooling_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, pd.out_indices, pd.out_shape, pd.out_block_channel_mapping, strides, dim)
-  return {'out_indices': pd.out_indices, 'out_values': unpooled_values, 'out_shape': pd.out_shape, 'out_block_channel_mapping': pd.out_block_channel_mapping}
+  return DirectSparseData(pd.out_indices, unpooled_values, pd.out_shape, pd.out_block_channel_mapping)
 
 def create_direct_sparse_to_dense(sparse_data, dim):
   sd = sparse_data
@@ -102,3 +110,12 @@ def create_direct_sparse_to_dense(sparse_data, dim):
 
 def create_direct_dense_to_sparse(dense_data, tensor_in_sizes, dim):
   return sc_module.direct_dense_to_sparse(dense_data, tensor_in_sizes, dim)
+
+
+def create_direct_sparse_batchnorm(sparse_data, name='batch_norm'):
+  with tf.variable_scope(name):
+    sd = sparse_data
+    batch_norm = tf.layers.batch_normalization(sparse_data.out_values)
+    return DirectSparseData(sd.out_indices, batch_norm, sd.out_shape, sd.out_block_channel_mapping)
+
+
