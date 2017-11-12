@@ -44,8 +44,10 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
     f_sh = tf.get_variable('filter_shape', initializer=sf.out_shape, trainable=False, validate_shape=False)
     f_map = tf.get_variable('filter_channel_mapping', initializer=sf.out_channel_mapping, trainable=False, validate_shape=False)
     f_val = tf.get_variable('filter_values', initializer=initializer, shape=[dense_filter_shape], trainable=True, validate_shape=True)
+    out_channel_count = filter_in_sizes[-1]
+    bias = tf.get_variable('bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type)
+    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, dim, max_density, filter_type)
 
     return conv_layer
 
@@ -68,8 +70,10 @@ def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, strides = 1, padd
     f_sh = tf.get_variable('filter_shape', initializer=sf.out_shape, trainable=False, validate_shape=False)
     f_map = tf.get_variable('filter_channel_mapping', initializer=sf.out_channel_mapping, trainable=False, validate_shape=False)
     f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=regularizer, shape=[dense_filter_shape], trainable=True, validate_shape=True)
+    out_channel_count = filter_in_sizes[-1]
+    bias = tf.get_variable('bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, strides, padding, dim, max_density, filter_type)
+    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, dim, max_density, filter_type)
 
     dense_val = tf.reduce_prod(conv_layer.out_shape)
     max_density_var = tf.multiply(tf.cast(dense_val, dtype=tf.float64), max_de)

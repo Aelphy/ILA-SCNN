@@ -13,7 +13,7 @@ def _DirectSparseConvKDGrad(op, *grads):
     output_values_grad: the incoming gradients of the output values
   Returns:
   """
-  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
+  [input_grads, filter_grads, bias_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
                                                 op.inputs[3],
@@ -38,11 +38,12 @@ def _DirectSparseConvKDGrad(op, *grads):
           None,
           filter_grads,
           None,
-          None]
+          None,
+          bias_grads]
 
 @ops.RegisterGradient("DirectSparseConvKDInput")
 def _DirectSparseConvKDInputGrad(op, *grads):
-  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
+  [input_grads, filter_grads, bias_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
                                                 op.inputs[3],
@@ -67,12 +68,13 @@ def _DirectSparseConvKDInputGrad(op, *grads):
           None,
           None,
           None,
+          None,
           None]
 
 
 @ops.RegisterGradient("DirectSparseConvKDFilter")
 def _DirectSparseConvKDFilterGrad(op, *grads):
-  [input_grads, filter_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
+  [input_grads, filter_grads, bias_grads] = sparse_nn_ops.direct_sparse_conv_kd_backprop(op.inputs[0],
                                                 op.inputs[1],
                                                 op.inputs[2],
                                                 op.inputs[3],
@@ -96,6 +98,7 @@ def _DirectSparseConvKDFilterGrad(op, *grads):
           None,
           None,
           filter_grads,
+          None,
           None,
           None]
 

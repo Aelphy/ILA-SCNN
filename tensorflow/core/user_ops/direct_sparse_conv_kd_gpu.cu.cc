@@ -303,12 +303,22 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
   }
 }
 
+template <typename dtype> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+add_bias(CudaLaunchConfig config, dtype* in_buffer, const dtype* bias, int channel){
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(in_buffer[x] == 0) continue;
+    in_buffer[x] = in_buffer[x] + bias[channel];
+  }
+}
 
 namespace functor {
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
 void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density, const std::string& filter_type) const {
   clock_t t;
-  const Tensor *in_indices, *in_values, *in_shape, *in_block_ptr_t, *data_count_t, *filter_indices, *filter_values, *filter_shape, *filter_channel_mapping_t;
+  const Tensor *in_indices, *in_values, *in_shape, *in_block_ptr_t, *data_count_t, *filter_indices, *filter_values, *filter_shape, *filter_channel_mapping_t, *bias;
   OP_REQUIRES_OK(context, context->input("in_indices", &in_indices));
   OP_REQUIRES_OK(context, context->input("in_values", &in_values));
   OP_REQUIRES_OK(context, context->input("in_shape", &in_shape));
@@ -317,6 +327,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   OP_REQUIRES_OK(context, context->input("filter_values", &filter_values));
   OP_REQUIRES_OK(context, context->input("filter_shape", &filter_shape));
   OP_REQUIRES_OK(context, context->input("filter_channel_mapping", &filter_channel_mapping_t));
+  OP_REQUIRES_OK(context, context->input("bias", &bias));
   const DeviceT d = context->eigen_device<DeviceT>();
   auto i_sh = in_shape->flat<IndiceT>();
   auto i_ind = in_indices->flat<IndiceT>();
@@ -324,6 +335,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   auto f_sh = filter_shape->flat<IndiceT>();
   auto f_ind = filter_indices->flat<IndiceT>();
   auto f_val = filter_values->flat<T>(); 
+  auto b = bias->flat<T>(); 
   auto i_mapping = in_block_ptr_t->flat<int>();
   auto f_mapping = filter_channel_mapping_t->flat<int>();
   int data_entry_count, filter_weight_count;
@@ -442,6 +454,7 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       }
       cudaMemset(result_dense_count, 0, sizeof(int));
       cudaStreamSynchronize(d.stream());
+      add_bias<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, b.data(), j);
       if(filter_type == "K-ABS"){
         abs_values<<<config_buffer.block_count, config_buffer.thread_per_block, 0, d.stream()>>>(config_buffer, channel_buffer, abs_channel_buffer, in_channel_ids_buffer, result_dense_count);
       } else if(filter_type == "K-RELU"){
@@ -582,6 +595,23 @@ fill_channel_buffer(CudaLaunchConfig config, const itype* in_op_idkd, const dtyp
   }
 }
 
+
+
+template <typename dtype, typename itype, int data_dimension> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
+add_bias_backprop(CudaLaunchConfig config, const dtype* grads, const itype* out_ids, const itype* out_shape, dtype* bias_bp){
+  itype id_kd[data_dimension];
+  CUDA_1D_KERNEL_LOOP(x, config.virtual_thread_count) {
+    if (x < 0) {  //x might overflow when testing extreme case
+      break;
+    }
+    if(grads[x] == 0) continue;
+    //TODO: use atomic add instead of scan!
+    index_1DtoKD<itype, data_dimension>(0, out_ids[x], out_shape, &id_kd[0]);
+    int channel = id_kd[data_dimension - 1];
+    atomicAdd(&bias_bp[channel], grads[x]);
+  }
+}
+
 template <typename DeviceT, typename T, typename IndiceT, int data_dimension>
 void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(OpKernelContext* context, const std::vector<int32>& stride, const std::string& padding, float max_density, const std::string& filter_type) const {
   const Tensor  *in_indices, *in_values, *in_shape, *in_block_ptr_t, *out_indices, *out_values, *out_shape, *out_block_ptr_t, 
@@ -649,15 +679,23 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   std::vector<int> cpu_filter_channel_mapping(out_channel_count * in_channel_count + 1);
   cudaMemcpy(&cpu_filter_channel_mapping[0], filter_channel_mapping, (out_channel_count * in_channel_count + 1) * sizeof(int), cudaMemcpyDeviceToHost);
 
-  Tensor *input_grads = NULL, *filter_grads = NULL;
+  Tensor *input_grads = NULL, *filter_grads = NULL, *bias_grads = NULL;
   TensorShape out_i_shape = {(IndiceT) i_val.dimension(0)};
   TensorShape out_f_shape = {(IndiceT) f_val.dimension(0)};
+  TensorShape out_b_shape = {(IndiceT) out_channel_count};
   OP_REQUIRES_OK(context, context->allocate_output("input_grads", out_i_shape, &input_grads));
   OP_REQUIRES_OK(context, context->allocate_output("filter_grads", out_f_shape, &filter_grads));
+  OP_REQUIRES_OK(context, context->allocate_output("bias_grads", out_b_shape, &bias_grads));
   auto in_grads = input_grads->flat<T>();
   auto f_grads = filter_grads->flat<T>();
+  auto b_grads = bias_grads->flat<T>();
   cudaMemset(in_grads.data(), 0, in_grads.dimension(0) * sizeof(T));
   cudaMemset(f_grads.data(), 0, f_grads.dimension(0) * sizeof(T));
+  cudaMemset(b_grads.data(), 0, b_grads.dimension(0) * sizeof(T));
+  {
+    CudaLaunchConfig config_bias = GetCudaLaunchConfig(output_entry_count, d);
+    add_bias_backprop<T, IndiceT, data_dimension><<<config_bias.block_count, config_bias.thread_per_block, 0, d.stream()>>>(config_bias, grads.data(), o_ind.data(), o_sh.data(), b_grads.data());
+  }
   
   if(data_entry_count <= 0){
     return;
