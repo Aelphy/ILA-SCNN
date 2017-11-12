@@ -28,7 +28,8 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
     strides = [1] + list(stride) + [1]
   else:
     strides = [1, stride, stride, stride, 1]
-
+  
+  bias = np.zeros([filter_in_sizes[-1]], dtype=np.float32)
   no_strides = [1, 1, 1, 1, 1]
   [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes, -3, 3)
   s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
@@ -70,9 +71,9 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
 
   ts = 0
   with tf.device("/gpu:0"):
-    net = sc_module.direct_sparse_conv_kd(pd.out_indices, pd.out_values, pd.out_shape, pd.out_block_channel_mapping, pf.out_indices, pf.out_values, pf.out_shape, pf.out_channel_mapping, strides, padding, dim, max_density, filter_type);
-    net = sc_module.direct_sparse_conv_kd(net.out_indices, net.out_values, net.out_shape, net.out_block_channel_mapping, pf2.out_indices, pf2.out_values, pf2.out_shape, pf2.out_channel_mapping, strides, padding, dim, max_density, filter_type);
-    net = sc_module.direct_sparse_conv_kd(net.out_indices, net.out_values, net.out_shape, net.out_block_channel_mapping, pf3.out_indices, pf3.out_values, pf3.out_shape, pf3.out_channel_mapping, strides, padding, dim, max_density, filter_type);
+    net = sc_module.direct_sparse_conv_kd(pd.out_indices, pd.out_values, pd.out_shape, pd.out_block_channel_mapping, pf.out_indices, pf.out_values, pf.out_shape, pf.out_channel_mapping, bias, strides, padding, dim, max_density, filter_type);
+    net = sc_module.direct_sparse_conv_kd(net.out_indices, net.out_values, net.out_shape, net.out_block_channel_mapping, pf2.out_indices, pf2.out_values, pf2.out_shape, pf2.out_channel_mapping, bias, strides, padding, dim, max_density, filter_type);
+    net = sc_module.direct_sparse_conv_kd(net.out_indices, net.out_values, net.out_shape, net.out_block_channel_mapping, pf3.out_indices, pf3.out_values, pf3.out_shape, pf3.out_channel_mapping, bias, strides, padding, dim, max_density, filter_type);
   with tf.Session(config=config) as sess:
     t6 = time.time()
     sv3 = sess.run(net)
@@ -107,8 +108,8 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
   tf.reset_default_graph()
   
   value3 = sp.sparse1d_to_dense(sv3.out_indices, sv3.out_values, sv3.out_shape, sv3.out_block_channel_mapping[-1])
-  print("expected: ", expected)
-  print("sparse: ", value3, sv3)
+  #print("expected: ", expected)
+  #print("sparse: ", value3, sv3)
   has_error = False
   approx_cmp = expected.flatten()
   approx = value3.flatten()

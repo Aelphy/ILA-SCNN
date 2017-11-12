@@ -371,22 +371,26 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
   std::vector<int> cpu_filter_channel_mapping(out_channel_count * in_channel_count + 1);
   cudaMemcpy(&cpu_filter_channel_mapping[0], filter_channel_mapping, (out_channel_count * in_channel_count + 1) * sizeof(int), cudaMemcpyDeviceToHost);
 
-  Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL;
+  Tensor *out_values = NULL, *out_indices = NULL, *out_shape = NULL, *data_count = NULL, *out_channel_densities = NULL;
   TensorShape out_ind_shape = {(IndiceT) result_count, (IndiceT) 1};
   TensorShape out_val_shape = {(IndiceT) result_count};
   TensorShape out_sh_shape = {(IndiceT) data_dimension};
   TensorShape out_count_shape = {(IndiceT) (batch_count * out_channel_count + 1)};
+  TensorShape out_density_shape = {(IndiceT) (out_channel_count)};
   OP_REQUIRES_OK(context, context->allocate_output("out_indices", out_ind_shape, &out_indices));
   OP_REQUIRES_OK(context, context->allocate_output("out_values", out_val_shape, &out_values));
   OP_REQUIRES_OK(context, context->allocate_output("out_shape", out_sh_shape, &out_shape));
   OP_REQUIRES_OK(context, context->allocate_output("out_block_channel_mapping", out_count_shape, &data_count));
+  OP_REQUIRES_OK(context, context->allocate_output("out_channel_densities", out_density_shape, &out_channel_densities));
   auto o_sh = out_shape->flat<IndiceT>();
   auto o_ind = out_indices->matrix<IndiceT>();
   auto o_val = out_values->flat<T>();
   auto data_offset = data_count->flat<int>();
+  auto o_density = out_channel_densities->flat<float>();
   int* data_offset_ptr = data_offset.data();
   cudaMemset(data_offset_ptr, 0, (batch_count * out_channel_count + 1) * sizeof(int)); //stores the dense result of the computed output channel in buffer
   cudaMemset(o_val.data(), 0, o_val.dimension(0) * sizeof(T));
+  cudaMemset(o_density.data(), 0, o_density.dimension(0) * sizeof(float));
 
   /////
   //1. Compute out shape
@@ -470,6 +474,8 @@ void DirectSparseConvFunctor<DeviceT, T, IndiceT, data_dimension>::operator()(Op
       IndiceT* write_vals;
       int start_offset = 0; //offset to handle increasingly sorted values (interested in decreasingly sorted values)
       cudaMemcpy(&cpu_result_count, result_dense_count, sizeof(int), cudaMemcpyDeviceToHost);
+      float channel_density = float(cpu_result_count) / channel_dense_size; 
+      cudaMemcpy(o_density.data() + j, &channel_density, sizeof(float), cudaMemcpyHostToDevice);
       if(cpu_result_count >= max_channel_count){
         compute_sort(context, d, abs_channel_buffer, tmp_channel_buffer, in_channel_ids_buffer, sorted_channel_ids_buffer, cpu_result_count); //sorted increasing
         cudaStreamSynchronize(d.stream());

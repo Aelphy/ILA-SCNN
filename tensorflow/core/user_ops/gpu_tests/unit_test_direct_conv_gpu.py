@@ -29,6 +29,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
   else:
     strides = [1, stride, stride, stride, 1]
 
+  bias = np.zeros([filter_in_sizes[-1]], dtype=np.float32)
   no_strides = [1, 1, 1, 1, 1]
   [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes, -3, 3)
   s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
@@ -56,7 +57,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
 
   ts = 0
   with tf.device("/gpu:0"):
-    approx_scskconv = sc_module.direct_sparse_conv_kd(pd.out_indices, pd.out_values, pd.out_shape, pd.out_block_channel_mapping, pf.out_indices, pf.out_values, pf.out_shape, pf.out_channel_mapping, strides, padding, dim, max_density, filter_type);
+    approx_scskconv = sc_module.direct_sparse_conv_kd(pd.out_indices, pd.out_values, pd.out_shape, pd.out_block_channel_mapping, pf.out_indices, pf.out_values, pf.out_shape, pf.out_channel_mapping, bias, strides, padding, dim, max_density, filter_type);
   with tf.Session(config=config) as sess:
     t6 = time.time()
     sv3 = sess.run(approx_scskconv)
@@ -133,6 +134,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
   value3 = sp.sparse1d_to_dense(sv3.out_indices, sv3.out_values, sv3.out_shape, sv3.out_block_channel_mapping[-1])
   #print("expected", expected)
   #print("sv3", value3)
+  #print("out densities", sv3.out_channel_densities)
 
   has_error = False
   approx_cmp = expected.flatten()
