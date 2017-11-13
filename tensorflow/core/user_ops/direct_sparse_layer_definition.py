@@ -59,13 +59,13 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
 
     return conv_layer
 
-def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None):
+def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005):
   with tf.variable_scope(name):
     max_de = tf.constant(max_density, dtype=tf.float64)
     min_bias = tf.constant(-0.001, dtype=tf.float64)
     max_bias = tf.constant(0.001, dtype=tf.float64)
     reg_bias = tf.get_variable('regularisation_bias', initializer=tf.zeros_initializer(), shape=[1], trainable = False, dtype=tf.float32)
-    regularizer = reg.biased_l2_regularizer(0.005, reg_bias)
+    regularizer = reg.biased_l2_regularizer(scale, reg_bias)
 
     #2. define initialization of sparse filter weights
     dense_filter_shape = np.prod(filter_in_sizes)

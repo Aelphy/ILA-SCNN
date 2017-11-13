@@ -1,0 +1,680 @@
+===============================================================
+===============================================================
+0.03
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 478.765s
+  training loss (in-iteration):	1.238805
+  train accuracy:		33.31 %
+Val 1 of 10 took 64.262s
+  val loss :		0.458105
+  val accuracy:		58.93 %
+Epoch 2 of 10 took 451.428s
+  training loss (in-iteration):	0.360765
+  train accuracy:		68.40 %
+Val 2 of 10 took 61.243s
+  val loss :		0.263803
+  val accuracy:		74.39 %
+Epoch 3 of 10 took 439.463s
+  training loss (in-iteration):	0.237505
+  train accuracy:		77.92 %
+Val 3 of 10 took 61.219s
+  val loss :		0.202873
+  val accuracy:		80.58 %
+Epoch 4 of 10 took 439.211s
+  training loss (in-iteration):	0.185240
+  train accuracy:		82.49 %
+Val 4 of 10 took 61.458s
+  val loss :		0.183608
+  val accuracy:		84.02 %
+Epoch 5 of 10 took 443.163s
+  training loss (in-iteration):	0.155206
+  train accuracy:		85.22 %
+Val 5 of 10 took 61.734s
+  val loss :		0.162396
+  val accuracy:		86.25 %
+Epoch 6 of 10 took 443.506s
+  training loss (in-iteration):	0.133609
+  train accuracy:		87.10 %
+Val 6 of 10 took 61.802s
+  val loss :		0.148657
+  val accuracy:		87.84 %
+Epoch 7 of 10 took 443.427s
+  training loss (in-iteration):	0.116736
+  train accuracy:		88.48 %
+Val 7 of 10 took 61.818s
+  val loss :		0.148520
+  val accuracy:		89.04 %
+Epoch 8 of 10 took 442.666s
+  training loss (in-iteration):	0.104315
+  train accuracy:		89.54 %
+Val 8 of 10 took 61.526s
+  val loss :		0.137483
+  val accuracy:		89.98 %
+Epoch 9 of 10 took 441.044s
+  training loss (in-iteration):	0.095363
+  train accuracy:		90.38 %
+Val 9 of 10 took 62.065s
+  val loss :		0.126000
+  val accuracy:		90.75 %
+Epoch 10 of 10 took 441.441s
+  training loss (in-iteration):	0.086276
+  train accuracy:		91.08 %
+Val 10 of 10 took 61.627s
+  val loss :		0.130586
+  val accuracy:		91.39 %
+===============================================================
+===============================================================
+0.035
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 441.252s
+  training loss (in-iteration):	0.998999
+  train accuracy:		51.47 %
+Val 1 of 10 took 61.592s
+  val loss :		0.394517
+  val accuracy:		69.25 %
+Epoch 2 of 10 took 441.260s
+  training loss (in-iteration):	0.332114
+  train accuracy:		75.60 %
+Val 2 of 10 took 61.630s
+  val loss :		0.258329
+  val accuracy:		79.60 %
+Epoch 3 of 10 took 441.764s
+  training loss (in-iteration):	0.220660
+  train accuracy:		82.16 %
+Val 3 of 10 took 61.647s
+  val loss :		0.187298
+  val accuracy:		84.10 %
+Epoch 4 of 10 took 441.494s
+  training loss (in-iteration):	0.169553
+  train accuracy:		85.57 %
+Val 4 of 10 took 61.687s
+  val loss :		0.167939
+  val accuracy:		86.73 %
+Epoch 5 of 10 took 441.616s
+  training loss (in-iteration):	0.140327
+  train accuracy:		87.70 %
+Val 5 of 10 took 61.579s
+  val loss :		0.160018
+  val accuracy:		88.49 %
+Epoch 6 of 10 took 441.703s
+  training loss (in-iteration):	0.121033
+  train accuracy:		89.17 %
+Val 6 of 10 took 61.718s
+  val loss :		0.151404
+  val accuracy:		89.75 %
+Epoch 7 of 10 took 441.295s
+  training loss (in-iteration):	0.107398
+  train accuracy:		90.26 %
+Val 7 of 10 took 62.198s
+  val loss :		0.140827
+  val accuracy:		90.69 %
+Epoch 8 of 10 took 441.212s
+  training loss (in-iteration):	0.095926
+  train accuracy:		91.10 %
+Val 8 of 10 took 61.671s
+  val loss :		0.138395
+  val accuracy:		91.45 %
+Epoch 9 of 10 took 442.193s
+  training loss (in-iteration):	0.086025
+  train accuracy:		91.78 %
+Val 9 of 10 took 61.609s
+  val loss :		0.135156
+  val accuracy:		92.07 %
+Epoch 10 of 10 took 441.856s
+  training loss (in-iteration):	0.078102
+  train accuracy:		92.34 %
+Val 10 of 10 took 61.665s
+  val loss :		0.127005
+  val accuracy:		92.59 %
+===============================================================
+===============================================================
+0.04
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 445.048s
+  training loss (in-iteration):	0.893589
+  train accuracy:		47.13 %
+Val 1 of 10 took 62.052s
+  val loss :		0.341457
+  val accuracy:		71.09 %
+Epoch 2 of 10 took 445.549s
+  training loss (in-iteration):	0.303162
+  train accuracy:		77.30 %
+Val 2 of 10 took 62.042s
+  val loss :		0.229936
+  val accuracy:		81.10 %
+Epoch 3 of 10 took 444.499s
+  training loss (in-iteration):	0.220139
+  train accuracy:		83.43 %
+Val 3 of 10 took 62.455s
+  val loss :		0.175325
+  val accuracy:		85.20 %
+Epoch 4 of 10 took 444.656s
+  training loss (in-iteration):	0.179771
+  train accuracy:		86.50 %
+Val 4 of 10 took 62.097s
+  val loss :		0.153261
+  val accuracy:		87.52 %
+Epoch 5 of 10 took 445.283s
+  training loss (in-iteration):	0.152297
+  train accuracy:		88.37 %
+Val 5 of 10 took 62.455s
+  val loss :		0.142338
+  val accuracy:		89.07 %
+Epoch 6 of 10 took 444.271s
+  training loss (in-iteration):	0.131968
+  train accuracy:		89.66 %
+Val 6 of 10 took 62.333s
+  val loss :		0.130482
+  val accuracy:		90.18 %
+Epoch 7 of 10 took 445.556s
+  training loss (in-iteration):	0.117338
+  train accuracy:		90.64 %
+Val 7 of 10 took 61.947s
+  val loss :		0.118830
+  val accuracy:		91.04 %
+Epoch 8 of 10 took 444.288s
+  training loss (in-iteration):	0.104456
+  train accuracy:		91.41 %
+Val 8 of 10 took 62.001s
+  val loss :		0.113367
+  val accuracy:		91.74 %
+Epoch 9 of 10 took 445.230s
+  training loss (in-iteration):	0.094555
+  train accuracy:		92.04 %
+Val 9 of 10 took 62.143s
+  val loss :		0.109501
+  val accuracy:		92.31 %
+Epoch 10 of 10 took 444.805s
+  training loss (in-iteration):	0.087207
+  train accuracy:		92.56 %
+Val 10 of 10 took 61.988s
+  val loss :		0.104864
+  val accuracy:		92.79 %
+===============================================================
+===============================================================
+0.045
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 445.234s
+  training loss (in-iteration):	0.806123
+  train accuracy:		49.17 %
+Val 1 of 10 took 61.997s
+  val loss :		0.222612
+  val accuracy:		74.32 %
+Epoch 2 of 10 took 445.012s
+  training loss (in-iteration):	0.179820
+  train accuracy:		80.84 %
+Val 2 of 10 took 62.259s
+  val loss :		0.134011
+  val accuracy:		84.73 %
+Epoch 3 of 10 took 444.900s
+  training loss (in-iteration):	0.121514
+  train accuracy:		86.99 %
+Val 3 of 10 took 62.004s
+  val loss :		0.111470
+  val accuracy:		88.65 %
+Epoch 4 of 10 took 445.289s
+  training loss (in-iteration):	0.095616
+  train accuracy:		89.83 %
+Val 4 of 10 took 61.994s
+  val loss :		0.101199
+  val accuracy:		90.76 %
+Epoch 5 of 10 took 444.347s
+  training loss (in-iteration):	0.080224
+  train accuracy:		91.49 %
+Val 5 of 10 took 62.869s
+  val loss :		0.091086
+  val accuracy:		92.10 %
+Epoch 6 of 10 took 444.359s
+  training loss (in-iteration):	0.066987
+  train accuracy:		92.62 %
+Val 6 of 10 took 62.488s
+  val loss :		0.092559
+  val accuracy:		93.06 %
+Epoch 7 of 10 took 445.028s
+  training loss (in-iteration):	0.059688
+  train accuracy:		93.44 %
+Val 7 of 10 took 62.015s
+  val loss :		0.089671
+  val accuracy:		93.77 %
+Epoch 8 of 10 took 444.886s
+  training loss (in-iteration):	0.052286
+  train accuracy:		94.06 %
+Val 8 of 10 took 62.170s
+  val loss :		0.084561
+  val accuracy:		94.31 %
+Epoch 9 of 10 took 444.999s
+  training loss (in-iteration):	0.046140
+  train accuracy:		94.55 %
+Val 9 of 10 took 62.122s
+  val loss :		0.087665
+  val accuracy:		94.77 %
+Epoch 10 of 10 took 445.295s
+  training loss (in-iteration):	0.043527
+  train accuracy:		94.96 %
+Val 10 of 10 took 62.033s
+  val loss :		0.104218
+  val accuracy:		95.13 %
+===============================================================
+===============================================================
+0.065
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 445.804s
+  training loss (in-iteration):	0.522932
+  train accuracy:		65.29 %
+Val 1 of 10 took 62.222s
+  val loss :		0.160783
+  val accuracy:		84.16 %
+Epoch 2 of 10 took 446.431s
+  training loss (in-iteration):	0.138318
+  train accuracy:		87.95 %
+Val 2 of 10 took 62.311s
+  val loss :		0.102501
+  val accuracy:		90.23 %
+Epoch 3 of 10 took 445.653s
+  training loss (in-iteration):	0.094269
+  train accuracy:		91.58 %
+Val 3 of 10 took 62.673s
+  val loss :		0.083453
+  val accuracy:		92.58 %
+Epoch 4 of 10 took 446.105s
+  training loss (in-iteration):	0.073383
+  train accuracy:		93.30 %
+Val 4 of 10 took 62.124s
+  val loss :		0.078805
+  val accuracy:		93.88 %
+Epoch 5 of 10 took 445.802s
+  training loss (in-iteration):	0.061204
+  train accuracy:		94.33 %
+Val 5 of 10 took 62.356s
+  val loss :		0.072952
+  val accuracy:		94.72 %
+Epoch 6 of 10 took 445.910s
+  training loss (in-iteration):	0.051630
+  train accuracy:		95.04 %
+Val 6 of 10 took 62.141s
+  val loss :		0.072404
+  val accuracy:		95.31 %
+Epoch 7 of 10 took 446.171s
+  training loss (in-iteration):	0.044165
+  train accuracy:		95.56 %
+Val 7 of 10 took 62.057s
+  val loss :		0.075968
+  val accuracy:		95.77 %
+Epoch 8 of 10 took 445.209s
+  training loss (in-iteration):	0.039218
+  train accuracy:		95.96 %
+Val 8 of 10 took 62.527s
+  val loss :		0.071233
+  val accuracy:		96.13 %
+Epoch 9 of 10 took 445.749s
+  training loss (in-iteration):	0.033530
+  train accuracy:		96.28 %
+Val 9 of 10 took 62.581s
+  val loss :		0.072411
+  val accuracy:		96.42 %
+Epoch 10 of 10 took 445.668s
+  training loss (in-iteration):	0.029940
+  train accuracy:		96.55 %
+Val 10 of 10 took 62.119s
+  val loss :		0.076518
+  val accuracy:		96.67 %
+===============================================================
+===============================================================
+0.075
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 454.301s
+  training loss (in-iteration):	0.415892
+  train accuracy:		69.92 %
+Val 1 of 10 took 63.199s
+  val loss :		0.134162
+  val accuracy:		87.22 %
+Epoch 2 of 10 took 454.692s
+  training loss (in-iteration):	0.110453
+  train accuracy:		90.29 %
+Val 2 of 10 took 63.187s
+  val loss :		0.097521
+  val accuracy:		92.09 %
+Epoch 3 of 10 took 455.444s
+  training loss (in-iteration):	0.080166
+  train accuracy:		93.16 %
+Val 3 of 10 took 63.207s
+  val loss :		0.084751
+  val accuracy:		93.95 %
+Epoch 4 of 10 took 455.087s
+  training loss (in-iteration):	0.062947
+  train accuracy:		94.51 %
+Val 4 of 10 took 63.195s
+  val loss :		0.078916
+  val accuracy:		94.97 %
+Epoch 5 of 10 took 454.328s
+  training loss (in-iteration):	0.053764
+  train accuracy:		95.33 %
+Val 5 of 10 took 63.462s
+  val loss :		0.074279
+  val accuracy:		95.64 %
+Epoch 6 of 10 took 454.910s
+  training loss (in-iteration):	0.045442
+  train accuracy:		95.89 %
+Val 6 of 10 took 63.219s
+  val loss :		0.072218
+  val accuracy:		96.11 %
+Epoch 7 of 10 took 455.187s
+  training loss (in-iteration):	0.040051
+  train accuracy:		96.30 %
+Val 7 of 10 took 63.212s
+  val loss :		0.076619
+  val accuracy:		96.46 %
+Epoch 8 of 10 took 455.125s
+  training loss (in-iteration):	0.034826
+  train accuracy:		96.62 %
+Val 8 of 10 took 63.194s
+  val loss :		0.071647
+  val accuracy:		96.75 %
+Epoch 9 of 10 took 454.688s
+  training loss (in-iteration):	0.031308
+  train accuracy:		96.88 %
+Val 9 of 10 took 63.234s
+  val loss :		0.072427
+  val accuracy:		96.99 %
+Epoch 10 of 10 took 455.088s
+  training loss (in-iteration):	0.028184
+  train accuracy:		97.09 %
+Val 10 of 10 took 63.318s
+  val loss :		0.080494
+  val accuracy:		97.18 %
+===============================================================
+===============================================================
+0.085
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 451.929s
+  training loss (in-iteration):	0.649845
+  train accuracy:		59.91 %
+Val 1 of 10 took 62.719s
+  val loss :		0.168203
+  val accuracy:		80.66 %
+Epoch 2 of 10 took 452.176s
+  training loss (in-iteration):	0.137298
+  train accuracy:		85.56 %
+Val 2 of 10 took 62.843s
+  val loss :		0.109385
+  val accuracy:		88.51 %
+Epoch 3 of 10 took 452.539s
+  training loss (in-iteration):	0.092371
+  train accuracy:		90.20 %
+Val 3 of 10 took 62.764s
+  val loss :		0.085684
+  val accuracy:		91.45 %
+Epoch 4 of 10 took 452.042s
+  training loss (in-iteration):	0.069246
+  train accuracy:		92.36 %
+Val 4 of 10 took 63.329s
+  val loss :		0.079059
+  val accuracy:		93.07 %
+Epoch 5 of 10 took 452.218s
+  training loss (in-iteration):	0.056502
+  train accuracy:		93.64 %
+Val 5 of 10 took 62.765s
+  val loss :		0.068780
+  val accuracy:		94.11 %
+Epoch 6 of 10 took 452.250s
+  training loss (in-iteration):	0.047106
+  train accuracy:		94.50 %
+Val 6 of 10 took 62.923s
+  val loss :		0.068233
+  val accuracy:		94.83 %
+Epoch 7 of 10 took 451.986s
+  training loss (in-iteration):	0.040277
+  train accuracy:		95.12 %
+Val 7 of 10 took 63.285s
+  val loss :		0.069679
+  val accuracy:		95.38 %
+Epoch 8 of 10 took 452.078s
+  training loss (in-iteration):	0.035365
+  train accuracy:		95.60 %
+Val 8 of 10 took 62.736s
+  val loss :		0.069953
+  val accuracy:		95.80 %
+Epoch 9 of 10 took 451.307s
+  training loss (in-iteration):	0.031192
+  train accuracy:		95.98 %
+Val 9 of 10 took 62.874s
+  val loss :		0.065917
+  val accuracy:		96.14 %
+Epoch 10 of 10 took 451.966s
+  training loss (in-iteration):	0.027200
+  train accuracy:		96.29 %
+Val 10 of 10 took 62.664s
+  val loss :		0.070626
+  val accuracy:		96.43 %
+===============================================================
+===============================================================
+0.095
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 454.595s
+  training loss (in-iteration):	0.495341
+  train accuracy:		65.37 %
+Val 1 of 10 took 63.144s
+  val loss :		0.124612
+  val accuracy:		84.89 %
+Epoch 2 of 10 took 454.503s
+  training loss (in-iteration):	0.102446
+  train accuracy:		88.84 %
+Val 2 of 10 took 63.160s
+  val loss :		0.086552
+  val accuracy:		91.15 %
+Epoch 3 of 10 took 454.974s
+  training loss (in-iteration):	0.071498
+  train accuracy:		92.47 %
+Val 3 of 10 took 63.678s
+  val loss :		0.070290
+  val accuracy:		93.42 %
+Epoch 4 of 10 took 455.174s
+  training loss (in-iteration):	0.056480
+  train accuracy:		94.11 %
+Val 4 of 10 took 63.559s
+  val loss :		0.063916
+  val accuracy:		94.65 %
+Epoch 5 of 10 took 457.197s
+  training loss (in-iteration):	0.046136
+  train accuracy:		95.08 %
+Val 5 of 10 took 63.157s
+  val loss :		0.060785
+  val accuracy:		95.43 %
+Epoch 6 of 10 took 455.033s
+  training loss (in-iteration):	0.038650
+  train accuracy:		95.73 %
+Val 6 of 10 took 63.409s
+  val loss :		0.060876
+  val accuracy:		95.99 %
+Epoch 7 of 10 took 455.590s
+  training loss (in-iteration):	0.033271
+  train accuracy:		96.21 %
+Val 7 of 10 took 63.027s
+  val loss :		0.063013
+  val accuracy:		96.40 %
+Epoch 8 of 10 took 455.877s
+  training loss (in-iteration):	0.029249
+  train accuracy:		96.57 %
+Val 8 of 10 took 63.072s
+  val loss :		0.065172
+  val accuracy:		96.72 %
+Epoch 9 of 10 took 455.004s
+  training loss (in-iteration):	0.025519
+  train accuracy:		96.86 %
+Val 9 of 10 took 63.660s
+  val loss :		0.064789
+  val accuracy:		96.98 %
+Epoch 10 of 10 took 454.877s
+  training loss (in-iteration):	0.021942
+  train accuracy:		97.10 %
+Val 10 of 10 took 63.174s
+  val loss :		0.060825
+  val accuracy:		97.20 %
+===============================================================
+===============================================================
+0.15
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 447.500s
+  training loss (in-iteration):	0.725739
+  train accuracy:		60.33 %
+Val 1 of 10 took 62.041s
+  val loss :		0.364796
+  val accuracy:		76.92 %
+Epoch 2 of 10 took 447.594s
+  training loss (in-iteration):	0.336911
+  train accuracy:		80.29 %
+Val 2 of 10 took 61.339s
+  val loss :		0.322412
+  val accuracy:		82.30 %
+Epoch 3 of 10 took 447.910s
+  training loss (in-iteration):	0.310112
+  train accuracy:		83.40 %
+Val 3 of 10 took 61.803s
+  val loss :		0.308209
+  val accuracy:		84.23 %
+Epoch 4 of 10 took 447.905s
+  training loss (in-iteration):	0.297156
+  train accuracy:		84.78 %
+Val 4 of 10 took 61.971s
+  val loss :		0.301006
+  val accuracy:		85.24 %
+Epoch 5 of 10 took 448.709s
+  training loss (in-iteration):	0.289419
+  train accuracy:		85.59 %
+Val 5 of 10 took 61.455s
+  val loss :		0.295363
+  val accuracy:		85.88 %
+Epoch 6 of 10 took 448.656s
+  training loss (in-iteration):	0.283042
+  train accuracy:		86.12 %
+Val 6 of 10 took 61.642s
+  val loss :		0.292770
+  val accuracy:		86.33 %
+Epoch 7 of 10 took 449.196s
+  training loss (in-iteration):	0.277911
+  train accuracy:		86.50 %
+Val 7 of 10 took 61.615s
+  val loss :		0.293605
+  val accuracy:		86.66 %
+Epoch 8 of 10 took 448.983s
+  training loss (in-iteration):	0.273417
+  train accuracy:		86.80 %
+Val 8 of 10 took 61.754s
+  val loss :		0.291446
+  val accuracy:		86.92 %
+Epoch 9 of 10 took 449.516s
+  training loss (in-iteration):	0.270185
+  train accuracy:		87.03 %
+Val 9 of 10 took 61.657s
+  val loss :		0.290062
+  val accuracy:		87.13 %
+Epoch 10 of 10 took 449.054s
+  training loss (in-iteration):	0.267464
+  train accuracy:		87.23 %
+Val 10 of 10 took 61.782s
+  val loss :		0.290530
+  val accuracy:		87.31 %
+===============================================================
+===============================================================
+0.2
+===============================================================
+===============================================================
+Tensor("sparse_placeholder/indices:0", shape=(?, 5), dtype=int64)
+initializing model
+model and data are initialized
+Epoch 1 of 10 took 428.829s
+  training loss (in-iteration):	0.285611
+  train accuracy:		78.21 %
+Val 1 of 10 took 58.668s
+  val loss :		0.089492
+  val accuracy:		91.56 %
+Epoch 2 of 10 took 427.490s
+  training loss (in-iteration):	0.074027
+  train accuracy:		93.63 %
+Val 2 of 10 took 58.496s
+  val loss :		0.071167
+  val accuracy:		94.81 %
+Epoch 3 of 10 took 427.962s
+  training loss (in-iteration):	0.056598
+  train accuracy:		95.51 %
+Val 3 of 10 took 58.376s
+  val loss :		0.063151
+  val accuracy:		96.01 %
+Epoch 4 of 10 took 427.938s
+  training loss (in-iteration):	0.046718
+  train accuracy:		96.37 %
+Val 4 of 10 took 58.832s
+  val loss :		0.057419
+  val accuracy:		96.66 %
+Epoch 5 of 10 took 426.798s
+  training loss (in-iteration):	0.039904
+  train accuracy:		96.89 %
+Val 5 of 10 took 58.566s
+  val loss :		0.057748
+  val accuracy:		97.08 %
+Epoch 6 of 10 took 427.234s
+  training loss (in-iteration):	0.034662
+  train accuracy:		97.25 %
+Val 6 of 10 took 58.243s
+  val loss :		0.052719
+  val accuracy:		97.39 %
+Epoch 7 of 10 took 427.527s
+  training loss (in-iteration):	0.030188
+  train accuracy:		97.52 %
+Val 7 of 10 took 58.450s
+  val loss :		0.056510
+  val accuracy:		97.63 %
+Epoch 8 of 10 took 426.804s
+  training loss (in-iteration):	0.026512
+  train accuracy:		97.73 %
+Val 8 of 10 took 58.313s
+  val loss :		0.056093
+  val accuracy:		97.82 %
+Epoch 9 of 10 took 427.719s
+  training loss (in-iteration):	0.023714
+  train accuracy:		97.90 %
+Val 9 of 10 took 58.240s
+  val loss :		0.057064
+  val accuracy:		97.98 %
+Epoch 10 of 10 took 427.439s
+  training loss (in-iteration):	0.020691
+  train accuracy:		98.04 %
+Val 10 of 10 took 58.549s
+  val loss :		0.060181
+  val accuracy:		98.11 %

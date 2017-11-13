@@ -1,0 +1,246 @@
+0.05
+data and model are initialized
+Epoch 1 of 10 took 739.464s
+  train loss    :		0.212581
+  train accuracy:		84.62 %
+Val 1 of 10 took 60.813s
+  val loss    :		0.084012
+  val accuracy:		93.67 %
+Pruning 1 of 10 took 0.011s
+  removed 0 out of 6984 weights
+Epoch 2 of 10 took 741.034s
+  train loss    :		0.068295
+  train accuracy:		95.04 %
+Val 2 of 10 took 60.785s
+  val loss    :		0.060483
+  val accuracy:		95.87 %
+Pruning 2 of 10 took 0.074s
+  removed 5958 out of 6984 weights
+Epoch 3 of 10 took 581.543s
+  train loss    :		0.092698
+  train accuracy:		96.12 %
+Val 3 of 10 took 49.717s
+  val loss    :		0.076321
+  val accuracy:		96.36 %
+Pruning 3 of 10 took 0.057s
+  removed 92 out of 1026 weights
+Epoch 4 of 10 took 566.744s
+  train loss    :		0.064030
+  train accuracy:		96.59 %
+Val 4 of 10 took 48.488s
+  val loss    :		0.066755
+  val accuracy:		96.78 %
+Pruning 4 of 10 took 0.061s
+  removed 5 out of 934 weights
+Epoch 5 of 10 took 563.931s
+  train loss    :		0.052047
+  train accuracy:		96.96 %
+Val 5 of 10 took 48.141s
+  val loss    :		0.063720
+  val accuracy:		97.10 %
+Pruning 5 of 10 took 0.063s
+  removed 22 out of 929 weights
+Epoch 6 of 10 took 561.047s
+  train loss    :		0.046049
+  train accuracy:		97.23 %
+Val 6 of 10 took 48.038s
+  val loss    :		0.060720
+  val accuracy:		97.34 %
+Pruning 6 of 10 took 0.064s
+  removed 10 out of 907 weights
+Epoch 7 of 10 took 558.090s
+  train loss    :		0.039994
+  train accuracy:		97.44 %
+Val 7 of 10 took 47.779s
+  val loss    :		0.061043
+  val accuracy:		97.53 %
+Pruning 7 of 10 took 0.067s
+  removed 20 out of 897 weights
+Epoch 8 of 10 took 556.920s
+  train loss    :		0.036310
+  train accuracy:		97.62 %
+Val 8 of 10 took 47.695s
+  val loss    :		0.061307
+  val accuracy:		97.69 %
+Pruning 8 of 10 took 0.068s
+  removed 6 out of 877 weights
+Epoch 9 of 10 took 556.171s
+  train loss    :		0.032346
+  train accuracy:		97.76 %
+Val 9 of 10 took 47.705s
+  val loss    :		0.062570
+  val accuracy:		97.83 %
+Pruning 9 of 10 took 0.071s
+  removed 5 out of 871 weights
+Epoch 10 of 10 took 556.865s
+  train loss    :		0.029082
+  train accuracy:		97.89 %
+Val 10 of 10 took 47.770s
+  val loss    :		0.066861
+  val accuracy:		97.94 %
+Pruning 10 of 10 took 0.073s
+  removed 13 out of 866 weights
+0.1
+data and model are initialized
+Epoch 1 of 10 took 743.140s
+  train loss    :		0.203285
+  train accuracy:		85.06 %
+Val 1 of 10 took 60.900s
+  val loss    :		0.082923
+  val accuracy:		93.99 %
+Pruning 1 of 10 took 0.047s
+  removed 0 out of 13968 weights
+Epoch 2 of 10 took 741.843s
+  train loss    :		0.065125
+  train accuracy:		95.30 %
+Val 2 of 10 took 60.862s
+  val loss    :		0.062297
+  val accuracy:		96.07 %
+Pruning 2 of 10 took 0.327s
+  removed 13876 out of 13968 weights
+Epoch 3 of 10 took 141.344s
+  train loss    :		2.301533
+  train accuracy:		82.26 %
+Val 3 of 10 took 13.143s
+  val loss    :		2.301843
+  val accuracy:		69.51 %
+Pruning 3 of 10 took 0.249s
+  removed 0 out of 92 weights
+Epoch 4 of 10 took 141.269s
+  train loss    :		2.301360
+  train accuracy:		61.22 %
+Val 4 of 10 took 13.146s
+  val loss    :		2.301863
+  val accuracy:		54.63 %
+Pruning 4 of 10 took 0.257s
+  removed 0 out of 92 weights
+Epoch 5 of 10 took 141.357s
+  train loss    :		2.301307
+  train accuracy:		49.82 %
+Val 5 of 10 took 13.148s
+  val loss    :		2.301878
+  val accuracy:		45.80 %
+Pruning 5 of 10 took 0.267s
+  removed 0 out of 92 weights
+Epoch 6 of 10 took 141.144s
+  train loss    :		2.301273
+  train accuracy:		42.67 %
+Val 6 of 10 took 13.176s
+  val loss    :		2.301890
+  val accuracy:		39.96 %
+Pruning 6 of 10 took 0.276s
+  removed 0 out of 92 weights
+Epoch 7 of 10 took 141.492s
+  train loss    :		2.301250
+  train accuracy:		37.76 %
+Val 7 of 10 took 13.167s
+  val loss    :		2.301899
+  val accuracy:		35.80 %
+Pruning 7 of 10 took 0.289s
+  removed 0 out of 92 weights
+Epoch 8 of 10 took 141.227s
+  train loss    :		2.301232
+  train accuracy:		34.17 %
+Val 8 of 10 took 13.155s
+  val loss    :		2.301907
+  val accuracy:		32.70 %
+Pruning 8 of 10 took 0.293s
+  removed 0 out of 92 weights
+Epoch 9 of 10 took 141.294s
+  train loss    :		2.301218
+  train accuracy:		31.44 %
+Val 9 of 10 took 13.237s
+  val loss    :		2.301912
+  val accuracy:		30.29 %
+Pruning 9 of 10 took 0.313s
+  removed 0 out of 92 weights
+Epoch 10 of 10 took 141.137s
+  train loss    :		2.301206
+  train accuracy:		29.29 %
+Val 10 of 10 took 13.169s
+  val loss    :		2.301918
+  val accuracy:		28.37 %
+Pruning 10 of 10 took 0.320s
+  removed 0 out of 92 weights
+0.5
+data and model are initialized
+Epoch 1 of 10 took 744.800s
+  train loss    :		0.211211
+  train accuracy:		85.29 %
+Val 1 of 10 took 61.080s
+  val loss    :		0.085980
+  val accuracy:		93.68 %
+Pruning 1 of 10 took 0.141s
+  removed 0 out of 20952 weights
+Epoch 2 of 10 took 744.745s
+  train loss    :		0.074255
+  train accuracy:		95.00 %
+Val 2 of 10 took 61.072s
+  val loss    :		0.061282
+  val accuracy:		95.80 %
+Pruning 2 of 10 took 0.950s
+  removed 20952 out of 20952 weights
+Epoch 3 of 10 took 26.169s
+  train loss    :		2.301487
+  train accuracy:		82.03 %
+Val 3 of 10 took 2.648s
+  val loss    :		2.301861
+  val accuracy:		69.32 %
+Pruning 3 of 10 took 0.711s
+  removed 0 out of 0 weights
+Epoch 4 of 10 took 25.974s
+  train loss    :		2.301360
+  train accuracy:		61.06 %
+Val 4 of 10 took 2.622s
+  val loss    :		2.301875
+  val accuracy:		54.49 %
+Pruning 4 of 10 took 0.769s
+  removed 0 out of 0 weights
+Epoch 5 of 10 took 26.263s
+  train loss    :		2.301307
+  train accuracy:		49.70 %
+Val 5 of 10 took 2.832s
+  val loss    :		2.301887
+  val accuracy:		45.69 %
+Pruning 5 of 10 took 0.744s
+  removed 0 out of 0 weights
+Epoch 6 of 10 took 26.315s
+  train loss    :		2.301274
+  train accuracy:		42.57 %
+Val 6 of 10 took 2.927s
+  val loss    :		2.301897
+  val accuracy:		39.87 %
+Pruning 6 of 10 took 0.771s
+  removed 0 out of 0 weights
+Epoch 7 of 10 took 26.374s
+  train loss    :		2.301250
+  train accuracy:		37.67 %
+Val 7 of 10 took 2.744s
+  val loss    :		2.301905
+  val accuracy:		35.73 %
+Pruning 7 of 10 took 0.789s
+  removed 0 out of 0 weights
+Epoch 8 of 10 took 26.484s
+  train loss    :		2.301232
+  train accuracy:		34.10 %
+Val 8 of 10 took 2.825s
+  val loss    :		2.301911
+  val accuracy:		32.63 %
+Pruning 8 of 10 took 0.812s
+  removed 0 out of 0 weights
+Epoch 9 of 10 took 26.270s
+  train loss    :		2.301218
+  train accuracy:		31.38 %
+Val 9 of 10 took 2.941s
+  val loss    :		2.301917
+  val accuracy:		30.23 %
+Pruning 9 of 10 took 0.848s
+  removed 0 out of 0 weights
+Epoch 10 of 10 took 26.445s
+  train loss    :		2.301206
+  train accuracy:		29.24 %
+Val 10 of 10 took 3.004s
+  val loss    :		2.301921
+  val accuracy:		28.32 %
+Pruning 10 of 10 took 0.878s
+  removed 0 out of 0 weights
