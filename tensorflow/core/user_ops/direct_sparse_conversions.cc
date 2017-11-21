@@ -20,7 +20,15 @@ REGISTER_OP("DirectSparseDataConversion")
   .Output("out_block_channel_mapping: int32")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
-  .Attr("dim: int=5");
+  .Attr("dim: int=5")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+    c->set_output(0, c->input(1));
+    c->set_output(1, c->UnknownShape());
+    c->set_output(2, c->input(1));
+    c->set_output(3, c->input(2));
+
+    return ::tensorflow::Status::OK();
+  });
 
 REGISTER_OP("DirectSparseFilterConversion")
   .Attr("T: realnumbertype")
@@ -33,7 +41,15 @@ REGISTER_OP("DirectSparseFilterConversion")
   .Output("out_values: T")
   .Output("out_shape: Tindices")
   .Output("out_channel_mapping: int32")
-  .Attr("dim: int=5");
+  .Attr("dim: int=5")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+    c->set_output(0, c->input(1));
+    c->set_output(1, c->input(1));
+    c->set_output(2, c->input(2));
+    c->set_output(3, c->UnknownShape());
+
+    return ::tensorflow::Status::OK();
+  });
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -84,4 +100,3 @@ REGISTER_GPU_ALL(float);
 #undef REGISTER_GPU_TYPE_
 #undef REGISTER_GPU_ALL
 #endif //GOOGLE_CUDA
-

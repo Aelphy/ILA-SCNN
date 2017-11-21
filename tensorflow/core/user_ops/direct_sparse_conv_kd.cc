@@ -2,6 +2,7 @@
 #include <map>
 #include <sstream>
 #include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 
@@ -9,15 +10,14 @@
 #include "direct_sparse_conv_kd_gpu.h"
 #endif //GOOGLE_CUDA
 
-
 /** DirectSparseConvKD
   * \ingroup CXX11_NeuralNetworks_Module
-  * 
+  *
   * \brief Applies a 3D convolution over a multichannel input voxel block.
-  * 
+  *
   * The input parameter is expected to be a tensor with a rank of 4 or more (channels, depth, height, width, and optionally others).
   * The kernel parameter is expected to be a 5D tensor (filters, channels, kernel_depth, kernel_height, kernel_width).
-  * 
+  *
   * The result can be assigned to a tensor of rank equal to the rank of the input. The dimensions of the result will be filters, depth, height, width (and others if applicable).
   */
 
@@ -41,9 +41,34 @@ REGISTER_OP("DirectSparseConvKD")
   .Output("out_channel_densities: float32")
   .Attr("strides: list(int)")
   .Attr("padding: string")
+  .Attr("dense_entry_count: int")
   .Attr("dim: int = 5")
   .Attr("max_density: float = 1")
-  .Attr("filter_type: string = 'K-ABS'");
+  .Attr("filter_type: string = 'K-ABS'")
+  .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+    float max_density;
+    TF_RETURN_IF_ERROR(c->GetAttr("max_density", &max_density));
+
+    int dense_entry_count;
+    TF_RETURN_IF_ERROR(c->GetAttr("dense_entry_count", &dense_entry_count));
+
+    int dim;
+    TF_RETURN_IF_ERROR(c->GetAttr("dim", &dim));
+
+    std::vector<::tensorflow::shape_inference::DimensionHandle> sparse_output_shape_dims;
+    sparse_output_shape_dims.push_back(c->MakeDim(ceil(dense_entry_count * max_density)));
+
+    std::vector<::tensorflow::shape_inference::DimensionHandle> output_shape_dims;
+    output_shape_dims.push_back(c->MakeDim(dim));
+
+    c->set_output(0, c->MakeShape(sparse_output_shape_dims));
+    c->set_output(1, c->MakeShape(sparse_output_shape_dims));
+    c->set_output(2, c->MakeShape(output_shape_dims));
+    c->set_output(3, c->UnknownShape());
+    c->set_output(4, c->UnknownShape());
+
+    return ::tensorflow::Status::OK();
+  });
 
 REGISTER_OP("DirectSparseConvKDBackprop")
   .Attr("T: realnumbertype")
@@ -88,6 +113,7 @@ class DirectSparseConvKD : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
     OP_REQUIRES_OK(context, context->GetAttr("max_density", &max_density));
     OP_REQUIRES_OK(context, context->GetAttr("filter_type", &filter_type));
+    OP_REQUIRES_OK(context, context->GetAttr("dense_entry_count", &dense_entry_count));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -103,6 +129,7 @@ class DirectSparseConvKD : public OpKernel {
   std::string padding;
   std::string filter_type;
   float max_density;
+  int dense_entry_count;
 };
 
 #if GOOGLE_CUDA
@@ -125,4 +152,3 @@ REGISTER_GPU_ALL(float);
 #undef REGISTER_GPU_TYPE
 #undef REGISTER_GPU_ALL
 #endif //GOOGLE_CUDA
-

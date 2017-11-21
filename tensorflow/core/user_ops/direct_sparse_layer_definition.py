@@ -38,7 +38,6 @@ def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, n
     sd = sparse_filter
     return sc_module.direct_sparse_filter_conversion(sd.indices, sd.values, sd.dense_shape, sd.dense_shape, dim=dim)
 
-#TODO: bias in conv layer! covered in batchnorm? TODO: directly integraded in conv layer?
 def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None):
   with tf.variable_scope(name):
     #2. define initialization of sparse filter weights
@@ -59,11 +58,12 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, strides = 1, padding 
 
     return conv_layer
 
-def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005):
+def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005, bias_offset=0.005):
   with tf.variable_scope(name):
-    max_de = tf.constant(max_density, dtype=tf.float64)
-    min_bias = tf.constant(-0.001, dtype=tf.float64)
-    max_bias = tf.constant(0.001, dtype=tf.float64)
+    max_de = tf.constant(max_density, dtype=tf.float32)
+    min_bias = tf.constant(-bias_offset, dtype=tf.float32)
+    max_bias = tf.constant(bias_offset, dtype=tf.float32)
+    bias_offset = tf.constant(bias_offset, dtype=tf.float32)
     reg_bias = tf.get_variable('regularisation_bias', initializer=tf.zeros_initializer(), shape=[1], trainable = False, dtype=tf.float32)
     regularizer = reg.biased_l2_regularizer(scale, reg_bias)
 
@@ -81,15 +81,11 @@ def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, strides = 1, padd
     out_channel_count = filter_in_sizes[-1]
     bias = tf.get_variable('sparse_bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, sparse_bias, strides, padding, dim, max_density, filter_type)
+    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, dim, max_density, filter_type)
 
-    dense_val = tf.reduce_prod(conv_layer.out_shape)
-    max_density_var = tf.multiply(tf.cast(dense_val, dtype=tf.float64), max_de)
-    out_count = tf.cast(conv_layer.out_block_channel_mapping[-1], dtype=tf.float64)
-    density_ge = tf.greater_equal(out_count, max_density_var)
-    factor_reg = tf.divide(out_count, max_density_var)
-    max_bias_reg = tf.multiply(factor_reg, max_bias)
-    new_bias = tf.cast(tf.cond(density_ge, lambda: min_bias, lambda: max_bias_reg), dtype=tf.float32)
+    out_density = tf.reduce_mean(conv_layer.out_channel_densities) # TODO: custom regularizer per channel
+    density_ge = tf.greater_equal(out_density, max_de)
+    new_bias = tf.cast(tf.cond(density_ge, lambda: max_bias * (out_density - max_de) + bias_offset, lambda: min_bias * (max_de - out_density)), dtype=tf.float32)
     assign_op = tf.assign(reg_bias, new_bias, validate_shape=False, name='update_bias')
 
     return conv_layer, assign_op
@@ -117,5 +113,3 @@ def create_direct_sparse_batchnorm(sparse_data, name='batch_norm'):
     sd = sparse_data
     batch_norm = tf.layers.batch_normalization(sparse_data.out_values)
     return DirectSparseData(sd.out_indices, batch_norm, sd.out_shape, sd.out_block_channel_mapping)
-
-

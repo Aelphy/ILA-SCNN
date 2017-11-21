@@ -23,10 +23,19 @@ class ModelnetReader():
     self.save = save
     random.seed()
     self.preprocess = preprocess
-    self.preloaded_samples = []
-    self.preloaded_labels = []
+    
+    num_samples = 0
+    for i in range(len(self.categories)):
+        for file in os.listdir(path_):
+            if file.endswith("xyz"):
+                num_samples += 1
+                
+    self.preloaded_samples = [None] * num_samples
+    self.preloaded_labels = [None] * num_samples
+    it = 0
+    
     if self.preprocess:
-      for i in range(0, len(self.categories)):
+      for i in range(len(self.categories)):
         class_label = [0] * len(self.categories)
         class_label[i] = 1
         if self.train:
@@ -34,12 +43,14 @@ class ModelnetReader():
         else:
           append = "/" + self.categories[i] + self.test_dir
         path_ = self.path + append
+        
         for file in os.listdir(path_):
           if file.endswith("xyz"):
             data_path = path_ + "/" + file
             points = np.loadtxt(data_path)
-            self.preloaded_samples.append(points)
-            self.preloaded_labels.append(class_label)
+            self.preloaded_samples[it] = points
+            self.preloaded_labels[it] = class_label
+            it += 1
   
   def start(self):
     return
@@ -49,11 +60,11 @@ class ModelnetReader():
 
   def init(self):
     if self.preprocess:
-      self.samples = range(0, len(self.preloaded_samples))
+      self.samples = range(len(self.preloaded_samples))
       random.shuffle(self.samples)
       return
     self.samples = []
-    for i in range(0, len(self.categories)):
+    for i in range(len(self.categories)):
       class_label = [0] * len(self.categories)
       class_label[i] = 1
       if self.train:
@@ -73,7 +84,7 @@ class ModelnetReader():
     self.batch = [[],[],shape,[]]
     if len(self.samples) < self.batch_size:
       return
-    for i in range(0, self.batch_size):
+    for i in range(self.batch_size):
       elem = self.samples.pop()
       if self.preprocess:
         [indices, values] = self.getData(elem, i)

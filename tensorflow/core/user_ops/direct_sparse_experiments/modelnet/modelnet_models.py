@@ -66,9 +66,7 @@ def model_modelnet_16(sparse_data, tensor_in_sizes, train_labels = None, num_cla
   dim = 5
   pooling_sizes = [1,2,2,2,1]
   batch_size = tensor_in_sizes[0]
-  total_size = 1
-  for i in range(1, len(tensor_in_sizes)): #skip batch size
-    total_size = total_size * tensor_in_sizes[i]
+  total_size = np.prod(tensor_in_sizes[1:])
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   d1 = 0.125
   net = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], strides, padding, dim, d1, "K-ABS", name = scope + "sc1", initializer=initializer)
