@@ -91,6 +91,7 @@ REGISTER_OP("DirectSparseConvKDBackprop")
   .Output("bias_grads: T")
   .Attr("strides: list(int)")
   .Attr("padding: string")
+  .Attr("dense_entry_count: int = 1")
   .Attr("dim: int = 5")
   .Attr("max_density: float = 1")
   .Attr("filter_type: string = 'K-ABS'");
