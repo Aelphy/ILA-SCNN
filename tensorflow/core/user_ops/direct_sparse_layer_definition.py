@@ -30,7 +30,6 @@ class DirectSparseData:
     self.out_block_channel_mapping = mapping
 
 def create_sparse_data_to_direct_sparse(sd, dim):
-  print(sd.indices)
   return sc_module.direct_sparse_data_conversion(sd.indices, sd.values, sd.dense_shape, dim)
 
 def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, name = ""):
