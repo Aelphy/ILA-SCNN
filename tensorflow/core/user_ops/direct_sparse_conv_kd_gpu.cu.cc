@@ -700,8 +700,10 @@ void DirectSparseConvBackPropFunctor<DeviceT, T, IndiceT, data_dimension>::opera
   cudaMemset(f_grads.data(), 0, f_grads.dimension(0) * sizeof(T));
   cudaMemset(b_grads.data(), 0, b_grads.dimension(0) * sizeof(T));
   {
-    CudaLaunchConfig config_bias = GetCudaLaunchConfig(output_entry_count, d);
-    add_bias_backprop<T, IndiceT, data_dimension><<<config_bias.block_count, config_bias.thread_per_block, 0, d.stream()>>>(config_bias, grads.data(), o_ind.data(), o_sh.data(), b_grads.data());
+    if(output_entry_count > 0){
+      CudaLaunchConfig config_bias = GetCudaLaunchConfig(output_entry_count, d);
+      add_bias_backprop<T, IndiceT, data_dimension><<<config_bias.block_count, config_bias.thread_per_block, 0, d.stream()>>>(config_bias, grads.data(), o_ind.data(), o_sh.data(), b_grads.data());
+    }
   }
   
   if(data_entry_count <= 0){

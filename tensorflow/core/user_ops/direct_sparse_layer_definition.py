@@ -114,5 +114,6 @@ def create_direct_dense_to_sparse(dense_data, tensor_in_sizes, dim):
 def create_direct_sparse_batchnorm(sparse_data, name='batch_norm'):
   with tf.variable_scope(name):
     sd = sparse_data
+    #TODO: create sparse batch norm
     batch_norm = tf.layers.batch_normalization(sparse_data.out_values)
     return DirectSparseData(sd.out_indices, batch_norm, sd.out_shape, sd.out_block_channel_mapping)
