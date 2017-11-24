@@ -104,18 +104,15 @@ def getBoundingBox(points):
 
 def toVoxelGrid(points, grid_size, res):
   [min_x, min_y, min_z, max_x, max_y, max_z] = getBoundingBox(points)
-  off_x = float(max_x - min_x) / 2 - min_x
-  off_y = float(max_y - min_y) / 2 - min_y
-  off_z = float(max_z - min_z) / 2 - min_z
-  max_size = max([max_x + off_x, max_y + off_y, max_z + off_z, grid_size])
-  scale = float(max_size) / res
+  max_size = max([max_x - min_x, max_y - min_y, max_z - min_z, grid_size])
+  scale = float(max_size) / float(res) + 0.001
   sparse_grid = {}
   batch = 0
   for batch_data in points:
     for point in batch_data:
-      bin_x = int(math.floor((point[0] + off_x) / scale))
-      bin_y = int(math.floor((point[1] + off_y) / scale))
-      bin_z = int(math.floor((point[2] + off_z) / scale))
+      bin_x = int(math.floor((point[0] - min_x) / scale))
+      bin_y = int(math.floor((point[1] - min_y) / scale))
+      bin_z = int(math.floor((point[2] - min_z) / scale))
       pid = (int(batch), bin_x, bin_y, bin_z, 0)
       sparse_grid[pid] = float(1)
     batch = batch + 1

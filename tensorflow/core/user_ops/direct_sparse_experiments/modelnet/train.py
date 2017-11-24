@@ -12,7 +12,7 @@ sys.path.append(BASE_DIR)
 sys.path.append(os.path.join(BASE_DIR, 'models'))
 sys.path.append(os.path.join(BASE_DIR, 'utils'))
 import provider
-import direct_sparse_layer_definition as ld
+import sparse_tools as st
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: GPU 0]')
@@ -212,9 +212,7 @@ def train_one_epoch(sess, ops, reg_ops, train_writer):
             [sparse_ind, sparse_values] = provider.toVoxelGrid(jittered_data, 0, RESOLUTION)
             data = tf.SparseTensorValue(sparse_ind, sparse_values, TENSOR_IN_SIZES)
             #convert to dense if needed  
-            #sd_converted = ld.create_sparse_data_to_direct_sparse(data, 5)
-            #d = ld.create_direct_sparse_to_dense(sd_converted, 5)
-            #data = sess.run(d)
+            #data = st.sparse_to_dense(sparse_ind, sparse_values, TENSOR_IN_SIZES)
 
             feed_dict = {ops['pointclouds_pl']: data,
                          ops['labels_pl']: argmax_labels,
@@ -262,9 +260,7 @@ def eval_one_epoch(sess, ops, test_writer):
             [sparse_ind, sparse_values] = provider.toVoxelGrid(current_data[start_idx:end_idx, :, :], 0, RESOLUTION) 
             data = tf.SparseTensorValue(sparse_ind, sparse_values, TENSOR_IN_SIZES)
             #convert to dense if needed  
-            #sd_converted = ld.create_sparse_data_to_direct_sparse(data, 5)
-            #d = ld.create_direct_sparse_to_dense(sd_converted, 5)
-            #data = sess.run(d)
+            #data = st.sparse_to_dense(sparse_ind, sparse_values, TENSOR_IN_SIZES)
             
             feed_dict = {ops['pointclouds_pl']: data,
                          ops['labels_pl']: argmax_labels,
