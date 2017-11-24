@@ -41,22 +41,18 @@ REGISTER_OP("DirectSparseConvKD")
   .Output("out_channel_densities: float32")
   .Attr("strides: list(int)")
   .Attr("padding: string")
-  .Attr("dense_entry_count: int")
+  .Attr("sparse_entry_bound: int = 1")
   .Attr("dim: int = 5")
   .Attr("max_density: float = 1")
   .Attr("filter_type: string = 'K-ABS'")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-    float max_density;
-    TF_RETURN_IF_ERROR(c->GetAttr("max_density", &max_density));
-
-    int dense_entry_count;
-    TF_RETURN_IF_ERROR(c->GetAttr("dense_entry_count", &dense_entry_count));
-
+    int sparse_entry_count;
+    TF_RETURN_IF_ERROR(c->GetAttr("sparse_entry_bound", &sparse_entry_count));
     int dim;
     TF_RETURN_IF_ERROR(c->GetAttr("dim", &dim));
 
     std::vector<::tensorflow::shape_inference::DimensionHandle> sparse_output_shape_dims;
-    sparse_output_shape_dims.push_back(c->MakeDim(ceil(dense_entry_count * max_density)));
+    sparse_output_shape_dims.push_back(c->MakeDim(ceil(sparse_entry_count)));
 
     std::vector<::tensorflow::shape_inference::DimensionHandle> output_shape_dims;
     output_shape_dims.push_back(c->MakeDim(dim));
@@ -91,7 +87,7 @@ REGISTER_OP("DirectSparseConvKDBackprop")
   .Output("bias_grads: T")
   .Attr("strides: list(int)")
   .Attr("padding: string")
-  .Attr("dense_entry_count: int = 1")
+  .Attr("sparse_entry_bound: int = 1")
   .Attr("dim: int = 5")
   .Attr("max_density: float = 1")
   .Attr("filter_type: string = 'K-ABS'");
@@ -114,7 +110,7 @@ class DirectSparseConvKD : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("padding", &padding));
     OP_REQUIRES_OK(context, context->GetAttr("max_density", &max_density));
     OP_REQUIRES_OK(context, context->GetAttr("filter_type", &filter_type));
-    OP_REQUIRES_OK(context, context->GetAttr("dense_entry_count", &dense_entry_count));
+    OP_REQUIRES_OK(context, context->GetAttr("sparse_entry_bound", &sparse_entry_count));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -127,10 +123,10 @@ class DirectSparseConvKD : public OpKernel {
  private:
   std::vector<int32> stride_;
   int dim;
+  int sparse_entry_count;
   std::string padding;
   std::string filter_type;
   float max_density;
-  int dense_entry_count;
 };
 
 #if GOOGLE_CUDA

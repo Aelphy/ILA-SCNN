@@ -39,14 +39,15 @@ def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_class
     total_size = total_size * tensor_in_sizes[i]
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
   ops = [None]*6
-  d1 = 0.125
-  net = ld.create_sparse_conv_layer(sd_converted, [5,5,5,1,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer)
-  net = ld.create_sparse_conv_layer(net, [5,5,5,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer)
-  net = ld.create_sparse_conv_layer(net, [5,5,5,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer)
-  [net, tensor_in_sizes] = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 6 * d1)
-  net = ld.create_sparse_conv_layer(net, [5,5,5,8,16], tensor_in_sizes, strides, padding, dim, 2 * d1, "K-RELU", name = scope + "sc4", initializer=initializer)
-  net = ld.create_sparse_conv_layer(net, [5,5,5,16,16], tensor_in_sizes, strides, padding, dim, 2 * d1, "K-RELU", name = scope + "sc5", initializer=initializer)
-  net = ld.create_sparse_conv_layer(net, [5,5,5,16,16], tensor_in_sizes, strides, padding, dim, 2 * d1, "K-ABS", name = scope + "sc6", initializer=initializer)
+  d1 = 0.33
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(sd_converted, [5,5,5,1,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer)
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [5,5,5,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer)
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [5,5,5,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer)
+  net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 1)
+  d2 = 0.33
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [5,5,5,8,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer)
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [5,5,5,16,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer)
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [5,5,5,16,16], tensor_in_sizes, strides, padding, dim, d2, "K-ABS", name = scope + "sc6", initializer=initializer)
   sd = ld.create_direct_sparse_to_dense(net, dim)
   sd_flat = tf.reshape(sd, [batch_size, total_size * 2])
   conv_out =  tf.layers.dropout(sd_flat, 0.5, name="dropout", training=is_training)

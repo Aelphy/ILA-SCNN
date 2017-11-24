@@ -37,9 +37,11 @@ def create_sparse_filter_to_direct_sparse(sparse_filter, tensor_in_shape, dim, n
     sd = sparse_filter
     return sc_module.direct_sparse_filter_conversion(sd.indices, sd.values, sd.dense_shape, sd.dense_shape, dim=dim)
 
-def create_sparse_conv_layer(sparse_data, filter_in_sizes, tensor_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None):
+def create_sparse_conv_layer(sparse_data, filter_in_sizes, tensor_in_sizes_, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None):
   with tf.variable_scope(name):
     #2. define initialization of sparse filter weights
+    tensor_in_sizes = tensor_in_sizes_.copy()
+    tensor_in_sizes[-1] = filter_in_sizes[-1]
     dense_filter_shape = np.prod(filter_in_sizes)
     sd = sparse_data
     dense_filter = tf.ones(filter_in_sizes)
@@ -53,13 +55,14 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, tensor_in_sizes, stri
     out_channel_count = filter_in_sizes[-1]
     bias = tf.get_variable('sparse_bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    dense_entry_count = np.prod(tensor_in_sizes)
-    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, dense_entry_count, dim, max_density, filter_type)
+    sparse_entry_bound = np.prod(tensor_in_sizes) * max_density + filter_in_sizes[-1] 
+    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, sparse_entry_bound, dim, max_density, filter_type)
+    return conv_layer, tensor_in_sizes
 
-    return conv_layer
-
-def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005, bias_offset=0.005):
+def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes_, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005, bias_offset=0.005):
   with tf.variable_scope(name):
+    tensor_in_sizes = tensor_in_sizes_.copy()
+    tensor_in_sizes[-1] = filter_in_sizes[-1]
     max_de = tf.constant(max_density, dtype=tf.float32)
     min_bias = tf.constant(-bias_offset, dtype=tf.float32)
     max_bias = tf.constant(bias_offset, dtype=tf.float32)
@@ -81,15 +84,14 @@ def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes, 
     out_channel_count = filter_in_sizes[-1]
     bias = tf.get_variable('sparse_bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    dense_entry_count = np.prod(tensor_in_sizes)
-    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, dense_entry_count, dim, max_density, filter_type)
+    sparse_entry_bound = np.prod(tensor_in_sizes) * max_density + filter_in_sizes[-1] 
+    conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, sparse_entry_bound, dim, max_density, filter_type)
 
     out_density = tf.reduce_mean(conv_layer.out_channel_densities) # TODO: custom regularizer per channel
     density_ge = tf.greater_equal(out_density, max_de)
     new_bias = tf.cast(tf.cond(density_ge, lambda: max_bias * (out_density - max_de) + bias_offset, lambda: min_bias * (max_de - out_density)), dtype=tf.float32)
     assign_op = tf.assign(reg_bias, new_bias, validate_shape=False, name='update_bias')
-
-    return conv_layer, assign_op
+    return conv_layer, tensor_in_sizes, assign_op
 
 def create_sparse_pooling_layer(sparse_data, pooling_sizes, tensor_in_sizes, dim, max_density = 0.):
   sd = sparse_data
