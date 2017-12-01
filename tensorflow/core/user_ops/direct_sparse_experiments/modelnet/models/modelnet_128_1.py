@@ -28,7 +28,7 @@ def placeholder_inputs(batch_size, num_classes, tensor_in_sizes_):
   labels_pl = tf.placeholder(tf.float32, shape=batch_label_sizes, name="labels_placeholder")
   return pointclouds_pl, labels_pl
 
-def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_classes = 10, scope = "mn256-", initializer = None, regularizer = None):
+def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_classes = 10, scope = "mn128-", initializer = None, regularizer = None):
   strides = [1,1,1,1,1]
   padding = "SAME"
   dim = 5 
@@ -40,23 +40,23 @@ def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_class
     total_size = total_size * tensor_in_sizes[i]
   ops = [None]*9
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
-  d1 = 0.01
+  d1 = 0.02
   net, tensor_in_sizes = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 0.06)
-  d2 = 0.03
+  d2 = 0.06
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,8,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,16,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,16,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 0.18)
-  d3 = 0.07
+  d3 = 0.14
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,16,24], tensor_in_sizes, strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,24,24], tensor_in_sizes, strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,24,24], tensor_in_sizes, strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 0.50)
   net = ld.create_direct_sparse_to_dense(net, dim)
-  net = tf.reshape(net, [batch_size, 32, 32, 32, 24])
+  net = tf.reshape(net, [batch_size, 16, 16, 16, 24])
   #dense layers
   net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc10", kernel_initializer=initializer, kernel_regularizer=regularizer)
   net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc11", kernel_initializer=initializer, kernel_regularizer=regularizer)
@@ -64,11 +64,7 @@ def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_class
   net = tf.layers.max_pooling3d(inputs=net, pool_size=dpooling_sizes, strides=2, padding="same", name="dp1")
   net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc13", kernel_initializer=initializer, kernel_regularizer=regularizer)
   net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc14", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc15", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.max_pooling3d(inputs=net, pool_size=dpooling_sizes, strides=2, padding="same", name="dp2")
-  net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc16", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc17", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  n3 = net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", name = scope + "sc18")
+  n3 = net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", name = scope + "sc15")
   net =  tf.layers.dropout(net, 0.5, name="dropout", training=is_training)
   net = tf.reshape(net, [batch_size, -1])
   net = tf.layers.dense(net, 512)
