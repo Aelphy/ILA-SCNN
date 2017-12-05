@@ -56,6 +56,7 @@ tf_custom_op_library(
               "direct_sparse_to_dense.cc",
               "direct_sparse_concat.cc",
               "evaluate_confusion_matrix.cc",
+              "direct_sparse_cwise_biased_reg.cc",
             ],
 
     gpu_srcs = [
@@ -72,6 +73,8 @@ tf_custom_op_library(
               "direct_sparse_to_dense_gpu.cu.cc",
               "direct_sparse_concat_gpu.h",
               "direct_sparse_concat_gpu.cu.cc",
+              "direct_sparse_cwise_biased_reg_gpu.h",
+              "direct_sparse_cwise_biased_reg_gpu.cu.cc",
     ],
 
     deps = [
