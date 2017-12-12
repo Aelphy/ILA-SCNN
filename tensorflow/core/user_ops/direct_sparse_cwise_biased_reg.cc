@@ -34,7 +34,7 @@ REGISTER_OP("DirectSparseChannelwiseBiasedL2Regularization")
   .Output("out_values: T")
   .Attr("dim: int = 5")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-    int sparse_entry_count = 1; //TODO: not 1 but number out channels
+    int sparse_entry_count = 1;
     int dim;
     TF_RETURN_IF_ERROR(c->GetAttr("dim", &dim));
     std::vector<::tensorflow::shape_inference::DimensionHandle> sparse_output_shape_dims;
@@ -42,6 +42,19 @@ REGISTER_OP("DirectSparseChannelwiseBiasedL2Regularization")
     c->set_output(0, c->MakeShape(sparse_output_shape_dims));
     return ::tensorflow::Status::OK();
   });
+
+REGISTER_OP("DirectSparseChannelwiseBiasedL2Backprop")
+  .Attr("T: realnumbertype")
+  .Attr("Tindices: {int32, int64}")
+  .Input("f_indices: Tindices")
+  .Input("f_values: T")
+  .Input("f_shape: Tindices")
+  .Input("f_channel_mapping: int32")
+  .Input("scale: T")
+  .Input("bias: T")
+  .Input("grads: T")
+  .Output("backprops: T")
+  .Attr("dim: int = 5");
 
 #include "tensorflow/core/framework/op_kernel.h"
 
@@ -71,7 +84,9 @@ class DirectSparseChannelwiseBiasedL2Regularization : public OpKernel {
 #if GOOGLE_CUDA
 #define REGISTER_GPU_TYPE(type, indice_type)      \
   REGISTER_KERNEL_BUILDER(Name("DirectSparseChannelwiseBiasedL2Regularization").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
-                          DirectSparseChannelwiseBiasedL2Regularization<type, indice_type, functor::DirectSparseCwiseBiasedRegFunctor>);
+                          DirectSparseChannelwiseBiasedL2Regularization<type, indice_type, functor::DirectSparseCwiseBiasedRegFunctor>); \
+  REGISTER_KERNEL_BUILDER(Name("DirectSparseChannelwiseBiasedL2Backprop").Device(DEVICE_GPU).TypeConstraint<type>("T").TypeConstraint<indice_type>("Tindices"), \
+                          DirectSparseChannelwiseBiasedL2Regularization<type, indice_type, functor::DirectSparseCwiseBiasedRegBpFunctor>);
 
 #define REGISTER_GPU_ALL(type) \
   REGISTER_GPU_TYPE(type, int64); \

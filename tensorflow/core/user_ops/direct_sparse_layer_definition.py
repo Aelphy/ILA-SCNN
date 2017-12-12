@@ -113,7 +113,6 @@ def create_direct_sparse_to_dense(sparse_data, dim):
 def create_direct_dense_to_sparse(dense_data, tensor_in_sizes, dim):
   return sc_module.direct_dense_to_sparse(dense_data, tensor_in_sizes, dim)
 
-
 def create_direct_sparse_batchnorm(sparse_data, name='batch_norm'):
   with tf.variable_scope(name):
     sd = sparse_data

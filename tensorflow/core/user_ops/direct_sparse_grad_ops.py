@@ -170,8 +170,17 @@ def _DirectDenseToSparseGrad(op, *grads):
 @ops.RegisterGradient("DirectSparseChannelwiseBiasedL2Regularization")
 def _DirectSparseChannelwiseBiasedL2RegularizationGrad(op, grad):
   return [None,
-          op.inputs[1] * grad, #grad contains a single value
+          sparse_nn_ops.direct_sparse_channelwise_biased_l2_backprop(op.inputs[0],
+                                         op.inputs[1],
+                                         op.inputs[2],
+                                         op.inputs[3],
+                                         op.inputs[4],
+                                         op.inputs[5],
+                                         grad,
+                                         dim=op.get_attr("dim")),
           None,
           None,
           None,
           None]
+
+
