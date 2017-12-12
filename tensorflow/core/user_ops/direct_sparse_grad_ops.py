@@ -166,3 +166,12 @@ def _DirectDenseToSparseGrad(op, *grads):
                                          op.outputs[3],
                                          grads[1],
                                          dim=op.get_attr("dim"))
+
+@ops.RegisterGradient("DirectSparseChannelwiseBiasedL2Regularization")
+def _DirectSparseChannelwiseBiasedL2RegularizationGrad(op, grad):
+  return [None,
+          op.inputs[1] * grad, #grad contains a single value
+          None,
+          None,
+          None,
+          None]

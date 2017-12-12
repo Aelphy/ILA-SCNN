@@ -7,8 +7,6 @@
 #include "direct_sparse_cwise_biased_reg_gpu.h"
 #include "direct_sparse_cuda_helpers_gpu.h"
 
-//TODO: support same SAME and UNPADDED convolutions
-
 namespace tensorflow {
 
 template <typename dtype, typename itype, int data_dimension, int power> __global__ void  __launch_bounds__(MAX_1024_THREADS_PER_BLOCK)
@@ -24,8 +22,8 @@ biased_cwise_reg(CudaLaunchConfig config, const itype* __restrict__ f_id_ptr, co
     auto in_id = f_id_ptr[x];
     index_KDto1D_<itype, data_dimension>(&id_kd[0], f_shape_ptr, &in_id);
     auto out_channel = id_kd[data_dimension - 1];
-    auto out_v = scale[0] * pow(f_val_ptr[x] + bias[out_channel], power); //TODO: power as template parameter (L1, L2)
-    atomicAdd(&(loss[out_channel]), out_v);
+    auto out_v = scale[0] * abs(pow(f_val_ptr[x] + bias[out_channel], power)) / 2; //TODO: power as template parameter (L1, L2)
+    atomicAdd(&(loss[0]), out_v);
   }
 }
 
@@ -52,10 +50,10 @@ void DirectSparseCwiseBiasedRegFunctor<DeviceT, T, IndiceT, data_dimension, powe
   cudaMemcpy(&out_channel_count, f_sh.data() + data_dimension - 1, sizeof(IndiceT), cudaMemcpyDeviceToHost);
 
 	Tensor *out_loss;
-	TensorShape out_loss_shape = {(IndiceT) out_channel_count};
+	TensorShape out_loss_shape = {(IndiceT) 1};
 	OP_REQUIRES_OK(context, context->allocate_output("out_values", out_loss_shape, &out_loss));
   auto o_loss = out_loss->flat<T>();
-  cudaMemset(o_loss.data(), 0, out_channel_count * sizeof(T));
+  cudaMemset(o_loss.data(), 0, sizeof(T));
   if(filter_weight_count > 0){
     CudaLaunchConfig config = GetCudaLaunchConfig(filter_weight_count, d);
     biased_cwise_reg<T, IndiceT, data_dimension, power><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(config, f_ind.data(), f_val.data(), f_sh.data(), f_mapping.data(), 
@@ -67,7 +65,6 @@ void DirectSparseCwiseBiasedRegFunctor<DeviceT, T, IndiceT, data_dimension, powe
 }  // end namespace functor
 
 // Instantiate the GPU implementation for float.
-//template struct functor::ApproxDirectSparseConvFunctor<GPUDevice, int, int>;
 #define INIT_GPU_TYPE(type, indice_type, dim, power) \
  template struct functor::DirectSparseCwiseBiasedRegFunctor<GPUDevice, type, indice_type, dim, power>;
 #define INIT_GPU_ALL(type, dim)    \

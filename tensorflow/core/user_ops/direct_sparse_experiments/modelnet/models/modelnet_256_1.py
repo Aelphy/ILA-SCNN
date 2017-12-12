@@ -71,7 +71,7 @@ def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_class
   n3 = net = tf.layers.conv3d(inputs=net, filters=48, kernel_size=[3, 3, 3], padding="same", name = scope + "sc18")
   net =  tf.layers.dropout(net, 0.5, name="dropout", training=is_training)
   net = tf.reshape(net, [batch_size, -1])
-  net = tf.layers.dense(net, 512)
+  net = tf.layers.dense(net, 1024)
   net = tf.layers.dense(net, num_classes)
   sd_out = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=net, labels=train_labels, name = "softmax_loss"))
   p_sd_out = tf.nn.softmax(logits=net)

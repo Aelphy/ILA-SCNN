@@ -10,6 +10,7 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn
 from tensorflow.python.ops import standard_ops
 from tensorflow.python.platform import tf_logging as logging
+import tensorflow as tf
 
 def biased_l2_regularizer(scale, bias, scope=None):
   """Returns a function that can be used to apply L2 regularization to weights.

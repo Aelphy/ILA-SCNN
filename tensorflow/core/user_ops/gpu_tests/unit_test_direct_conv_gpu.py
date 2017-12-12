@@ -69,6 +69,9 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
     print("time approx sparse: ", ts)
   tf.reset_default_graph()
 
+  time.sleep(1)
+
+
   td = 0
   with tf.device("/gpu:0"):
     conv = nn_ops.conv3d(d1, d2, strides, padding)
@@ -84,7 +87,8 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
   tf.reset_default_graph()
   
   print("time ratio: ", ts / td);
- 
+  return;
+
   [bp_ind, sv3_bp_val, bp_sh] = sp.createRandomSparseTensor(1, [len(sv3.out_values)], 1, 9)
   d3_ = sp.sparse1d_to_dense(sv3.out_indices, sv3_bp_val, sv3.out_shape, sv3.out_block_channel_mapping[-1])
   out_backprop_val = constant_op.constant(d3_)
@@ -198,20 +202,20 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
 pid = os.getpid()
 print(pid)
 
-num_trials = 3
-res = 48
-channel_count = 3
-channel_count_out = 6
+num_trials = 8
+res = 128
+channel_count = 8
+channel_count_out = 8
 filter_res = 3
-batch_size = 1
-max_density = 1
+batch_size = 32
+max_density = 1/res
 in_density = 1/res
 f_density = 1
 filter_type = "K-RELU"
 test_type = ""
 ret_value = verifyValues(
-  tensor_in_sizes=[batch_size, res, res, 1, channel_count], #[batch, depth, height, width, in_channels]
-  filter_in_sizes=[filter_res, filter_res, 1, channel_count, channel_count_out], #[depth, height, width, in_channels, out_channels] 
+  tensor_in_sizes=[batch_size, res, res, res, channel_count], #[batch, depth, height, width, in_channels]
+  filter_in_sizes=[filter_res, filter_res, filter_res, channel_count, channel_count_out], #[depth, height, width, in_channels, out_channels] 
   stride=1,
   rho_data=1 * in_density,
   rho_filter=1 * f_density,

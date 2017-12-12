@@ -40,31 +40,23 @@ def get_model(sparse_data, train_labels, is_training, tensor_in_sizes, num_class
     total_size = total_size * tensor_in_sizes[i]
   ops = [None]*9
   sd_converted = ld.create_sparse_data_to_direct_sparse(sparse_data, dim)
-  d1 = 0.02
+  d1 = 0.14
   net, tensor_in_sizes = ld.create_sparse_conv_layer(sd_converted, [3,3,3,1,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc1", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc2", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,8,8], tensor_in_sizes, strides, padding, dim, d1, "K-RELU", name = scope + "sc3", initializer=initializer)
-  net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 0.06)
-  d2 = 0.06
+  net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, min(1, 6 * d1))
+  d2 = 0.33
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,8,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc4", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,16,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc5", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,16,16], tensor_in_sizes, strides, padding, dim, d2, "K-RELU", name = scope + "sc6", initializer=initializer)
-  net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 0.18)
-  d3 = 0.14
+  net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, min(1, 6 * d2))
+  d3 = 0.66
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,16,24], tensor_in_sizes, strides, padding, dim, d3, "K-RELU", name = scope + "sc7", initializer=initializer)
   net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,24,24], tensor_in_sizes, strides, padding, dim, d3, "K-RELU", name = scope + "sc8", initializer=initializer)
-  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,24,24], tensor_in_sizes, strides, padding, dim, d3, "K-RELU", name = scope + "sc9", initializer=initializer)
-  net, tensor_in_sizes = ld.create_sparse_pooling_layer(net, pooling_sizes, tensor_in_sizes, dim, 0.50)
+  net, tensor_in_sizes = ld.create_sparse_conv_layer(net, [3,3,3,24,24], tensor_in_sizes, strides, padding, dim, d3, "K-ABS", name = scope + "sc9", initializer=initializer)
   net = ld.create_direct_sparse_to_dense(net, dim)
-  net = tf.reshape(net, [batch_size, 16, 16, 16, 24])
+  net = tf.reshape(net, [batch_size, 8, 8, 8, 24])
   #dense layers
-  net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc10", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc11", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.conv3d(inputs=net, filters=32, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc12", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.max_pooling3d(inputs=net, pool_size=dpooling_sizes, strides=2, padding="same", name="dp1")
-  net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc13", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", activation=tf.nn.relu, name = scope + "sc14", kernel_initializer=initializer, kernel_regularizer=regularizer)
-  n3 = net = tf.layers.conv3d(inputs=net, filters=40, kernel_size=[3, 3, 3], padding="same", name = scope + "sc15")
   net =  tf.layers.dropout(net, 0.5, name="dropout", training=is_training)
   net = tf.reshape(net, [batch_size, -1])
   net = tf.layers.dense(net, 1024)

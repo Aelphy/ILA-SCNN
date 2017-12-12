@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import numbers
 
+import tensorflow as tf
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import math_ops
@@ -40,6 +41,6 @@ def biased_l2_regularizer(scale, bias, indices, shape, fc_mapping, scope=None):
                                        dtype=weights.dtype.base_dtype,
                                        name='scale')
 
-      return tf.reduce_sum(sc_module.direct_sparse_cwise_biased_l2_regularization(indices, weights, shape, fc_mapping, bias, my_scale)) #TODO: get rid of reduced sum and apply reg. loss per channel
+      return sc_module.direct_sparse_channelwise_biased_l2_regularization(indices, weights, shape, fc_mapping, my_scale, bias) #TODO: get rid of reduced sum and apply reg. loss per channel
 
   return l2
