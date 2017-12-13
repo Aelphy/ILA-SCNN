@@ -60,7 +60,7 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, tensor_in_sizes_, str
     conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, sparse_entry_bound, dim, max_density, filter_type)
     return conv_layer, tensor_in_sizes
 
-def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes_, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005, bias_offset=0.005):
+def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes_, strides = 1, padding = "SAME", dim = 5, max_density = 0.5, filter_type = "K-RELU", name = "conv", initializer=None, scale=0.005, bias_offset=0.005, bias_momentum = 0.95):
   with tf.variable_scope(name):
     out_channel_count = filter_in_sizes[-1]
     tensor_in_sizes = tensor_in_sizes_.copy()
@@ -91,6 +91,7 @@ def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes_,
     out_density = conv_layer.out_channel_densities # TODO: custom regularizer per channel
     density_ge = tf.greater_equal(out_density, max_de)
     new_bias = tf.cast(tf.where(density_ge, max_bias * (out_density - max_de) + bias_offset, min_bias * (max_de - out_density)), dtype=tf.float32)
+    new_bias = (1 - bias_momentum) * new_bias + bias_momentum * reg_bias; #lowpass filter
     assign_op = tf.assign(reg_bias, new_bias, validate_shape=False, name='update_bias')
     return conv_layer, tensor_in_sizes, assign_op
 
