@@ -7,6 +7,7 @@ import socket
 import importlib
 import os
 import sys
+import time
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 sys.path.append(os.path.join(BASE_DIR, 'models'))
@@ -187,13 +188,18 @@ def train():
             if 'filter_values' in parts[1]:
               kernels[parts[0]]['filter_values'] = var 
 
+        f = open(LOG_DIR + '/reg_experiment.log', 'wb')
+        f.write('t, delta filter weights, #filter weights, test loss, test accuracy, training loss, training accuracy\n')
+        f.flush()
+
         for epoch in range(MAX_EPOCH):
             log_string('**** EPOCH %03d ****' % (epoch))
             sys.stdout.flush()
              
-            train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove)
-            eval_one_epoch(sess, ops, test_writer)
-            
+            time_count, av_loss, av_acc, sum_removed, new_weights = train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f)
+            ev_loss, ev_acc = eval_one_epoch(sess, ops, test_writer)
+            f.write('{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(time_count, sum_removed, new_weights, ev_loss, ev_acc, av_loss, av_acc)+'\n')
+            f.flush()
             # Save the variables to disk.
             if epoch % 10 == 0:
                 save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"))
@@ -201,7 +207,7 @@ def train():
 
 
 
-def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove):
+def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f):
     """ ops: dict mapping from string to tf ops """
     is_training = True
     
@@ -209,6 +215,12 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove):
     train_file_idxs = np.arange(0, len(TRAIN_FILES))
     np.random.shuffle(train_file_idxs)
     
+    time_count = 0
+    av_loss = 0
+    av_acc = 0
+    sum_removed = 0
+    new_weights = 0
+
     for fn in range(len(TRAIN_FILES)):
         log_string('----' + str(fn) + '-----')
         current_data, current_label = provider.loadDataFile(TRAIN_FILES[train_file_idxs[fn]])
@@ -239,12 +251,14 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove):
             data = tf.SparseTensorValue(sparse_ind, sparse_values, TENSOR_IN_SIZES)
             #convert to dense if needed  
             #data = st.sparse_to_dense(sparse_ind, sparse_values, TENSOR_IN_SIZES)
-
+ 
+            time_start = time.time()
             feed_dict = {ops['pointclouds_pl']: data,
                          ops['labels_pl']: argmax_labels,
                          ops['is_training_pl']: is_training,}
             summary, step, _, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
                 ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict)
+            time_count += time.time() - time_start
             #sess.run(reg_ops, feed_dict=feed_dict)
             train_writer.add_summary(summary, step)
             pred_val = np.argmax(pred_val, 1)
@@ -252,7 +266,8 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove):
             total_correct += correct
             total_seen += BATCH_SIZE
             loss_sum += loss_val
-        
+        av_loss += loss_sum / float(num_batches)
+        av_acc += total_correct / float(total_seen)
         log_string('mean loss: %f' % (loss_sum / float(num_batches)))
         log_string('accuracy: %f' % (total_correct / float(total_seen)))
 
@@ -289,6 +304,12 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove):
             to_remove[layer] = current_small
 
         print('Pruning removed {} out of {} weights'.format(removed_weights, weights_total))
+        sum_removed += removed_weights
+        new_weights = weights_total
+    av_loss = av_loss / len(TRAIN_FILES)
+    av_acc = av_acc / len(TRAIN_FILES)
+
+    return time_count, av_loss, av_acc, sum_removed, new_weights 
 
 
         
@@ -341,6 +362,7 @@ def eval_one_epoch(sess, ops, test_writer):
     log_string('eval mean loss: %f' % (loss_sum / float(total_seen)))
     log_string('eval accuracy: %f'% (total_correct / float(total_seen)))
     log_string('eval avg class acc: %f' % (np.mean(np.array(total_correct_class)/np.array(total_seen_class,dtype=np.float))))
+    return loss_sum / float(total_seen), total_correct / float(total_seen)
          
 
 
