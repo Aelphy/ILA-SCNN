@@ -189,7 +189,7 @@ def train():
               kernels[parts[0]]['filter_values'] = var 
 
         f = open(LOG_DIR + '/reg_experiment.log', 'wb')
-        f.write('t, delta filter weights, #filter weights, test loss, test accuracy, training loss, training accuracy\n')
+        f.write('t_test, t_train, delta filter weights, #filter weights, test loss, test accuracy, training loss, training accuracy\n')
         f.flush()
 
         for epoch in range(MAX_EPOCH):
@@ -197,8 +197,8 @@ def train():
             sys.stdout.flush()
              
             time_count, av_loss, av_acc, sum_removed, new_weights = train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f)
-            ev_loss, ev_acc = eval_one_epoch(sess, ops, test_writer)
-            f.write('{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(time_count, sum_removed, new_weights, ev_loss, ev_acc, av_loss, av_acc)+'\n')
+            ev_time, ev_loss, ev_acc = eval_one_epoch(sess, ops, test_writer)
+            f.write('{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(ev_time, time_count, sum_removed, new_weights, ev_loss, ev_acc, av_loss, av_acc)+'\n')
             f.flush()
             # Save the variables to disk.
             if epoch % 10 == 0:
@@ -321,7 +321,7 @@ def eval_one_epoch(sess, ops, test_writer):
     loss_sum = 0
     total_seen_class = [0 for _ in range(NUM_CLASSES)]
     total_correct_class = [0 for _ in range(NUM_CLASSES)]
-    
+    time_total = 0
     for fn in range(len(TEST_FILES)):
         log_string('----' + str(fn) + '-----')
         current_data, current_label = provider.loadDataFile(TEST_FILES[fn])
@@ -347,8 +347,10 @@ def eval_one_epoch(sess, ops, test_writer):
             feed_dict = {ops['pointclouds_pl']: data,
                          ops['labels_pl']: argmax_labels,
                          ops['is_training_pl']: is_training,}
+            time_start = time.time()
             summary, step, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
                 ops['loss'], ops['pred']], feed_dict=feed_dict)
+            time_total += time.time() - time_start
             pred_val = np.argmax(pred_val, 1)
             correct = np.sum(pred_val == current_label[start_idx:end_idx])
             total_correct += correct
@@ -362,7 +364,7 @@ def eval_one_epoch(sess, ops, test_writer):
     log_string('eval mean loss: %f' % (loss_sum / float(total_seen)))
     log_string('eval accuracy: %f'% (total_correct / float(total_seen)))
     log_string('eval avg class acc: %f' % (np.mean(np.array(total_correct_class)/np.array(total_seen_class,dtype=np.float))))
-    return loss_sum / float(total_seen), total_correct / float(total_seen)
+    return time_total, loss_sum / float(total_seen), total_correct / float(total_seen)
          
 
 
