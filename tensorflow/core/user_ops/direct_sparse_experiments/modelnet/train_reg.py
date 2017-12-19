@@ -146,7 +146,6 @@ def train():
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
-        config.log_device_placement = False
         sess = tf.Session(config=config)
 
         # Add summary writers
@@ -191,12 +190,15 @@ def train():
         f = open(LOG_DIR + '/reg_experiment.log', 'wb')
         f.write('t, delta filter weights, #filter weights, test loss, test accuracy, training loss, training accuracy\n')
         f.flush()
+        
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
 
         for epoch in range(MAX_EPOCH):
             log_string('**** EPOCH %03d ****' % (epoch))
             sys.stdout.flush()
              
-            time_count, av_loss, av_acc, sum_removed, new_weights = train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f)
+            time_count, av_loss, av_acc, sum_removed, new_weights = train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run_options, run_metadata, epoch)
             ev_loss, ev_acc = eval_one_epoch(sess, ops, test_writer)
             f.write('{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(time_count, sum_removed, new_weights, ev_loss, ev_acc, av_loss, av_acc)+'\n')
             f.flush()
@@ -207,7 +209,7 @@ def train():
 
 
 
-def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f):
+def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run_options, run_metadata, epoch):
     """ ops: dict mapping from string to tf ops """
     is_training = True
     
@@ -233,7 +235,9 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f):
         total_correct = 0
         total_seen = 0
         loss_sum = 0
+
        
+
         for batch_idx in range(num_batches):
             start_idx = batch_idx * BATCH_SIZE
             end_idx = (batch_idx+1) * BATCH_SIZE
@@ -251,18 +255,30 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f):
             data = tf.SparseTensorValue(sparse_ind, sparse_values, TENSOR_IN_SIZES)
             #convert to dense if needed  
             #data = st.sparse_to_dense(sparse_ind, sparse_values, TENSOR_IN_SIZES)
- 
-            time_start = time.time()
-            feed_dict = {ops['pointclouds_pl']: data,
-                         ops['labels_pl']: argmax_labels,
-                         ops['is_training_pl']: is_training,}
-            summary, step, _, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
-                ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict)
-            time_count += time.time() - time_start
-            #sess.run(reg_ops, feed_dict=feed_dict)
-            train_writer.add_summary(summary, step)
+            if time_count == 0:
+              time_start = time.time()
+              feed_dict = {ops['pointclouds_pl']: data,
+                           ops['labels_pl']: argmax_labels,
+                           ops['is_training_pl']: is_training,}
+              summary, step, _, loss_val, pred_val = sess.run([tf.summary.merge_all(), ops['step'],
+                  ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
+              time_count += time.time() - time_start
+              sess.run(reg_ops, feed_dict=feed_dict)
+              train_writer.add_run_metadata(run_metadata, 'step%d'%epoch)
+              train_writer.add_summary(summary, step)
+            else:
+              time_start = time.time()
+              feed_dict = {ops['pointclouds_pl']: data,
+                           ops['labels_pl']: argmax_labels,
+                           ops['is_training_pl']: is_training,}
+              summary, step, _, loss_val, pred_val = sess.run([tf.summary.merge_all(), ops['step'],
+                  ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict)
+              time_count += time.time() - time_start
+              sess.run(reg_ops, feed_dict=feed_dict)
+              train_writer.add_summary(summary, step)
+
             pred_val = np.argmax(pred_val, 1)
-            correct = np.sum(pred_val == current_label[start_idx:end_idx])
+            correct = (pred_val == current_label[start_idx:end_idx]).sum()
             total_correct += correct
             total_seen += BATCH_SIZE
             loss_sum += loss_val
