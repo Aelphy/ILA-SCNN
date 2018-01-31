@@ -1,6 +1,6 @@
 
 <div align="center">
- <img src=""><br><br>
+ <img src="modelnet_example.png"><br><br>
 </div>
 
 -----------------
