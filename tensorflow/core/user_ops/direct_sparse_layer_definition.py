@@ -11,7 +11,6 @@ from tensorflow.python.ops import gradient_checker
 from tensorflow.python.ops import nn_ops
 import tensorflow.python.ops.nn_grad
 from tensorflow.python.platform import test
-import direct_sparse_regularizers as reg
 import direct_sparse_cwise_regularizers as creg
 import tensorflow as tf
 import random
