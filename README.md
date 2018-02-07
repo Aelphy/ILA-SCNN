@@ -32,4 +32,5 @@ source ~/.bashrc
 We provide the following examples:
 1)  [Modelnet Application](https://github.com/TimoHackel/ILA-SCNN/tree/master/tensorflow/core/user_ops/direct_sparse_experiments/modelnet)
 2) [MNIST Application](https://github.com/TimoHackel/ILA-SCNN/tree/master/tensorflow/core/user_ops/direct_sparse_experiments/mnist)
+
 The correct data sets will be downloaded automatically when running the scripts.
