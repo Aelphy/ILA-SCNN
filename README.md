@@ -8,8 +8,8 @@
 
 ## ILA-SCNN
 
-This repository contains the source code of our paper: [ILA-SCNN: Inference, Learning and Attention Mechanisms that Exploit and Preserve Sparsity in Convolutional Networks](https://deadlink.link)
-Our implementation extents tensorflow by providing GPU implementations for layers  that are able efficiently process large-scale, sparse data. For more details please refer to our paper.
+This repository contains the source code of our paper: [Inference, Learning and Attention Mechanisms that Exploit and Preserve Sparsity in Convolutional Networks](https://arxiv.org/abs/1801.10585)
+Our implementation extents tensorflow by providing GPU implementations for layers that are able efficiently process large-scale, sparse data. For more details please refer to our paper.
 
 
 ## Installation
@@ -30,5 +30,6 @@ source ~/.bashrc
 
 ## Examples
 We provide the following examples:
-1)  [Modelnet](https://github.com/TimoHackel/ILA-SCNN/tree/master/tensorflow/core/user_ops/direct_sparse_experiments/modelnet)
-2) [MNIST](https://github.com/TimoHackel/ILA-SCNN/tree/master/tensorflow/core/user_ops/direct_sparse_experiments/mnist)
+1)  [Modelnet Application](https://github.com/TimoHackel/ILA-SCNN/tree/master/tensorflow/core/user_ops/direct_sparse_experiments/modelnet)
+2) [MNIST Application](https://github.com/TimoHackel/ILA-SCNN/tree/master/tensorflow/core/user_ops/direct_sparse_experiments/mnist)
+The correct data sets will be downloaded automatically when running the scripts.
