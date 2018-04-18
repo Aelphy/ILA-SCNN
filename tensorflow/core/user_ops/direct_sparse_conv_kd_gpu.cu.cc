@@ -297,7 +297,6 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
         acc_id += out_id[i] * mul;
         mul = mul * input_shape[i + 1];
       }
-      //if(global_acc_id >= 0){
       if(is_valid){
         atomicAdd(&(dense_channel_buffer[acc_id]), out_v);
       }

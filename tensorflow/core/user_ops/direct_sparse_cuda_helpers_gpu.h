@@ -411,7 +411,6 @@ compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, co
     }
     if(x >= number_blocks) continue;
     index_1DtoKD<dtype, data_dimension>(0, in_block_ids[in_block_ptr[x]], in_shape_ptr, &idKD[0]);
-    //index_1DtoKD<dtype, data_dimension>(0, in_block_id[in_block_ptr[x]], in_shape_ptr, idKD);
     int channel = idKD[data_dimension - 1];
     int batch = idKD[0];
     atomicMin(&(out_index_ptr[batch * number_channels + channel]), in_block_ptr[x]);
@@ -423,9 +422,9 @@ compute_input_block_index(CudaLaunchConfig config, const dtype* in_block_ptr, co
       break;
     }
     //TODO: better parallelization
-    if(out_index_ptr[x] == number_blocks){
+    if(out_index_ptr[x] == data_entry_count){
       for(int i = x + 1; i <= op_count; ++i){ //linear search to the end until valid entry is found or number_blocks
-        if(out_index_ptr[i] != number_blocks){
+        if(out_index_ptr[i] != data_entry_count){
           out_index_ptr[x] = out_index_ptr[i];
           break;
         }
