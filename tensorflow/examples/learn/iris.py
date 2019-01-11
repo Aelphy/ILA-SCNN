@@ -11,14 +11,18 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Example of DNNClassifier for Iris plant dataset."""
+"""Example of DNNClassifier for Iris plant dataset.
+
+This example uses APIs in Tensorflow 1.4 or above.
+"""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import os
-import urllib
+
+from six.moves.urllib.request import urlretrieve
 
 import tensorflow as tf
 
@@ -35,9 +39,7 @@ FEATURE_KEYS = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width']
 def maybe_download_iris_data(file_name, download_url):
   """Downloads the file and returns the number of data."""
   if not os.path.exists(file_name):
-    raw = urllib.urlopen(download_url).read()
-    with open(file_name, 'w') as f:
-      f.write(raw)
+    urlretrieve(download_url, file_name)
 
   # The first line is a comma-separated string. The first one is the number of
   # total data in the file.

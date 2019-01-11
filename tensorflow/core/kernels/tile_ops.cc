@@ -31,6 +31,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_types.h"
 #include "tensorflow/core/framework/type_index.h"
+#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
 #include "tensorflow/core/platform/macros.h"
@@ -149,10 +150,12 @@ class TileOp : public OpKernel {
 #undef HANDLE_TYPE_NAME
 #undef HANDLE_TYPE
 
-    OP_REQUIRES(context, false,
-                errors::Unimplemented(
-                    "TileOp : Unhandled input dimensions, DT : ",
-                    context->input(0).dtype(), ", dims : ", input_dims));
+    OP_REQUIRES(
+        context, false,
+        errors::Unimplemented(
+            "TileOp : The input data type is not supported, DataType : ",
+            DataTypeString(context->input(0).dtype()),
+            ", Dimension : ", input_dims));
   }
 
  private:
@@ -222,6 +225,7 @@ TF_CALL_complex128(HANDLE_TYPE_NAME_CPU);
 TF_CALL_string(HANDLE_TYPE_NAME_CPU);
 
 #if GOOGLE_CUDA
+TF_CALL_bool(HANDLE_TYPE_NAME_GPU);
 TF_CALL_float(HANDLE_TYPE_NAME_GPU);
 TF_CALL_double(HANDLE_TYPE_NAME_GPU);
 TF_CALL_int16(HANDLE_TYPE_NAME_GPU);
@@ -329,9 +333,10 @@ class TileGradientOp : public OpKernel {
 #undef HANDLE_DIM
 
     OP_REQUIRES(context, false,
-                errors::Unimplemented(
-                    "TileGradientOp : Unhandled input dimensions, DT : ",
-                    context->input(0).dtype(), ", dims : ", input_dims));
+                errors::Unimplemented("TileGradientOp : The input data type or "
+                                      "dimension is not supported, DataType : ",
+                                      DataTypeString(context->input(0).dtype()),
+                                      ", Dimension : ", input_dims));
   }
 
  private:
@@ -534,7 +539,7 @@ REGISTER_KERNEL_BUILDER(Name("TileGrad")
                         TileGradientOp<CPUDevice, int64>);
 
 #if GOOGLE_CUDA
-#define REGISTER_GPU(type)                                         \
+#define REGISTER_GPU_TILE(type)                                    \
   REGISTER_KERNEL_BUILDER(Name("Tile")                             \
                               .Device(DEVICE_GPU)                  \
                               .TypeConstraint<type>("T")           \
@@ -546,7 +551,9 @@ REGISTER_KERNEL_BUILDER(Name("TileGrad")
                               .TypeConstraint<type>("T")           \
                               .TypeConstraint<int64>("Tmultiples") \
                               .HostMemory("multiples"),            \
-                          TileOp<GPUDevice, int64>);               \
+                          TileOp<GPUDevice, int64>);
+
+#define REGISTER_GPU_TILE_GRAD(type)                               \
   REGISTER_KERNEL_BUILDER(Name("TileGrad")                         \
                               .Device(DEVICE_GPU)                  \
                               .TypeConstraint<type>("T")           \
@@ -560,6 +567,11 @@ REGISTER_KERNEL_BUILDER(Name("TileGrad")
                               .HostMemory("multiples"),            \
                           TileGradientOp<GPUDevice, int64>);
 
+#define REGISTER_GPU(type) \
+  REGISTER_GPU_TILE(type); \
+  REGISTER_GPU_TILE_GRAD(type);
+
+TF_CALL_bool(REGISTER_GPU_TILE);
 TF_CALL_float(REGISTER_GPU);
 TF_CALL_double(REGISTER_GPU);
 TF_CALL_half(REGISTER_GPU);
@@ -568,6 +580,8 @@ TF_CALL_int32(REGISTER_GPU);
 TF_CALL_complex64(REGISTER_GPU);
 TF_CALL_complex128(REGISTER_GPU)
 
+#undef REGISTER_GPU_TILE
+#undef REGISTER_GPU_TILE_GRAD
 #undef REGISTER_GPU
 #endif  // GOOGLE_CUDA
 

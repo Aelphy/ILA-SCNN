@@ -26,12 +26,14 @@ from tensorflow.python.estimator.canned import head as head_lib
 from tensorflow.python.estimator.canned import optimizers
 from tensorflow.python.feature_column import feature_column as feature_column_lib
 from tensorflow.python.layers import core as core_layers
+from tensorflow.python.layers import normalization
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import nn
 from tensorflow.python.ops import partitioned_variables
 from tensorflow.python.ops import variable_scope
+from tensorflow.python.ops.losses import losses
 from tensorflow.python.summary import summary
-from tensorflow.python.training import training_util
+from tensorflow.python.util.tf_export import estimator_export
 
 # The default learning rate of 0.05 is a historical artifact of the initial
 # implementation, but seems a reasonable choice.
@@ -44,27 +46,29 @@ def _add_hidden_layer_summary(value, tag):
 
 
 def _dnn_logit_fn_builder(units, hidden_units, feature_columns, activation_fn,
-                          dropout, input_layer_partitioner):
+                          dropout, input_layer_partitioner, batch_norm):
   """Function builder for a dnn logit_fn.
 
   Args:
-    units: An int indicating the dimension of the logit layer, or a list of ints
-      to build multiple logits in the MultiHead case.
+    units: An int indicating the dimension of the logit layer.  In the
+      MultiHead case, this should be the sum of all component Heads' logit
+      dimensions.
     hidden_units: Iterable of integer number of hidden units per layer.
     feature_columns: Iterable of `feature_column._FeatureColumn` model inputs.
     activation_fn: Activation function applied to each layer.
     dropout: When not `None`, the probability we will drop out a given
       coordinate.
     input_layer_partitioner: Partitioner for input layer.
+    batch_norm: Whether to use batch normalization after each hidden layer.
 
   Returns:
     A logit_fn (see below).
 
   Raises:
-    ValueError: If units is not an int or a list.
+    ValueError: If units is not an int.
   """
-  if not (isinstance(units, int) or isinstance(units, list)):
-    raise ValueError('units must be an int or list.  Given type: {}'.format(
+  if not isinstance(units, int):
+    raise ValueError('units must be an int.  Given type: {}'.format(
         type(units)))
 
   def dnn_logit_fn(features, mode):
@@ -81,13 +85,13 @@ def _dnn_logit_fn_builder(units, hidden_units, feature_columns, activation_fn,
       A `Tensor` representing the logits, or a list of `Tensor`'s representing
       multiple logits in the MultiHead case.
     """
+    is_training = mode == model_fn.ModeKeys.TRAIN
     with variable_scope.variable_scope(
         'input_from_feature_columns',
         values=tuple(six.itervalues(features)),
         partitioner=input_layer_partitioner):
       net = feature_column_lib.input_layer(
           features=features, feature_columns=feature_columns)
-
     for layer_id, num_hidden_units in enumerate(hidden_units):
       with variable_scope.variable_scope(
           'hiddenlayer_%d' % layer_id, values=(net,)) as hidden_layer_scope:
@@ -97,42 +101,49 @@ def _dnn_logit_fn_builder(units, hidden_units, feature_columns, activation_fn,
             activation=activation_fn,
             kernel_initializer=init_ops.glorot_uniform_initializer(),
             name=hidden_layer_scope)
-        if dropout is not None and mode == model_fn.ModeKeys.TRAIN:
+        if dropout is not None and is_training:
           net = core_layers.dropout(net, rate=dropout, training=True)
+        if batch_norm:
+          # TODO(hjm): In future, if this becomes popular, we can enable
+          # customization of the batch normalization params by accepting a
+          # list of `BatchNormalization` instances as `batch_norm`.
+          net = normalization.batch_normalization(
+              net,
+              # The default momentum 0.99 actually crashes on certain
+              # problem, so here we use 0.999, which is the default of
+              # tf.contrib.layers.batch_norm.
+              momentum=0.999,
+              training=is_training,
+              name='batchnorm_%d' % layer_id)
       _add_hidden_layer_summary(net, hidden_layer_scope.name)
 
-    if isinstance(units, int):
-      with variable_scope.variable_scope(
-          'logits', values=(net,)) as logits_scope:
-        logits = core_layers.dense(
-            net,
-            units=units,
-            activation=None,
-            kernel_initializer=init_ops.glorot_uniform_initializer(),
-            name=logits_scope)
-      _add_hidden_layer_summary(logits, logits_scope.name)
-    else:
-      logits = []
-      for head_index, logits_dimension in enumerate(units):
-        with variable_scope.variable_scope(
-            'logits_head_{}'.format(head_index), values=(net,)) as logits_scope:
-          these_logits = core_layers.dense(
-              net,
-              units=logits_dimension,
-              activation=None,
-              kernel_initializer=init_ops.glorot_uniform_initializer(),
-              name=logits_scope)
-        _add_hidden_layer_summary(these_logits, logits_scope.name)
-        logits.append(these_logits)
+    with variable_scope.variable_scope('logits', values=(net,)) as logits_scope:
+      logits = core_layers.dense(
+          net,
+          units=units,
+          activation=None,
+          kernel_initializer=init_ops.glorot_uniform_initializer(),
+          name=logits_scope)
+    _add_hidden_layer_summary(logits, logits_scope.name)
+
     return logits
 
   return dnn_logit_fn
 
 
-def _dnn_model_fn(
-    features, labels, mode, head, hidden_units, feature_columns,
-    optimizer='Adagrad', activation_fn=nn.relu, dropout=None,
-    input_layer_partitioner=None, config=None):
+def _dnn_model_fn(features,
+                  labels,
+                  mode,
+                  head,
+                  hidden_units,
+                  feature_columns,
+                  optimizer='Adagrad',
+                  activation_fn=nn.relu,
+                  dropout=None,
+                  input_layer_partitioner=None,
+                  config=None,
+                  tpu_estimator_spec=False,
+                  batch_norm=False):
   """Deep Neural Net model_fn.
 
   Args:
@@ -153,11 +164,12 @@ def _dnn_model_fn(
     input_layer_partitioner: Partitioner for input layer. Defaults
       to `min_max_variable_partitioner` with `min_slice_size` 64 << 20.
     config: `RunConfig` object to configure the runtime settings.
+    tpu_estimator_spec: Whether to return a `_TPUEstimatorSpec` or
+      or `model_fn.EstimatorSpec` instance.
+    batch_norm: Whether to use batch normalization after each hidden layer.
 
   Returns:
-    predictions: A dict of `Tensor` objects.
-    loss: A scalar containing the loss of the step.
-    train_op: The op for training.
+    An `EstimatorSpec` instance.
 
   Raises:
     ValueError: If features has the wrong type.
@@ -165,6 +177,7 @@ def _dnn_model_fn(
   if not isinstance(features, dict):
     raise ValueError('features should be a dictionary of `Tensor`s. '
                      'Given type: {}'.format(type(features)))
+
   optimizer = optimizers.get_optimizer_instance(
       optimizer, learning_rate=_LEARNING_RATE)
   num_ps_replicas = config.num_ps_replicas if config else 0
@@ -186,23 +199,27 @@ def _dnn_model_fn(
         feature_columns=feature_columns,
         activation_fn=activation_fn,
         dropout=dropout,
-        input_layer_partitioner=input_layer_partitioner)
+        input_layer_partitioner=input_layer_partitioner,
+        batch_norm=batch_norm)
     logits = logit_fn(features=features, mode=mode)
 
-    def _train_op_fn(loss):
-      """Returns the op to optimize the loss."""
-      return optimizer.minimize(
-          loss,
-          global_step=training_util.get_global_step())
+    if tpu_estimator_spec:
+      return head._create_tpu_estimator_spec(  # pylint: disable=protected-access
+          features=features,
+          mode=mode,
+          labels=labels,
+          optimizer=optimizer,
+          logits=logits)
+    else:
+      return head.create_estimator_spec(
+          features=features,
+          mode=mode,
+          labels=labels,
+          optimizer=optimizer,
+          logits=logits)
 
-    return head.create_estimator_spec(
-        features=features,
-        mode=mode,
-        labels=labels,
-        train_op_fn=_train_op_fn,
-        logits=logits)
 
-
+@estimator_export('estimator.DNNClassifier')
 class DNNClassifier(estimator.Estimator):
   """A classifier for TensorFlow DNN models.
 
@@ -230,6 +247,23 @@ class DNNClassifier(estimator.Estimator):
         learning_rate=0.1,
         l1_regularization_strength=0.001
       ))
+
+  # Or estimator using an optimizer with a learning rate decay.
+  estimator = DNNClassifier(
+      feature_columns=[categorical_feature_a_emb, categorical_feature_b_emb],
+      hidden_units=[1024, 512, 256],
+      optimizer=lambda: tf.AdamOptimizer(
+          learning_rate=tf.exponential_decay(
+              learning_rate=0.1,
+              global_step=tf.get_global_step(),
+              decay_steps=10000,
+              decay_rate=0.96))
+
+  # Or estimator with warm-starting from a previous checkpoint.
+  estimator = DNNClassifier(
+      feature_columns=[categorical_feature_a_emb, categorical_feature_b_emb],
+      hidden_units=[1024, 512, 256],
+      warm_start_from="/path/to/checkpoint/dir")
 
   # Input builders
   def input_fn_train: # returns x, y
@@ -261,22 +295,30 @@ class DNNClassifier(estimator.Estimator):
   Loss is calculated by using softmax cross entropy.
 
   @compatibility(eager)
-  Estimators are not compatible with eager execution.
+  Estimators can be used while eager execution is enabled. Note that `input_fn`
+  and all hooks are executed inside a graph context, so they have to be written
+  to be compatible with graph mode. Note that `input_fn` code using `tf.data`
+  generally works in both graph and eager modes.
   @end_compatibility
   """
 
-  def __init__(self,
-               hidden_units,
-               feature_columns,
-               model_dir=None,
-               n_classes=2,
-               weight_column=None,
-               label_vocabulary=None,
-               optimizer='Adagrad',
-               activation_fn=nn.relu,
-               dropout=None,
-               input_layer_partitioner=None,
-               config=None):
+  def __init__(
+      self,
+      hidden_units,
+      feature_columns,
+      model_dir=None,
+      n_classes=2,
+      weight_column=None,
+      label_vocabulary=None,
+      optimizer='Adagrad',
+      activation_fn=nn.relu,
+      dropout=None,
+      input_layer_partitioner=None,
+      config=None,
+      warm_start_from=None,
+      loss_reduction=losses.Reduction.SUM,
+      batch_norm=False,
+  ):
     """Initializes a `DNNClassifier` instance.
 
     Args:
@@ -305,8 +347,9 @@ class DNNClassifier(estimator.Estimator):
         encoded as integer values in {0, 1,..., n_classes-1} for `n_classes`>2 .
         Also there will be errors if vocabulary is not provided and labels are
         string.
-      optimizer: An instance of `tf.Optimizer` used to train the model. Defaults
-        to Adagrad optimizer.
+      optimizer: An instance of `tf.Optimizer` used to train the model. Can also
+        be a string (one of 'Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD'), or
+        callable. Defaults to Adagrad optimizer.
       activation_fn: Activation function applied to each layer. If `None`, will
         use `tf.nn.relu`.
       dropout: When not `None`, the probability we will drop out a given
@@ -314,16 +357,19 @@ class DNNClassifier(estimator.Estimator):
       input_layer_partitioner: Optional. Partitioner for input layer. Defaults
         to `min_max_variable_partitioner` with `min_slice_size` 64 << 20.
       config: `RunConfig` object to configure the runtime settings.
+      warm_start_from: A string filepath to a checkpoint to warm-start from, or
+        a `WarmStartSettings` object to fully configure warm-starting.  If the
+        string filepath is provided instead of a `WarmStartSettings`, then all
+        weights are warm-started, and it is assumed that vocabularies and Tensor
+        names are unchanged.
+      loss_reduction: One of `tf.losses.Reduction` except `NONE`. Describes how
+        to reduce training loss over batch. Defaults to `SUM`.
+      batch_norm: Whether to use batch normalization after each hidden layer.
     """
-    if n_classes == 2:
-      head = head_lib._binary_logistic_head_with_sigmoid_cross_entropy_loss(  # pylint: disable=protected-access
-          weight_column=weight_column,
-          label_vocabulary=label_vocabulary)
-    else:
-      head = head_lib._multi_class_head_with_softmax_cross_entropy_loss(  # pylint: disable=protected-access
-          n_classes, weight_column=weight_column,
-          label_vocabulary=label_vocabulary)
+    head = head_lib._binary_logistic_or_multi_class_head(  # pylint: disable=protected-access
+        n_classes, weight_column, label_vocabulary, loss_reduction)
     def _model_fn(features, labels, mode, config):
+      """Call the defined shared _dnn_model_fn."""
       return _dnn_model_fn(
           features=features,
           labels=labels,
@@ -335,11 +381,15 @@ class DNNClassifier(estimator.Estimator):
           activation_fn=activation_fn,
           dropout=dropout,
           input_layer_partitioner=input_layer_partitioner,
-          config=config)
+          config=config,
+          batch_norm=batch_norm)
+
     super(DNNClassifier, self).__init__(
-        model_fn=_model_fn, model_dir=model_dir, config=config)
+        model_fn=_model_fn, model_dir=model_dir, config=config,
+        warm_start_from=warm_start_from)
 
 
+@estimator_export('estimator.DNNRegressor')
 class DNNRegressor(estimator.Estimator):
   """A regressor for TensorFlow DNN models.
 
@@ -367,6 +417,23 @@ class DNNRegressor(estimator.Estimator):
         learning_rate=0.1,
         l1_regularization_strength=0.001
       ))
+
+  # Or estimator using an optimizer with a learning rate decay.
+  estimator = DNNRegressor(
+      feature_columns=[categorical_feature_a_emb, categorical_feature_b_emb],
+      hidden_units=[1024, 512, 256],
+      optimizer=lambda: tf.AdamOptimizer(
+          learning_rate=tf.exponential_decay(
+              learning_rate=0.1,
+              global_step=tf.get_global_step(),
+              decay_steps=10000,
+              decay_rate=0.96))
+
+  # Or estimator with warm-starting from a previous checkpoint.
+  estimator = DNNRegressor(
+      feature_columns=[categorical_feature_a_emb, categorical_feature_b_emb],
+      hidden_units=[1024, 512, 256],
+      warm_start_from="/path/to/checkpoint/dir")
 
   # Input builders
   def input_fn_train: # returns x, y
@@ -398,21 +465,29 @@ class DNNRegressor(estimator.Estimator):
   Loss is calculated by using mean squared error.
 
   @compatibility(eager)
-  Estimators are not compatible with eager execution.
+  Estimators can be used while eager execution is enabled. Note that `input_fn`
+  and all hooks are executed inside a graph context, so they have to be written
+  to be compatible with graph mode. Note that `input_fn` code using `tf.data`
+  generally works in both graph and eager modes.
   @end_compatibility
   """
 
-  def __init__(self,
-               hidden_units,
-               feature_columns,
-               model_dir=None,
-               label_dimension=1,
-               weight_column=None,
-               optimizer='Adagrad',
-               activation_fn=nn.relu,
-               dropout=None,
-               input_layer_partitioner=None,
-               config=None):
+  def __init__(
+      self,
+      hidden_units,
+      feature_columns,
+      model_dir=None,
+      label_dimension=1,
+      weight_column=None,
+      optimizer='Adagrad',
+      activation_fn=nn.relu,
+      dropout=None,
+      input_layer_partitioner=None,
+      config=None,
+      warm_start_from=None,
+      loss_reduction=losses.Reduction.SUM,
+      batch_norm=False,
+  ):
     """Initializes a `DNNRegressor` instance.
 
     Args:
@@ -435,8 +510,9 @@ class DNNRegressor(estimator.Estimator):
         used as a key to fetch weight tensor from the `features`. If it is a
         `_NumericColumn`, raw tensor is fetched by key `weight_column.key`,
         then weight_column.normalizer_fn is applied on it to get weight tensor.
-      optimizer: An instance of `tf.Optimizer` used to train the model. Defaults
-        to Adagrad optimizer.
+      optimizer: An instance of `tf.Optimizer` used to train the model. Can also
+        be a string (one of 'Adagrad', 'Adam', 'Ftrl', 'RMSProp', 'SGD'), or
+        callable. Defaults to Adagrad optimizer.
       activation_fn: Activation function applied to each layer. If `None`, will
         use `tf.nn.relu`.
       dropout: When not `None`, the probability we will drop out a given
@@ -444,21 +520,34 @@ class DNNRegressor(estimator.Estimator):
       input_layer_partitioner: Optional. Partitioner for input layer. Defaults
         to `min_max_variable_partitioner` with `min_slice_size` 64 << 20.
       config: `RunConfig` object to configure the runtime settings.
+      warm_start_from: A string filepath to a checkpoint to warm-start from, or
+        a `WarmStartSettings` object to fully configure warm-starting.  If the
+        string filepath is provided instead of a `WarmStartSettings`, then all
+        weights are warm-started, and it is assumed that vocabularies and Tensor
+        names are unchanged.
+      loss_reduction: One of `tf.losses.Reduction` except `NONE`. Describes how
+        to reduce training loss over batch. Defaults to `SUM`.
+      batch_norm: Whether to use batch normalization after each hidden layer.
     """
+
     def _model_fn(features, labels, mode, config):
+      """Call the defined shared _dnn_model_fn."""
       return _dnn_model_fn(
           features=features,
           labels=labels,
           mode=mode,
-          head=head_lib.  # pylint: disable=protected-access
-          _regression_head_with_mean_squared_error_loss(
-              label_dimension=label_dimension, weight_column=weight_column),
+          head=head_lib._regression_head(  # pylint: disable=protected-access
+              label_dimension=label_dimension, weight_column=weight_column,
+              loss_reduction=loss_reduction),
           hidden_units=hidden_units,
           feature_columns=tuple(feature_columns or []),
           optimizer=optimizer,
           activation_fn=activation_fn,
           dropout=dropout,
           input_layer_partitioner=input_layer_partitioner,
-          config=config)
+          config=config,
+          batch_norm=batch_norm)
+
     super(DNNRegressor, self).__init__(
-        model_fn=_model_fn, model_dir=model_dir, config=config)
+        model_fn=_model_fn, model_dir=model_dir, config=config,
+        warm_start_from=warm_start_from)

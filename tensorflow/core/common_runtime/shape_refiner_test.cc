@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/core/graph/testlib.h"
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/core/status_test_util.h"
+#include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/public/version.h"
 
@@ -59,6 +60,39 @@ class ShapeRefinerTest : public ::testing::Test {
   }
 
   static constexpr int64 kMaxTensorSize = ShapeRefiner::kMaxTensorSize;
+
+  void TestStridedSlice(const PartialTensorShape& input_shape, int begin,
+                        int end, int stride, const char* expected,
+                        int begin_mask = 0, int end_mask = 0,
+                        int ellipsis_mask = 0) {
+    Scope root = Scope::DisabledShapeInferenceScope();
+    auto placeholder =
+        ops::Placeholder(root, DT_INT32, ops::Placeholder::Shape(input_shape));
+    auto input = ops::Shape(root, placeholder);
+    auto begin_op = ops::Const(root, {begin});
+    auto end_op = ops::Const(root, {end});
+    auto stride_op = ops::Const(root, {stride});
+    auto slice = ops::StridedSlice(root, input, begin_op, end_op, stride_op,
+                                   ops::StridedSlice::BeginMask(begin_mask)
+                                       .EndMask(end_mask)
+                                       .EllipsisMask(ellipsis_mask));
+    Node* result;
+    TF_ASSERT_OK(NodeBuilder("test", "TensorAsShapeInt32")
+                     .Input(slice.node())
+                     .Finalize(root.graph(), &result));
+
+    ShapeRefiner m(TF_GRAPH_DEF_VERSION, OpRegistry::Global());
+    TF_ASSERT_OK(m.AddNode(placeholder.node()));
+    TF_ASSERT_OK(m.AddNode(input.node()));
+    TF_ASSERT_OK(m.AddNode(begin_op.node()));
+    TF_ASSERT_OK(m.AddNode(end_op.node()));
+    TF_ASSERT_OK(m.AddNode(stride_op.node()));
+    TF_ASSERT_OK(m.AddNode(slice.node()));
+    TF_ASSERT_OK(m.AddNode(result));
+
+    shape_inference::InferenceContext* ctx = m.GetContext(result);
+    EXPECT_EQ(ctx->DebugString(ctx->output(0)), expected);
+  }
 };
 
 namespace {
@@ -143,8 +177,8 @@ TEST_F(ShapeRefinerTest, BadShapes) {
   // an error.
   Status s = m.AddNode(mm.node());
   ASSERT_FALSE(s.ok());
-  ASSERT_TRUE(StringPiece(s.error_message())
-                  .contains("Dimensions must be equal, but are 1 and 2"));
+  ASSERT_TRUE(str_util::StrContains(
+      s.error_message(), "Dimensions must be equal, but are 1 and 2"));
 }
 
 TEST_F(ShapeRefinerTest, SetShape) {
@@ -724,6 +758,25 @@ TEST_F(ShapeRefinerTest, PropagateRange) {
   EXPECT_EQ("[1,4,7,10]", ctx->DebugString(ctx->output(0)));
 }
 
+// Make sure PlaceholderWithDefaults aren't treated as constants.
+TEST_F(ShapeRefinerTest, NoPropagatePlaceholderWithDefault) {
+  Scope root = Scope::NewRootScope();
+  auto constant = ops::Const<int>(root, 2);
+  auto placeholder =
+      ops::PlaceholderWithDefault(root, constant, PartialTensorShape());
+  Node* shape_data;
+  TF_ASSERT_OK(NodeBuilder("Test", "ShapeData")
+                   .Input(placeholder.node())
+                   .Finalize(root.graph(), &shape_data));
+
+  ShapeRefiner m(TF_GRAPH_DEF_VERSION, OpRegistry::Global());
+  TF_ASSERT_OK(m.AddNode(constant.node()));
+  TF_ASSERT_OK(m.AddNode(placeholder.node()));
+  TF_ASSERT_OK(m.AddNode(shape_data));
+  shape_inference::InferenceContext* ic = m.GetContext(shape_data);
+  EXPECT_EQ(ic->DebugString(ic->output(0)), "?");
+}
+
 TEST_F(ShapeRefinerTest, ConstantValueTwoInputsToSameNode) {
   Scope root = Scope::NewRootScope();
   // This node is used as two inputs to 'range'.
@@ -1013,8 +1066,8 @@ TEST_F(ShapeRefinerTest, ConstantValueAsShape_PackInvalidInput) {
     TF_ASSERT_OK(m.AddNode(input.node()));
   }
   TF_ASSERT_OK(m.AddNode(pack.node()));
-  EXPECT_TRUE(
-      StringPiece(m.AddNode(result).error_message()).contains("but is rank 2"));
+  EXPECT_TRUE(str_util::StrContains(m.AddNode(result).error_message(),
+                                    "but is rank 2"));
 }
 
 TEST_F(ShapeRefinerTest, ConstantValueAsShape_Concat) {
@@ -1136,6 +1189,73 @@ TEST_F(ShapeRefinerTest, ConstantValueAsShape_ConcatInvalidDimValue) {
             m.AddNode(result).error_message());
 }
 
+TEST_F(ShapeRefinerTest, ConstantValueAsShape_StridedSlice) {
+  TestStridedSlice(
+      /*input_shape=*/{1, -1, 3, -1, 5},
+      /*begin=*/2,
+      /*end=*/5,
+      /*stride=*/1,
+      /*expected=*/"[3,?,5]");
+}
+
+TEST_F(ShapeRefinerTest, ConstantValueAsShape_StridedSliceNegativeStride) {
+  // clang-format off
+  TestStridedSlice(
+      /*input_shape=*/{1, -1, 3, -1, 5},
+      /*begin=*/10,
+      /*end=*/0,
+      /*stride=*/-1,
+      /*expected=*/"[5,?,3,?]");
+  // clang-format on
+}
+
+TEST_F(ShapeRefinerTest, ConstantValueAsShape_StridedSliceMasks) {
+  TestStridedSlice(
+      /*input_shape=*/{1, -1, 3, -1, 5},
+      /*begin=*/3,
+      /*end=*/4,
+      /*stride=*/1,
+      /*expected=*/"[1,?,3,?,5]",
+      /*begin_mask=*/1,
+      /*end_mask=*/1);
+}
+
+TEST_F(ShapeRefinerTest, ConstantValueAsShape_StridedSliceInvalidMask) {
+  TestStridedSlice(
+      /*input_shape=*/{1, -1, 3},
+      /*begin=*/2,
+      /*end=*/3,
+      /*stride=*/1,
+      /*expected=*/"[?,?,?]",
+      /*begin_mask=*/0,
+      /*end_mask=*/0,
+      /*ellipsis_mask=*/1);
+}
+
+TEST_F(ShapeRefinerTest, ConstantValueAsShape_StridedSliceMulti) {
+  Scope root = Scope::DisabledShapeInferenceScope();
+  auto input = ops::Placeholder(root, DT_INT32);
+  auto begin = ops::Const(root, {0, 0});
+  auto end = ops::Const(root, {2, 2});
+  auto stride = ops::Const(root, {1, 1});
+  auto slice = ops::StridedSlice(root, input, begin, end, stride);
+  Node* result;
+  TF_ASSERT_OK(NodeBuilder("test", "TensorAsShapeInt32")
+                   .Input(slice.node())
+                   .Finalize(root.graph(), &result));
+
+  ShapeRefiner m(TF_GRAPH_DEF_VERSION, OpRegistry::Global());
+  TF_ASSERT_OK(m.AddNode(input.node()));
+  TF_ASSERT_OK(m.AddNode(begin.node()));
+  TF_ASSERT_OK(m.AddNode(end.node()));
+  TF_ASSERT_OK(m.AddNode(stride.node()));
+  TF_ASSERT_OK(m.AddNode(slice.node()));
+  TF_ASSERT_OK(m.AddNode(result));
+
+  shape_inference::InferenceContext* ctx = m.GetContext(result);
+  EXPECT_EQ(ctx->DebugString(ctx->output(0)), "?");
+}
+
 namespace {
 
 // Dummy op to test ShapeRefiner util functions
@@ -1161,11 +1281,13 @@ TEST_F(ShapeRefinerTest, SameDefinedShape) {
   auto s_unknown_2 = ctx->MakeShape({-1, 2});
   auto s_unknown_2_b = ctx->MakeShape({-1, 2});
 
-  EXPECT_TRUE(SameDefinedShape(ctx, unknown, unknown_b));
+  EXPECT_TRUE(SameDefinedShape(ctx, unknown, unknown));
+  EXPECT_FALSE(SameDefinedShape(ctx, unknown, unknown_b));
   EXPECT_FALSE(SameDefinedShape(ctx, unknown, s_1_2));
   EXPECT_TRUE(SameDefinedShape(ctx, s_1_2, s_1_2_b));
   EXPECT_FALSE(SameDefinedShape(ctx, s_1_2, s_2_2));
-  EXPECT_TRUE(SameDefinedShape(ctx, s_unknown_2, s_unknown_2_b));
+  EXPECT_TRUE(SameDefinedShape(ctx, s_unknown_2, s_unknown_2));
+  EXPECT_FALSE(SameDefinedShape(ctx, s_unknown_2, s_unknown_2_b));
 }
 
 TEST_F(ShapeRefinerTest, IsUpdatedShapesOrTypes) {
@@ -1178,14 +1300,15 @@ TEST_F(ShapeRefinerTest, IsUpdatedShapesOrTypes) {
   TF_ASSERT_OK(m.AddNode(test));
   shape_inference::InferenceContext* ctx = m.GetContext(test);
 
+  shape_inference::ShapeHandle unknown = ctx->UnknownShape();
   std::vector<shape_inference::ShapeAndType> t0{
       {ctx->MakeShape({1, 2, 3}), DT_FLOAT},
-      {ctx->UnknownShape(), DT_INVALID},
+      {unknown, DT_INVALID},
       {ctx->MakeShape({4, 3, 2, 1}), DT_INT32}};
 
   std::vector<shape_inference::ShapeAndType> t1{
       {ctx->MakeShape({1, 2, 3}), DT_FLOAT},
-      {ctx->UnknownShape(), DT_INVALID},
+      {unknown, DT_INVALID},
       {ctx->MakeShape({4, 3, 2, 1}), DT_INT32}};
 
   std::vector<shape_inference::ShapeAndType> t2{
@@ -1256,10 +1379,20 @@ TEST_F(ShapeRefinerTest, IncrementalUpdates) {
       0, std::vector<shape_inference::ShapeAndType>{{shp, DT_FLOAT}});
   refined = false;
   TF_ASSERT_OK(m.UpdateNode(dequeue, true /* relax */, &refined));
-  EXPECT_FALSE(refined);
+  EXPECT_TRUE(refined);
   ctx = m.GetContext(dequeue);
   EXPECT_EQ("[?,7]", ctx->DebugString(ctx->output(0)));
-  ASSERT_FALSE(SameHandle(ctx->Dim(ctx->output(0), 0), ctx->Dim(shp, 0)));
+  EXPECT_TRUE(SameHandle(ctx->Dim(ctx->output(0), 0), ctx->Dim(shp, 0)));
+
+  // Inject a shape of the same handle and expect refined to not change.
+  ctx = m.GetContext(queue);
+  shape_inference::ShapeHandle shp2 = shp;
+  ctx->set_output_handle_shapes_and_types(
+      0, std::vector<shape_inference::ShapeAndType>{{shp2, DT_FLOAT}});
+  refined = false;
+  TF_ASSERT_OK(m.UpdateNode(dequeue, /*relax=*/false, &refined));
+  EXPECT_FALSE(refined);
+  EXPECT_TRUE(SameHandle(ctx->Dim(shp, 0), ctx->Dim(shp2, 0)));
 }
 
 void TestSimpleFunctionInference(bool enable_function_inference,

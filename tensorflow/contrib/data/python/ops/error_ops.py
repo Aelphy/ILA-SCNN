@@ -17,9 +17,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from tensorflow.contrib.data.python.ops import contrib_op_loader  # pylint: disable=unused-import
+from tensorflow.contrib.data.python.ops import gen_dataset_ops
 from tensorflow.python.data.ops import dataset_ops
-from tensorflow.python.data.util import nest
-from tensorflow.python.ops import gen_dataset_ops
 
 
 def ignore_errors():
@@ -42,28 +42,31 @@ def ignore_errors():
 
   Returns:
     A `Dataset` transformation function, which can be passed to
-    @{tf.data.Dataset.apply}.
+    `tf.data.Dataset.apply`.
   """
 
   def _apply_fn(dataset):
-    return IgnoreErrorsDataset(dataset)
+    return _IgnoreErrorsDataset(dataset)
 
   return _apply_fn
 
 
-class IgnoreErrorsDataset(dataset_ops.Dataset):
+class _IgnoreErrorsDataset(dataset_ops.Dataset):
   """A `Dataset` that silently ignores errors when computing its input."""
 
   def __init__(self, input_dataset):
     """See `Dataset.ignore_errors()` for details."""
-    super(IgnoreErrorsDataset, self).__init__()
+    super(_IgnoreErrorsDataset, self).__init__()
     self._input_dataset = input_dataset
 
   def _as_variant_tensor(self):
     return gen_dataset_ops.ignore_errors_dataset(
         self._input_dataset._as_variant_tensor(),  # pylint: disable=protected-access
-        output_shapes=nest.flatten(self.output_shapes),
-        output_types=nest.flatten(self.output_types))
+        **dataset_ops.flat_structure(self))
+
+  @property
+  def output_classes(self):
+    return self._input_dataset.output_classes
 
   @property
   def output_shapes(self):

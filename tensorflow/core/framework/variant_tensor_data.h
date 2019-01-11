@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_FRAMEWORK_VARIANT_TENSOR_DATA_H
-#define TENSORFLOW_FRAMEWORK_VARIANT_TENSOR_DATA_H
+#ifndef TENSORFLOW_CORE_FRAMEWORK_VARIANT_TENSOR_DATA_H_
+#define TENSORFLOW_CORE_FRAMEWORK_VARIANT_TENSOR_DATA_H_
 
 #include <algorithm>
 #include <vector>
@@ -63,7 +63,7 @@ class VariantTensorData {
   // Tensors contained within objects being serialized.
   int tensors_size() const;
   const Tensor& tensors(int index) const;
-  std::vector<Tensor> tensors();
+  const std::vector<Tensor>& tensors() const;
   Tensor* add_tensors();
 
   // Conversion to and from VariantTensorDataProto
@@ -112,4 +112,4 @@ string ProtoDebugString(const VariantTensorData& object);
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_FRAMEWORK_VARIANT_TENSOR_DATA_H
+#endif  // TENSORFLOW_CORE_FRAMEWORK_VARIANT_TENSOR_DATA_H_

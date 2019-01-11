@@ -18,9 +18,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import numpy as np
+
 from tensorflow.python.framework import dtypes
+from tensorflow.python.framework import ops
 from tensorflow.python.framework import sparse_tensor
 from tensorflow.python.framework import test_util
+from tensorflow.python.ops import sparse_ops
 from tensorflow.python.platform import googletest
 
 
@@ -50,6 +54,28 @@ class SparseTensorTest(test_util.TensorFlowTestCase):
         self.assertAllEqual(sess_run_value.indices, value.indices)
         self.assertAllEqual(sess_run_value.values, value.values)
         self.assertAllEqual(sess_run_value.dense_shape, value.dense_shape)
+
+  def testIsSparse(self):
+    self.assertFalse(sparse_tensor.is_sparse(3))
+    self.assertFalse(sparse_tensor.is_sparse("foo"))
+    self.assertFalse(sparse_tensor.is_sparse(np.array(3)))
+    self.assertTrue(
+        sparse_tensor.is_sparse(sparse_tensor.SparseTensor([[0]], [0], [1])))
+    self.assertTrue(
+        sparse_tensor.is_sparse(
+            sparse_tensor.SparseTensorValue([[0]], [0], [1])))
+
+  def testConsumers(self):
+    sp = sparse_tensor.SparseTensor([[0, 0], [1, 2]], [1.0, 3.0], [3, 4])
+    w = ops.convert_to_tensor(np.ones([4, 1], np.float32))
+    out = sparse_ops.sparse_tensor_dense_matmul(sp, w)
+    self.assertEqual(len(sp.consumers()), 1)
+    self.assertEqual(sp.consumers()[0], out.op)
+
+    dense = sparse_ops.sparse_tensor_to_dense(sp)
+    self.assertEqual(len(sp.consumers()), 2)
+    self.assertTrue(dense.op in sp.consumers())
+    self.assertTrue(out.op in sp.consumers())
 
 
 class ConvertToTensorOrSparseTensorTest(test_util.TensorFlowTestCase):

@@ -45,13 +45,12 @@ GraphDef GDef(gtl::ArraySlice<NodeDef> nodes,
 }
 
 // Helper to construct a NodeDef.
-NodeDef NDef(const string& name, const string& op,
-             gtl::ArraySlice<string> inputs,
+NodeDef NDef(StringPiece name, StringPiece op, gtl::ArraySlice<string> inputs,
              gtl::ArraySlice<std::pair<string, FDH::AttrValueWrapper>> attrs,
              const string& device) {
   NodeDef n;
-  n.set_name(name);
-  n.set_op(op);
+  n.set_name(string(name));
+  n.set_op(string(op));
   for (const auto& in : inputs) n.add_input(in);
   n.set_device(device);
   for (auto na : attrs) n.mutable_attr()->insert({na.first, na.second.proto});
@@ -71,6 +70,24 @@ FunctionDef NonZero() {
       // Nodes
       {
           {{"y"}, "Identity", {"x"}, {{"T", "$T"}}},
+      });
+}
+
+FunctionDef IsZero() {
+  const Tensor kZero = test::AsScalar<int64>(0);
+  return FDH::Define(
+      // Name
+      "IsZero",
+      // Args
+      {"x: T"},
+      // Return values
+      {"equal: T"},
+      // Attr def
+      {"T:{float, double, int32, int64, string}"},
+      {
+          {{"zero"}, "Const", {}, {{"value", kZero}, {"dtype", DT_INT64}}},
+          {{"cast"}, "Cast", {"zero"}, {{"SrcT", DT_INT64}, {"DstT", "$T"}}},
+          {{"equal"}, "Equal", {"x", "cast"}, {{"T", "$T"}}},
       });
 }
 
@@ -149,33 +166,25 @@ FunctionDef XTimes16() {
       {{"y", "y:y:0"}});
 }
 
-FunctionDef WXPlusB(){return FDH::Define(
-    // Name
-    "WXPlusB",
-    // Args
-    {"w: T", "x: T", "b: T"},
-    // Return values
-    {"y: T"},
-    // Attr def
-    {"T: {float, double}"},
-    // Nodes
-    {
-      {{"mm"},
-       "MatMul",
-       {"w", "x"},
-       {
-           {"T", "$T"}, {"transpose_a", false}, {"transpose_b", false},
-#ifdef INTEL_MKL
-       }},
-#else
+FunctionDef WXPlusB() {
+  return FDH::Define(
+      // Name
+      "WXPlusB",
+      // Args
+      {"w: T", "x: T", "b: T"},
+      // Return values
+      {"y: T"},
+      // Attr def
+      {"T: {float, double}"},
+      // Nodes
+      {{{"mm"},
+        "MatMul",
+        {"w", "x"},
+        {{"T", "$T"},
+         {"transpose_a", false},
+         {"transpose_b", false},
          {"_kernel", "eigen"}}},
-#endif
-      {
-        {"y"}, "Add", {"mm", "b"}, {
-          { "T", "$T" }
-        }
-      }
-    });
+       {{"y"}, "Add", {"mm", "b"}, {{"T", "$T"}}}});
 }
 
 FunctionDef Swap() {
@@ -191,6 +200,79 @@ FunctionDef Swap() {
       // Nodes
       {{{"o0"}, "Identity", {"i1"}, {{"T", "$T"}}},
        {{"o1"}, "Identity", {"i0"}, {{"T", "$T"}}}});
+}
+
+FunctionDef InvalidControlFlow() {
+  return FDH::Create(
+      // Name
+      "InvalidControlFlow",
+      // Args
+      {"i: int32"},
+      // Return values
+      {"o: int32"},
+      // Attr def
+      {},
+      // Nodes
+      {{{"enter"}, "Enter", {"i"}, {{"T", DT_INT32}, {"frame_name", "while"}}},
+       {{"add"}, "Add", {"enter:output", "i"}, {{"T", DT_INT32}}}},
+      // Output mapping
+      {{"o", "add:z"}});
+}
+
+FunctionDef LessThanOrEqualToN(int64 N) {
+  const Tensor kN = test::AsScalar<int64>(N);
+  return FDH::Define(
+      // Name
+      "LessThanOrEqualToN",
+      // Args
+      {"x: T"},
+      // Return values
+      {"z: bool"},
+      // Attr def
+      {"T: {float, double, int32, int64}"},
+      // Nodes
+      {
+          {{"N"}, "Const", {}, {{"value", kN}, {"dtype", DT_INT64}}},
+          {{"y"}, "Cast", {"N"}, {{"SrcT", DT_INT64}, {"DstT", "$T"}}},
+          {{"z"}, "LessEqual", {"x", "y"}, {{"T", "$T"}}},
+      });
+}
+
+FunctionDef XPlusOneXTimesY() {
+  const Tensor kOne = test::AsScalar<int64>(1);
+  return FDH::Define(
+      // Name
+      "XPlusOneXTimesY",
+      // Args
+      {"x: T", "y: T"},
+      // Return values
+      {"s: T", "t: T"},
+      // Attr def
+      {"T: {float, double, int32, int64}"},
+      // Nodes
+      {{{"one"}, "Const", {}, {{"value", kOne}, {"dtype", DT_INT64}}},
+       {{"increment"}, "Cast", {"one"}, {{"SrcT", DT_INT64}, {"DstT", "$T"}}},
+       {{"s"}, "Add", {"x", "increment"}, {{"T", "$T"}}},
+       {{"t"}, "Mul", {"x", "y"}, {{"T", "$T"}}}});
+}
+
+FunctionDef XYXLessThanOrEqualToN(int64 N) {
+  const Tensor kN = test::AsScalar<int64>(N);
+  return FDH::Define(
+      // Name
+      "XYXLessThanOrEqualToN",
+      // Args
+      {"x: T", "y: T"},
+      // Return values
+      {"z: bool"},
+      // Attr def
+      {"T: {float, double, int32, int64}"},
+      // Nodes
+      {
+          {{"N"}, "Const", {}, {{"value", kN}, {"dtype", DT_INT64}}},
+          {{"N1"}, "Cast", {"N"}, {{"SrcT", DT_INT64}, {"DstT", "$T"}}},
+          {{"z"}, "LessEqual", {"x", "N1"}, {{"T", "$T"}}},
+      });
 }
 
 void FunctionTestSchedClosure(std::function<void()> fn) {

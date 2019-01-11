@@ -28,6 +28,7 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.ops.distributions import laplace
 from tensorflow.python.ops.distributions import transformed_distribution
 from tensorflow.python.ops.linalg import linalg
+from tensorflow.python.util import deprecation
 
 
 __all__ = [
@@ -109,8 +110,7 @@ class VectorLaplaceLinearOperator(
   #### Examples
 
   ```python
-  ds = tf.contrib.distributions
-  la = tf.linalg
+  tfd = tf.contrib.distributions
 
   # Initialize a single 3-variate VectorLaplace with some desired covariance.
   mu = [1., 2, 3]
@@ -124,9 +124,9 @@ class VectorLaplaceLinearOperator(
   #      [ 0.1, -0.3,  0.4]])
 
   # Divide scale by sqrt(2) so that the final covariance will be what we want.
-  vla = ds.VectorLaplaceLinearOperator(
+  vla = tfd.VectorLaplaceLinearOperator(
       loc=mu,
-      scale=la.LinearOperatorLowerTriangular(scale / tf.sqrt(2)))
+      scale=tf.linalg.LinearOperatorLowerTriangular(scale / tf.sqrt(2.)))
 
   # Covariance agrees with cholesky(cov) parameterization.
   vla.covariance().eval()
@@ -143,9 +143,9 @@ class VectorLaplaceLinearOperator(
   scale_diag = [[1., 2, 3],
                 [0.5, 1, 1.5]]     # shape: [2, 3]
 
-  vla = ds.VectorLaplaceLinearOperator(
+  vla = tfd.VectorLaplaceLinearOperator(
       loc=mu,
-      scale=la.LinearOperatorDiag(scale_diag))
+      scale=tf.linalg.LinearOperatorDiag(scale_diag))
 
   # Compute the pdf of two `R^3` observations; return a length-2 vector.
   x = [[-0.9, 0, 0.1],
@@ -155,6 +155,14 @@ class VectorLaplaceLinearOperator(
 
   """
 
+  @deprecation.deprecated(
+      "2018-10-01",
+      "The TensorFlow Distributions library has moved to "
+      "TensorFlow Probability "
+      "(https://github.com/tensorflow/probability). You "
+      "should update all references to use `tfp.distributions` "
+      "instead of `tf.contrib.distributions`.",
+      warn_once=True)
   def __init__(self,
                loc=None,
                scale=None,
@@ -192,7 +200,7 @@ class VectorLaplaceLinearOperator(
       ValueError: if `scale` is unspecified.
       TypeError: if not `scale.dtype.is_floating`
     """
-    parameters = locals()
+    parameters = dict(locals())
     if scale is None:
       raise ValueError("Missing required `scale` parameter.")
     if not scale.dtype.is_floating:

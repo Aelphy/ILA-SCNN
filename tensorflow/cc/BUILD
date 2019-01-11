@@ -121,6 +121,7 @@ cc_library(
     deps = [
         ":array_grad",
         ":data_flow_grad",
+        ":image_grad",
         ":math_grad",
         ":nn_grad",
     ],
@@ -332,6 +333,36 @@ tf_cc_test(
 )
 
 cc_library(
+    name = "image_grad",
+    srcs = ["gradients/image_grad.cc"],
+    deps = [
+        ":cc_ops",
+        ":cc_ops_internal",
+        ":grad_op_registry",
+        ":gradients",
+    ],
+    alwayslink = 1,
+)
+
+tf_cc_test(
+    name = "gradients_image_grad_test",
+    srcs = ["gradients/image_grad_test.cc"],
+    deps = [
+        ":cc_ops",
+        ":client_session",
+        ":grad_op_registry",
+        ":grad_testutil",
+        ":gradient_checker",
+        ":image_grad",
+        ":testutil",
+        "//tensorflow/core:lib_internal",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
+    ],
+)
+
+cc_library(
     name = "math_grad",
     srcs = ["gradients/math_grad.cc"],
     deps = [
@@ -348,9 +379,11 @@ tf_cc_test(
     srcs = ["gradients/math_grad_test.cc"],
     deps = [
         ":cc_ops",
+        ":client_session",
         ":grad_op_registry",
         ":grad_testutil",
         ":gradient_checker",
+        ":gradients",
         ":math_grad",
         ":testutil",
         "//tensorflow/core:lib_internal",
@@ -421,6 +454,7 @@ tf_cc_test(
 
 tf_gen_op_wrappers_cc(
     name = "cc_ops",
+    api_def_srcs = ["//tensorflow/core/api_def:base_api_def"],
     op_lib_names = [
         "array_ops",
         "audio_ops",
@@ -432,6 +466,7 @@ tf_gen_op_wrappers_cc(
         "linalg_ops",
         "logging_ops",
         "lookup_ops",
+        "manip_ops",
         "math_ops",
         "nn_ops",
         "no_op",
@@ -447,7 +482,6 @@ tf_gen_op_wrappers_cc(
         "ops/const_op.h",
         "ops/standard_ops.h",
     ],
-    override_file = "ops/op_gen_overrides.pbtxt",
     pkg = "//tensorflow/core",
 )
 
@@ -525,14 +559,35 @@ cc_library_with_android_deps(
         "//tensorflow/core:android_tensorflow_lib",
     ],
     copts = tf_copts(),
+    data = [
+        "//tensorflow/core/api_def:base_api_def",
+    ],
+    deps = [
+        "//tensorflow/core:framework_headers_lib",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+        "//tensorflow/core:op_gen_lib",
+        "//tensorflow/core:proto_text",
+        "//tensorflow/core:protos_all_cc",
+    ],
+)
+
+tf_cc_test(
+    name = "cc_op_gen_test",
+    srcs = [
+        "framework/cc_op_gen.cc",
+        "framework/cc_op_gen.h",
+        "framework/cc_op_gen_test.cc",
+    ],
     deps = [
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//tensorflow/core:op_gen_lib",
-        "//tensorflow/core:op_gen_overrides_proto_cc",
         "//tensorflow/core:proto_text",
         "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
     ],
 )
 
@@ -573,7 +628,6 @@ tf_cc_binary(
     copts = tf_copts(),
     linkopts = select({
         "//tensorflow:windows": [],
-        "//tensorflow:windows_msvc": [],
         "//tensorflow:darwin": [
             "-lm",
             "-lpthread",
@@ -596,18 +650,6 @@ tf_cc_binary(
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:tensorflow",
     ],
-)
-
-filegroup(
-    name = "all_files",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            "**/METADATA",
-            "**/OWNERS",
-        ],
-    ),
-    visibility = ["//tensorflow:__subpackages__"],
 )
 
 cc_library(
@@ -652,7 +694,6 @@ cc_library(
         "//tensorflow/core:lib",
         "//tensorflow/core:lib_internal",
         "//tensorflow/core:protos_all_cc",
-        "//tensorflow/core:tensorflow",
     ],
 )
 

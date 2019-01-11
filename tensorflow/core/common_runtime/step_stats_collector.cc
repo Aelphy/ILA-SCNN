@@ -16,19 +16,112 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/step_stats_collector.h"
 #include "tensorflow/core/common_runtime/costmodel_manager.h"
 #include "tensorflow/core/framework/allocation_description.pb.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_description.pb.h"
 #include "tensorflow/core/framework/tracking_allocator.h"
 #include "tensorflow/core/graph/costmodel.h"
+#include "tensorflow/core/graph/graph.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
+#include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/scanner.h"
+#include "tensorflow/core/lib/strings/stringprintf.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace tensorflow {
+namespace {
+const int kMaxAllocReportNodes = 100;
+const float kMaxAllocReportFraction = 0.99;
 
-NodeExecStatsWrapper::NodeExecStatsWrapper()
-    : NodeExecStatsWrapper(new NodeExecStats) {}
+struct AllocStats {
+  std::map<int64, std::vector<string>> nodes_by_size;
+  int64 total_bytes = 0;
+  int64 total_nodes = 0;
+};
+}  // namespace
+
+NodeExecStatsWrapper::NodeExecStatsWrapper(const string& node_name)
+    : NodeExecStatsWrapper(new NodeExecStats) {
+  stats_->set_node_name(node_name);
+}
 NodeExecStatsWrapper::NodeExecStatsWrapper(NodeExecStats* stats)
     : stats_(stats) {}
+
+void NodeExecStatsWrapper::SetOutput(int slot, const Tensor* v) {
+  DCHECK(v);
+  NodeOutput* no = stats_->add_output();
+  no->set_slot(slot);
+  v->FillDescription(no->mutable_tensor_description());
+}
+
+void NodeExecStatsWrapper::SetMemory(OpKernelContext* ctx) {
+  for (const auto& allocator_pair : ctx->wrapped_allocators()) {
+    AddAllocation(allocator_pair.first, allocator_pair.second);
+  }
+  auto* ms = stats_->mutable_memory_stats();
+  ms->set_temp_memory_size(ctx->temp_memory_allocated());
+  for (const auto& alloc_id : ctx->persistent_alloc_ids()) {
+    ms->mutable_persistent_tensor_alloc_ids()->Add(alloc_id);
+  }
+  ms->set_persistent_memory_size(ctx->persistent_memory_allocated());
+}
+
+void NodeExecStatsWrapper::SetReferencedTensors(
+    const TensorReferenceVector& tensors) {
+  // be careful not to increment the reference count on any tensor
+  // while recording the information
+  for (size_t i = 0; i < tensors.size(); ++i) {
+    AllocationDescription* description = stats_->add_referenced_tensor();
+    tensors.at(i).FillDescription(description);
+  }
+}
+
+// TODO(tucker): merge with the DetailText function in session.cc
+// in a common location.
+bool NodeExecStatsWrapper::SetTimelineLabel(const Node* node) {
+  bool is_transfer_node = false;
+  string memory;
+  for (auto& all : stats_->memory()) {
+    int64 tot = all.total_bytes();
+    if (tot >= 0.1 * 1048576.0) {
+      int64 peak = all.peak_bytes();
+      if (peak > 0) {
+        memory =
+            strings::StrCat(memory, "[", all.allocator_name(),
+                            strings::Printf(" %.1fMB %.1fMB] ", tot / 1048576.0,
+                                            peak / 1048576.0));
+      } else {
+        memory = strings::StrCat(memory, "[", all.allocator_name(),
+                                 strings::Printf(" %.1fMB] ", tot / 1048576.0));
+      }
+    }
+  }
+  const AttrSlice attrs = node->attrs();
+  string text;
+  if (IsSend(node)) {
+    string tensor_name;
+    TF_CHECK_OK(GetNodeAttr(attrs, "tensor_name", &tensor_name));
+    string recv_device;
+    TF_CHECK_OK(GetNodeAttr(attrs, "recv_device", &recv_device));
+    text = strings::StrCat(memory, node->name(), " = ", node->type_string(),
+                           "(", tensor_name, " @", recv_device);
+    is_transfer_node = true;
+  } else if (IsRecv(node)) {
+    string tensor_name;
+    TF_CHECK_OK(GetNodeAttr(attrs, "tensor_name", &tensor_name));
+    string send_device;
+    TF_CHECK_OK(GetNodeAttr(attrs, "send_device", &send_device));
+    text = strings::StrCat(memory, node->name(), " = ", node->type_string(),
+                           "(", tensor_name, " @", send_device);
+    is_transfer_node = true;
+  } else {
+    text =
+        strings::StrCat(memory, node->name(), " = ", node->type_string(), "(",
+                        str_util::Join(node->requested_inputs(), ", "), ")");
+  }
+  stats_->set_timeline_label(text);
+  return is_transfer_node;
+}
 
 void NodeExecStatsWrapper::AddAllocation(
     Allocator* allocator, TrackingAllocator* tracking_allocator) {
@@ -83,7 +176,7 @@ static int ExtractGpuWithStreamAll(string device_name) {
   } else {
     // Convert the captured string into an integer. But first we need to put
     // the digits back in order
-    string ordered_capture = capture.ToString();
+    string ordered_capture = std::string(capture);
     std::reverse(ordered_capture.begin(), ordered_capture.end());
     int gpu_id;
     CHECK(strings::safe_strto32(ordered_capture, &gpu_id));
@@ -112,7 +205,7 @@ static int ExtractGpuWithoutStream(string device_name) {
   } else {
     // Convert the captured string into an integer. But first we need to put
     // the digits back in order
-    string ordered_capture = capture.ToString();
+    string ordered_capture = std::string(capture);
     std::reverse(ordered_capture.begin(), ordered_capture.end());
     int gpu_id;
     CHECK(strings::safe_strto32(ordered_capture, &gpu_id));
@@ -139,7 +232,7 @@ void StepStatsCollector::BuildCostModel(
     const DeviceStepStats* hardware_stats;
   };
 
-  std::unordered_map<StringPiece, DeviceStats, StringPiece::Hasher>
+  std::unordered_map<StringPiece, DeviceStats, StringPieceHasher>
       per_device_stats;
   std::unordered_map<int, const DeviceStepStats*> gpu_hardware_stats;
 
@@ -159,7 +252,7 @@ void StepStatsCollector::BuildCostModel(
 
   for (auto& itr : per_device_stats) {
     const StringPiece device_name = itr.first;
-    const int gpu_id = ExtractGpuWithoutStream(device_name.ToString());
+    const int gpu_id = ExtractGpuWithoutStream(std::string(device_name));
     if (gpu_id >= 0) {
       // Reference the gpu hardware stats in addition to the regular stats
       // for this gpu device if they're available.
@@ -179,7 +272,7 @@ void StepStatsCollector::BuildCostModel(
     CostModel* cm = cost_model_manager->FindOrCreateCostModel(graph);
     cm->IncrementUpdateTimes();
 
-    std::unordered_map<StringPiece, Node*, StringPiece::Hasher> name_to_node;
+    std::unordered_map<StringPiece, Node*, StringPieceHasher> name_to_node;
     for (Node* n : graph->nodes()) {
       name_to_node.emplace(n->name(), n);
     }
@@ -215,22 +308,24 @@ void StepStatsCollector::BuildCostModel(
       if (node) {
         for (int i = 0; i < stats.output_size(); ++i) {
           const auto& output = stats.output(i);
-          cm->RecordMaxMemorySize(node, i, Bytes(output.tensor_description()
-                                                     .allocation_description()
-                                                     .allocated_bytes()),
-                                  stats.output(i).tensor_description().shape(),
-                                  node->output_types()[i]);
-          cm->RecordAllocationId(node, i, output.tensor_description()
-                                              .allocation_description()
-                                              .allocation_id());
+          int output_slot = output.slot();
+          cm->RecordMaxMemorySize(node, output_slot,
+                                  Bytes(output.tensor_description()
+                                            .allocation_description()
+                                            .allocated_bytes()),
+                                  output.tensor_description().shape(),
+                                  node->output_types()[output_slot]);
+          cm->RecordAllocationId(node, output_slot,
+                                 output.tensor_description()
+                                     .allocation_description()
+                                     .allocation_id());
         }
         cm->RecordMemoryStats(node, stats.memory_stats());
         // Use hardware stats to record the execution time if they're available,
         // otherwise use the regular (less accurate) stats
         string node_name = dev_stats.regular_stats->node_stats(i).node_name();
-        if (dev_stats.hardware_stats &&
-            name_to_hw_node_stats.find(node_name) !=
-                name_to_hw_node_stats.end()) {
+        if (dev_stats.hardware_stats && name_to_hw_node_stats.find(node_name) !=
+                                            name_to_hw_node_stats.end()) {
           const NodeExecStats& hw_stats = name_to_hw_node_stats[node_name];
           cm->RecordMaxExecutionTime(
               node, Microseconds(hw_stats.op_end_rel_micros()));
@@ -265,6 +360,85 @@ void StepStatsCollector::Save(const string& device,
     dss.push_back(std::unique_ptr<NodeExecStatsWrapper>(stats));
     collectedNodes++;
   }
+}
+
+string StepStatsCollector::ReportAllocsOnResourceExhausted(const string& err) {
+  mutex_lock l(mu_);
+  if (err.find("OOM") == err.npos) {
+    return "";
+  }
+  // <device, allocator> -> AllocStats
+  std::map<std::pair<string, string>, AllocStats> allocs_map;
+  string report = "\n";
+  for (const auto& dev_stat : dev_stats_) {
+    const string& device = dev_stat.first;
+    // Only print the device that has OOM.
+    // TODO(xpan): Extract device from err first to speed it up.
+    if (err.find(device) == err.npos) {
+      continue;
+    }
+    // NodeExecStatsWrapper*
+    for (const auto& stats : dev_stat.second) {
+      // std::pair<AllocatorMemoryUsed*, TrackingAllocator*>
+      for (const auto& alloc : stats->allocations_) {
+        // Only print the allocator that has OOM.
+        // TODO(xpan): Extract device from err first to speed it up.
+        if (err.find(alloc.first->allocator_name()) == err.npos) {
+          continue;
+        }
+        auto dev_allocator =
+            std::make_pair(dev_stat.first, alloc.first->allocator_name());
+        AllocStats& dev_allocs_stats = allocs_map[dev_allocator];
+        TrackingAllocator* tracking_alloc = alloc.second;
+        gtl::InlinedVector<AllocRecord, 4> cur_records =
+            tracking_alloc->GetCurrentRecords();
+        int64 cur_bytes = 0;
+        for (const auto& r : cur_records) {
+          cur_bytes += r.alloc_bytes;
+        }
+        if (cur_bytes > 0) {
+          dev_allocs_stats.total_bytes += cur_bytes;
+          dev_allocs_stats.total_nodes++;
+          dev_allocs_stats.nodes_by_size[cur_bytes].push_back(
+              stats->stats()->node_name());
+        }
+      }
+    }
+  }
+
+  for (const auto& dev_allocs_it : allocs_map) {
+    const auto& dev = dev_allocs_it.first;
+    const AllocStats& dev_allocs_stats = dev_allocs_it.second;
+    int64 reported_bytes = 0;
+    int64 reported_nodes = 0;
+    bool done = false;
+    strings::StrAppend(&report, "\nCurrent usage from device: ", dev.first,
+                       ", allocator: ", dev.second, "\n");
+    // Print allocations stats of the <device, allocator> pair.
+    for (auto it = dev_allocs_stats.nodes_by_size.rbegin();
+         it != dev_allocs_stats.nodes_by_size.rend(); ++it) {
+      for (const string& node_name : it->second) {
+        reported_bytes += it->first;
+        strings::StrAppend(&report, "  ",
+                           strings::HumanReadableNumBytes(it->first), " from ",
+                           node_name, "\n");
+        if (++reported_nodes > kMaxAllocReportNodes ||
+            reported_bytes >=
+                dev_allocs_stats.total_bytes * kMaxAllocReportFraction) {
+          done = true;
+          break;
+        }
+      }
+      if (done) break;
+    }
+    int64 remain_nodes = dev_allocs_stats.total_nodes - reported_nodes;
+    int64 remain_bytes = dev_allocs_stats.total_bytes - reported_bytes;
+    if (remain_nodes > 0) {
+      strings::StrAppend(&report, "  Remaining ", remain_nodes, " nodes with ",
+                         strings::HumanReadableNumBytes(remain_bytes), "\n");
+    }
+  }
+  return report;
 }
 
 void StepStatsCollector::Finalize() {

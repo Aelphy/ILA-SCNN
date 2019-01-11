@@ -21,16 +21,20 @@ limitations under the License.
 
 #ifdef INTEL_MKL
 
-#include <unistd.h>
 #include <cstdlib>
-#include <string>
 #include "tensorflow/core/common_runtime/bfc_allocator.h"
-#include "tensorflow/core/framework/allocator.h"
+#include "tensorflow/core/common_runtime/visitable_allocator.h"
 #include "tensorflow/core/lib/strings/numbers.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/mem.h"
 
+#ifndef INTEL_MKL_DNN_ONLY
 #include "i_malloc.h"
+#endif
+
+#ifdef _WIN32
+typedef unsigned int uint;
+#endif
 
 namespace tensorflow {
 
@@ -46,7 +50,7 @@ class MklSubAllocator : public SubAllocator {
 
 /// CPU allocator for MKL that wraps BFC allocator and intercepts
 /// and redirects memory allocation calls from MKL.
-class MklCPUAllocator : public Allocator {
+class MklCPUAllocator : public VisitableAllocator {
  public:
   // Constructor and other standard functions
 
@@ -54,7 +58,7 @@ class MklCPUAllocator : public Allocator {
   static constexpr const char* kMaxLimitStr = "TF_MKL_ALLOC_MAX_BYTES";
 
   /// Default upper limit on allocator size - 64GB
-  static const size_t kDefaultMaxLimit = 64LL << 30;
+  static constexpr size_t kDefaultMaxLimit = 64LL << 30;
 
   MklCPUAllocator() { TF_CHECK_OK(Initialize()); }
 
@@ -81,7 +85,7 @@ class MklCPUAllocator : public Allocator {
       }
 #if defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
       if (user_val > max_mem_bytes) {
-        LOG(WARNING) << "The user specifed a memory limit " << kMaxLimitStr
+        LOG(WARNING) << "The user specified a memory limit " << kMaxLimitStr
                      << "=" << user_val
                      << " greater than available physical memory: "
                      << max_mem_bytes
@@ -94,14 +98,14 @@ class MklCPUAllocator : public Allocator {
     VLOG(1) << "MklCPUAllocator: Setting max_mem_bytes: " << max_mem_bytes;
     allocator_ = new BFCAllocator(new MklSubAllocator, max_mem_bytes,
                                   kAllowGrowth, kName);
-
+#ifndef INTEL_MKL_DNN_ONLY
     // For redirecting all allocations from MKL to this allocator
     // From: http://software.intel.com/en-us/node/528565
     i_malloc = MallocHook;
     i_calloc = CallocHook;
     i_realloc = ReallocHook;
     i_free = FreeHook;
-
+#endif
     return Status::OK();
   }
 
@@ -115,7 +119,17 @@ class MklCPUAllocator : public Allocator {
     allocator_->DeallocateRaw(ptr);
   }
 
-  void GetStats(AllocatorStats* stats) { return allocator_->GetStats(stats); }
+  void GetStats(AllocatorStats* stats) override { allocator_->GetStats(stats); }
+
+  void ClearStats() override { allocator_->ClearStats(); }
+
+  void AddAllocVisitor(Visitor visitor) override {
+    allocator_->AddAllocVisitor(visitor);
+  }
+
+  void AddFreeVisitor(Visitor visitor) override {
+    allocator_->AddFreeVisitor(visitor);
+  }
 
  private:
   // Hooks provided by this allocator for memory allocation routines from MKL
@@ -134,12 +148,14 @@ class MklCPUAllocator : public Allocator {
     Status s = Status(error::Code::UNIMPLEMENTED,
                       "Unimplemented case for hooking MKL function.");
     TF_CHECK_OK(s);  // way to assert with an error message
+    return nullptr; // return a value and make static code analyzers happy
   }
 
   static inline void* ReallocHook(void* ptr, size_t size) {
     Status s = Status(error::Code::UNIMPLEMENTED,
                       "Unimplemented case for hooking MKL function.");
     TF_CHECK_OK(s);  // way to assert with an error message
+    return nullptr; // return a value and make static code analyzers happy
   }
 
   /// Do we allow growth in BFC Allocator
@@ -149,9 +165,12 @@ class MklCPUAllocator : public Allocator {
   static constexpr const char* kName = "mklcpu";
 
   /// The alignment that we need for the allocations
-  static const size_t kAlignment = 64;
+  static constexpr const size_t kAlignment = 64;
 
-  Allocator* allocator_;  // owned by this class
+  VisitableAllocator* allocator_;  // owned by this class
+
+  // Prevent copying and assignment
+  TF_DISALLOW_COPY_AND_ASSIGN(MklCPUAllocator);
 };
 
 }  // namespace tensorflow

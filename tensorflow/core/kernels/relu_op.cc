@@ -31,7 +31,7 @@ typedef Eigen::ThreadPoolDevice CPUDevice;
 typedef Eigen::GpuDevice GPUDevice;
 #ifdef TENSORFLOW_USE_SYCL
 typedef Eigen::SyclDevice SYCLDevice;
-#endif // TENSORFLOW_USE_SYCL
+#endif  // TENSORFLOW_USE_SYCL
 
 #define REGISTER_RELU_KERNELS(type)                                   \
   REGISTER_KERNEL_BUILDER(                                            \
@@ -113,8 +113,7 @@ namespace functor {
                                                                                \
   template <>                                                                  \
   void Selu<GPUDevice, T>::operator()(                                         \
-      const GPUDevice& d,                                                      \
-      typename TTypes<T>::ConstTensor features,                                \
+      const GPUDevice& d, typename TTypes<T>::ConstTensor features,            \
       typename TTypes<T>::Tensor activations);                                 \
   extern template struct Selu<GPUDevice, T>;                                   \
                                                                                \
@@ -125,7 +124,11 @@ namespace functor {
       typename TTypes<T>::Tensor backprops);                                   \
   extern template struct SeluGrad<GPUDevice, T>;
 
-
+template <>
+void Relu<GPUDevice, qint8>::operator()(
+    const GPUDevice& d, typename TTypes<qint8>::ConstTensor features,
+    typename TTypes<qint8>::Tensor activations);
+extern template struct Relu<GPUDevice, qint8>;
 
 TF_CALL_GPU_NUMBER_TYPES(DECLARE_GPU_SPEC);
 }  // namespace functor
@@ -157,10 +160,29 @@ TF_CALL_GPU_NUMBER_TYPES(DECLARE_GPU_SPEC);
       Name("SeluGrad").Device(DEVICE_GPU).TypeConstraint<type>("T"),  \
       SeluGradOp<GPUDevice, type>)
 
-
-
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_KERNELS);
 #undef REGISTER_GPU_KERNELS
+
+template <typename Device>
+class ReluOp<Device, qint8>
+    : public UnaryElementWiseOp<qint8, ReluOp<Device, qint8>> {
+ public:
+  using UnaryElementWiseOp<qint8, ReluOp<Device, qint8>>::UnaryElementWiseOp;
+
+  void Operate(OpKernelContext* context, const Tensor& input, Tensor* output) {
+    auto flat_input = input.flat<qint8>();
+    OP_REQUIRES(context, (flat_input.size() % 4) == 0,
+                errors::InvalidArgument(
+                    "Tensor size must be a multiple of 4 for Relu<qint8>. Got ",
+                    flat_input.size()));
+    functor::Relu<Device, qint8> func;
+    func(context->eigen_device<Device>(), flat_input, output->flat<qint8>());
+  }
+};
+
+REGISTER_KERNEL_BUILDER(
+    Name("Relu").Device(DEVICE_GPU).TypeConstraint<qint8>("T"),
+    ReluOp<GPUDevice, qint8>);
 
 #endif  // GOOGLE_CUDA
 
@@ -192,10 +214,8 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_KERNELS);
       Name("SeluGrad").Device(DEVICE_SYCL).TypeConstraint<type>("T"),  \
       SeluGradOp<SYCLDevice, type>)
 
-
-
 TF_CALL_GPU_NUMBER_TYPES_NO_HALF(REGISTER_SYCL_KERNELS);
 #undef REGISTER_SYCL_KERNELS
-#endif // TENSORFLOW_USE_SYCL
+#endif  // TENSORFLOW_USE_SYCL
 
 }  // namespace tensorflow

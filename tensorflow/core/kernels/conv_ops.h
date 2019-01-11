@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_KERNELS_CONV_OPS_H_
-#define TENSORFLOW_KERNELS_CONV_OPS_H_
+#ifndef TENSORFLOW_CORE_KERNELS_CONV_OPS_H_
+#define TENSORFLOW_CORE_KERNELS_CONV_OPS_H_
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/resource_mgr.h"
@@ -34,8 +34,9 @@ class OpKernelContext;
 template <typename Device, typename T>
 struct LaunchConv2DOp {
   void operator()(OpKernelContext* ctx, bool use_cudnn, bool cudnn_use_autotune,
-                  const Tensor& input, const Tensor& filter, int row_stride,
-                  int col_stride, const Padding& padding, Tensor* output,
+                  const Tensor& input, const Tensor& filter, int row_dilation,
+                  int col_dilation, int row_stride, int col_stride,
+                  const Padding& padding, Tensor* output,
                   TensorFormat data_format);
 };
 
@@ -43,8 +44,9 @@ struct LaunchConv2DOp {
 template <typename T>
 struct LaunchConv2DOp<Eigen::GpuDevice, T> {
   void operator()(OpKernelContext* ctx, bool use_cudnn, bool cudnn_use_autotune,
-                  const Tensor& input, const Tensor& filter, int row_stride,
-                  int col_stride, const Padding& padding, Tensor* output,
+                  const Tensor& input, const Tensor& filter, int row_dilation,
+                  int col_dilation, int row_stride, int col_stride,
+                  const Padding& padding, Tensor* output,
                   TensorFormat data_format);
 };
 #endif  // GOOGLE_CUDA
@@ -66,4 +68,4 @@ struct Im2ColBufferResource : public ResourceBase {
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_KERNELS_CONV_OPS_H
+#endif  // TENSORFLOW_CORE_KERNELS_CONV_OPS_H_

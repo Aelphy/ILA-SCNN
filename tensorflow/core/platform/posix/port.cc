@@ -17,13 +17,18 @@ limitations under the License.
 #include "jemalloc/jemalloc.h"
 #endif
 
+#include "absl/base/internal/sysinfo.h"
+
 #include "tensorflow/core/platform/cpu_info.h"
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/platform/mem.h"
+#include "tensorflow/core/platform/numa.h"
 #include "tensorflow/core/platform/snappy.h"
 #include "tensorflow/core/platform/types.h"
+
 #if defined(__linux__) && !defined(__ANDROID__)
 #include <sched.h>
+#include <sys/sysinfo.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +37,8 @@ limitations under the License.
 #ifdef TF_USE_SNAPPY
 #include "snappy.h"
 #endif
-#if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__)
+#if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__) || \
+    defined(__HAIKU__)
 #include <thread>
 #endif
 
@@ -56,7 +62,8 @@ int NumSchedulableCPUs() {
   }
   perror("sched_getaffinity");
 #endif
-#if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__)
+#if (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__) || \
+    defined(__HAIKU__)
   unsigned int count = std::thread::hardware_concurrency();
   if (count > 0) return static_cast<int>(count);
 #endif
@@ -64,6 +71,24 @@ int NumSchedulableCPUs() {
   fprintf(stderr, "can't determine number of CPU cores: assuming %d\n",
           kDefaultCores);
   return kDefaultCores;
+}
+
+int NumHyperthreadsPerCore() {
+  static const int ht_per_core = tensorflow::port::CPUIDNumSMT();
+  return (ht_per_core > 0) ? ht_per_core : 1;
+}
+
+bool NUMAEnabled() {
+  // Not yet implemented: coming soon.
+  return false;
+}
+
+int NUMANumNodes() { return 1; }
+
+void NUMASetThreadNodeAffinity(int node) {}
+
+int NUMAGetThreadNodeAffinity() {
+  return kNUMANoAffinity;
 }
 
 void* AlignedMalloc(size_t size, int minimum_alignment) {
@@ -115,6 +140,16 @@ void Free(void* ptr) {
 #endif
 }
 
+void* NUMAMalloc(int node, size_t size, int minimum_alignment) {
+  return AlignedMalloc(size, minimum_alignment);
+}
+
+void NUMAFree(void* ptr, size_t size) { Free(ptr); }
+
+int NUMAGetMemAffinity(const void* addr) {
+  return kNUMANoAffinity;
+}
+
 void MallocExtension_ReleaseToSystem(std::size_t num_bytes) {
   // No-op.
 }
@@ -157,8 +192,18 @@ bool Snappy_Uncompress(const char* input, size_t length, char* output) {
 string Demangle(const char* mangled) { return mangled; }
 
 double NominalCPUFrequency() {
-  // TODO(yuefengz): implement it for this platform.
-  return 1.0;
+  return absl::base_internal::NominalCPUFrequency();
+}
+
+int64 AvailableRam() {
+#if defined(__linux__) && !defined(__ANDROID__)
+  struct sysinfo info;
+  int err = sysinfo(&info);
+  if (err == 0) {
+    return info.freeram;
+  }
+#endif
+  return INT64_MAX;
 }
 
 }  // namespace port

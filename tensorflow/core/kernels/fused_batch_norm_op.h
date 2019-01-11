@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_KERNELS_FUSED_BATCH_NORM_OP_H_
-#define TENSORFLOW_KERNELS_FUSED_BATCH_NORM_OP_H_
+#ifndef TENSORFLOW_CORE_KERNELS_FUSED_BATCH_NORM_OP_H_
+#define TENSORFLOW_CORE_KERNELS_FUSED_BATCH_NORM_OP_H_
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "tensorflow/core/framework/tensor.h"
@@ -47,6 +47,12 @@ template <class T>
 struct InvVarianceToVariance {
   void operator()(const Eigen::GpuDevice& d, double epsilon, int sample_size,
                   int channels, T* variance);
+};
+
+// This function sets a GPU tensor to NaNs.
+template <class T>
+struct SetNanFunctor {
+  void operator()(const Eigen::GpuDevice& d, typename TTypes<T>::Flat out);
 };
 
 #endif  // GOOGLE_CUDA
@@ -92,26 +98,28 @@ struct FusedBatchNormFreezeGrad {
     // offset_backprop  = sum(y_backprop)
     // scale_backprop = y_backprop * ((x - pop_mean) * rsqrt(pop_var + epsilon))
     // x_backprop = y_backprop * (scale * rsqrt(pop_var + epsilon))
-    offset_backprop.device(d) = y_backprop.reshape(rest_by_depth)
-                                    .template cast<U>()
-                                    .sum(reduction_axis);
+
+    auto y_backprop_rest_by_depth =
+        y_backprop.reshape(rest_by_depth).template cast<U>();
+    auto input_rest_by_depth = input.reshape(rest_by_depth).template cast<U>();
+
+    offset_backprop.device(d) = y_backprop_rest_by_depth.sum(reduction_axis);
 
     // scratch1 = rsqrt(pop_var + epsilon)
     scratch1.device(d) = (pop_var + pop_var.constant(epsilon)).rsqrt();
 
     // scratch2 = sum(y_backprop * (x - mean))
     scratch2.device(d) =
-        (y_backprop.reshape(rest_by_depth).template cast<U>() *
-         (input.reshape(rest_by_depth).template cast<U>() -
+        (y_backprop_rest_by_depth *
+         (input_rest_by_depth -
           pop_mean.reshape(one_by_depth).broadcast(rest_by_one)))
             .sum(reduction_axis);
 
     x_backprop.reshape(rest_by_depth).device(d) =
-        (y_backprop.reshape(rest_by_depth).template cast<U>() *
-         ((scratch1 * scale)
-              .eval()
-              .reshape(one_by_depth)
-              .broadcast(rest_by_one)))
+        (y_backprop_rest_by_depth * ((scratch1 * scale)
+                                         .eval()
+                                         .reshape(one_by_depth)
+                                         .broadcast(rest_by_one)))
             .template cast<T>();
     scale_backprop.device(d) = scratch2 * scratch1;
   }
@@ -120,4 +128,4 @@ struct FusedBatchNormFreezeGrad {
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_KERNELS_FUSED_BATCH_NORM_OP_H_
+#endif  // TENSORFLOW_CORE_KERNELS_FUSED_BATCH_NORM_OP_H_

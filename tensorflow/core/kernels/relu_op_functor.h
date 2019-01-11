@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_KERNELS_RELU_OP_FUNCTOR_H_
-#define TENSORFLOW_KERNELS_RELU_OP_FUNCTOR_H_
+#ifndef TENSORFLOW_CORE_KERNELS_RELU_OP_FUNCTOR_H_
+#define TENSORFLOW_CORE_KERNELS_RELU_OP_FUNCTOR_H_
 // Functor definition for ReluOp and ReluGradOp, must be compilable by nvcc.
 
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
@@ -85,10 +85,9 @@ struct Relu6Grad {
     // make sure not to propagate the associated gradient
     // value. This allows "features" to be either the input or the output of
     // the relu6.
-    backprops.device(d) =
-        gradients *
-        ((features > static_cast<T>(0)) * (features < static_cast<T>(6)))
-            .template cast<T>();
+    backprops.device(d) = gradients * ((features > static_cast<T>(0)) *
+                                       (features < static_cast<T>(6)))
+                                          .template cast<T>();
   }
 };
 
@@ -161,12 +160,12 @@ struct SeluGrad {
     const auto scale = static_cast<T>(1.0507009873554804934193349852946);
     const auto scale_alpha = static_cast<T>(1.7580993408473768599402175208123);
     backprops.device(d) =
-        (activations < static_cast<T>(0)).select(
-            gradients * (activations + scale_alpha), gradients * scale);
+        (activations < static_cast<T>(0))
+            .select(gradients * (activations + scale_alpha), gradients * scale);
   }
 };
 
 }  // namespace functor
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_KERNELS_RELU_OP_FUNCTOR_H_
+#endif  // TENSORFLOW_CORE_KERNELS_RELU_OP_FUNCTOR_H_
