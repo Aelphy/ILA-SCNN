@@ -62,7 +62,7 @@ def createRandomSparseTensor(non_zero_percentage, shape, min_range = 1, max_rang
     ra_ids = random.sample(range(total_size), num_elems)
   else:
     ra_ids = range(num_elems)
-  ra_ids.sort()
+  list(sorted(list(ra_ids)))
   ids = [1] * num_elems
   for idx, s in enumerate(ra_ids):
     ids[idx] = id1D_to_idkD(s, shape)

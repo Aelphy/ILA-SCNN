@@ -29,12 +29,15 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
   else:
     strides = [1, stride, stride, stride, 1]
 
+  out_sizes = np.copy(tensor_in_sizes)
+  out_sizes[-1] = filter_in_sizes[-1]
+  out_entry_count = np.prod(out_sizes) * max_density
   bias = np.zeros([filter_in_sizes[-1]], dtype=np.float32)
   no_strides = [1, 1, 1, 1, 1]
   [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes, -3, 3)
   s1 = tf.SparseTensor(indices=t1ind, values=t1val, dense_shape=t1sh)
   d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
-  
+
   [t2ind, t2val, t2sh] = sp.createRandomSparseTensor(rho_filter, filter_in_sizes)
   s2 = tf.SparseTensor(indices=t2ind, values=t2val, dense_shape=t2sh)
   d2 = sp.sparse_to_dense(t2ind, t2val, t2sh)
@@ -57,7 +60,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
 
   ts = 0
   with tf.device("/gpu:0"):
-    approx_scskconv = sc_module.direct_sparse_conv_kd(pd.out_indices, pd.out_values, pd.out_shape, pd.out_block_channel_mapping, pf.out_indices, pf.out_values, pf.out_shape, pf.out_channel_mapping, bias, strides, padding, dim, max_density, filter_type);
+    approx_scskconv = sc_module.direct_sparse_conv_kd(pd.out_indices, pd.out_values, pd.out_shape, pd.out_block_channel_mapping, pf.out_indices, pf.out_values, pf.out_shape, pf.out_channel_mapping, bias, strides, padding, out_entry_count, dim, max_density, filter_type);
   with tf.Session(config=config) as sess:
     t6 = time.time()
     sv3 = sess.run(approx_scskconv)
@@ -85,14 +88,14 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
     td = abs(t22 - t11) / max(num_trials,1)
     print("time dense gpu: ", td)
   tf.reset_default_graph()
-  
+
   print("time ratio: ", ts / td);
   return;
 
   [bp_ind, sv3_bp_val, bp_sh] = sp.createRandomSparseTensor(1, [len(sv3.out_values)], 1, 9)
   d3_ = sp.sparse1d_to_dense(sv3.out_indices, sv3_bp_val, sv3.out_shape, sv3.out_block_channel_mapping[-1])
   out_backprop_val = constant_op.constant(d3_)
-  
+
   t_bp1 = 0
   with tf.Session(config=config) as sess:
     with tf.device("/gpu:0"):
@@ -105,7 +108,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
       t_bp1 = t_bp1 + t2 - t1
   t_bp1 = t_bp1 / float(num_trials)
   print("time bp1: ", t_bp1)
-  
+
   t_bp2 = 0
   with tf.Session(config=config) as sess:
     with tf.device("/gpu:0"):
@@ -118,7 +121,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
       t_bp2 = t_bp2 + t2 - t1
   t_bp2 = t_bp2 / float(num_trials)
   print("time bp2: ", t_bp2)
-  
+
   t_bp3 = 0
   with tf.Session(config=config) as sess:
     with tf.device("/gpu:0"):
@@ -136,9 +139,9 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
   bp_sfg = sp.sparse1d_to_dense(pf.out_indices, res_bp3.filter_grads, pf.out_shape, pf.out_channel_mapping[-1])
   bp_sig = sp.sparse1d_to_dense(pd.out_indices, res_bp3.input_grads, pd.out_shape, pd.out_block_channel_mapping[-1])
   value3 = sp.sparse1d_to_dense(sv3.out_indices, sv3.out_values, sv3.out_shape, sv3.out_block_channel_mapping[-1])
-  #print("expected", expected)
-  #print("sv3", value3)
-  #print("out densities", sv3.out_channel_densities)
+  print("expected", expected)
+  print("sv3", value3)
+  print("out densities", sv3.out_channel_densities)
 
   has_error = False
   approx_cmp = expected.flatten()
@@ -168,7 +171,7 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
       if bp_sig_flat[i] == res_bp2_flat[i]:
         bp_i_correct_cnt = bp_i_correct_cnt + 1
       else:
-        bp_i_error_cnt = bp_i_error_cnt + 1 
+        bp_i_error_cnt = bp_i_error_cnt + 1
 
   filter_flat = d2.flatten()
   bp_sfg_flat = bp_sfg.flatten()
@@ -180,9 +183,9 @@ def verifyValues(tensor_in_sizes, filter_in_sizes, stride, rho_data = 0.1, rho_f
       if bp_sfg_flat[i] == res_bp1_flat[i]:
         bp_f_correct_cnt = bp_f_correct_cnt + 1
       else:
-        bp_f_error_cnt = bp_f_error_cnt + 1 
+        bp_f_error_cnt = bp_f_error_cnt + 1
 
-  
+
   print("total number of non-zero corrects: ", correct_cnt)
   print("sparse input size: ", len(t1ind))
   print("total number of bpi corrects: ", bp_i_correct_cnt)
@@ -203,19 +206,19 @@ pid = os.getpid()
 print(pid)
 
 num_trials = 8
-res = 128
-channel_count = 8
-channel_count_out = 8
+res = 3
+channel_count = 1
+channel_count_out = 1
 filter_res = 3
 batch_size = 32
-max_density = 1/res
-in_density = 1/res
+max_density = 1
+in_density = 0.3
 f_density = 1
 filter_type = "K-RELU"
 test_type = ""
 ret_value = verifyValues(
   tensor_in_sizes=[batch_size, res, res, res, channel_count], #[batch, depth, height, width, in_channels]
-  filter_in_sizes=[filter_res, filter_res, filter_res, channel_count, channel_count_out], #[depth, height, width, in_channels, out_channels] 
+  filter_in_sizes=[filter_res, filter_res, filter_res, channel_count, channel_count_out], #[depth, height, width, in_channels, out_channels]
   stride=1,
   rho_data=1 * in_density,
   rho_filter=1 * f_density,

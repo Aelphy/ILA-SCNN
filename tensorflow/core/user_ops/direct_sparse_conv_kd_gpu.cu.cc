@@ -272,8 +272,10 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
   }
   itype out_id[data_dimension - 2];
   //2. perform convolution with kd indices
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count.x, X) {
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count.y, Y) {
+  //TODO depreciated CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
+  for (int x = blockIdx.x * blockDim.x + threadIdx.x; x < config.virtual_thread_count.x; x += blockDim.x * gridDim.x){
+    //TODO depreciated CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
+    for (int y = blockIdx.y * blockDim.y + threadIdx.y; y < config.virtual_thread_count.y; y += blockDim.y * gridDim.y){
       const int fid = y;
       const int did = x;
       const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];
@@ -295,7 +297,6 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
         acc_id += out_id[i] * mul;
         mul = mul * input_shape[i + 1];
       }
-      //if(global_acc_id >= 0){
       if(is_valid){
         atomicAdd(&(dense_channel_buffer[acc_id]), out_v);
       }
@@ -548,8 +549,10 @@ gmSparseDirectConvBackProp(Cuda2DLaunchConfig config, const dtype* __restrict__ 
   }
   itype out_id[data_dimension - 2];
   //2. perform convolution with kd indices
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count.x, X) {
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count.y, Y) {
+  //TODO depreciated CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
+  for (int x = blockIdx.x * blockDim.x + threadIdx.x; x < config.virtual_thread_count.x; x += blockDim.x * gridDim.x){
+    //TODO depreciated CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
+    for (int y = blockIdx.y * blockDim.y + threadIdx.y; y < config.virtual_thread_count.y; y += blockDim.y * gridDim.y){
       const int fid = y;
       const int did = x;
       const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];

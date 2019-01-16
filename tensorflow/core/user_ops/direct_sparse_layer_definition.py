@@ -11,7 +11,6 @@ from tensorflow.python.ops import gradient_checker
 from tensorflow.python.ops import nn_ops
 import tensorflow.python.ops.nn_grad
 from tensorflow.python.platform import test
-import direct_sparse_regularizers as reg
 import direct_sparse_cwise_regularizers as creg
 import tensorflow as tf
 import random
@@ -56,7 +55,7 @@ def create_sparse_conv_layer(sparse_data, filter_in_sizes, tensor_in_sizes_, str
     out_channel_count = filter_in_sizes[-1]
     bias = tf.get_variable('sparse_bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    sparse_entry_bound = np.prod(tensor_in_sizes) * max_density + filter_in_sizes[-1] 
+    sparse_entry_bound = np.prod(tensor_in_sizes) * max_density + filter_in_sizes[-1]
     conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, sparse_entry_bound, dim, max_density, filter_type)
     return conv_layer, tensor_in_sizes
 
@@ -85,7 +84,7 @@ def create_sparse_conv_layer_reg(sparse_data, filter_in_sizes, tensor_in_sizes_,
     f_val = tf.get_variable('filter_values', initializer=initializer, regularizer=regularizer, shape=[dense_filter_shape], trainable=True, validate_shape=True)
     bias = tf.get_variable('sparse_bias', initializer=tf.zeros_initializer(), shape=[out_channel_count], trainable=True, validate_shape=True) #TODO: make trainable
     #3. define convolutional layer
-    sparse_entry_bound = np.prod(tensor_in_sizes) * max_density + filter_in_sizes[-1] 
+    sparse_entry_bound = np.prod(tensor_in_sizes) * max_density + filter_in_sizes[-1]
     conv_layer = sc_module.direct_sparse_conv_kd(sd.out_indices, sd.out_values, sd.out_shape, sd.out_block_channel_mapping, f_ind, f_val, f_sh, f_map, bias, strides, padding, sparse_entry_bound, dim, max_density, filter_type)
 
     out_density = conv_layer.out_channel_densities # TODO: custom regularizer per channel

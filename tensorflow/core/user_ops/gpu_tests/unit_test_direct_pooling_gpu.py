@@ -7,6 +7,10 @@ from __future__ import print_function
 import collections
 import math
 
+import sys
+
+sys.path.append('..')
+
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import gradient_checker
@@ -23,7 +27,6 @@ import sparse_tools as sp
 from direct_sparse_module import sparse_nn_ops as sc_module
 from math import ceil as ceil
 import os
-import sys
 
 def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim = 5, max_density = 1, num_trials = 3, test_type = ""):
   if isinstance(stride, collections.Iterable):
@@ -35,7 +38,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
 
   [t1ind, t1val, t1sh] = sp.createRandomSparseTensor(rho_data, tensor_in_sizes)
   d1 = sp.sparse_to_dense(t1ind, t1val, t1sh)
-  
+
   print("strides: \n", strides)
   print("input shape", tensor_in_sizes)
 
@@ -62,21 +65,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
     ts =  abs(t6 - t5) / max(num_trials,1)
     print("time approx sparse: ", ts)
   tf.reset_default_graph()
-  
-  tsu = 0
-  with tf.device("/gpu:0"):
-    unpooling = sc_module.direct_sparse_unpooling_kd(sv3.out_indices, sv3.out_values, sv3.out_shape, sv3.out_block_channel_mapping, pd.out_indices, pd.out_shape, pd.out_block_channel_mapping, strides, dim);
-  with tf.Session(config=config) as sess:
-    t6 = time.time()
-    sv4 = sess.run(unpooling)
-    t5 = time.time()
-    for i in range(0, num_trials):
-      sess.run(unpooling)
-    t6 = time.time()
-    tsu =  abs(t6 - t5) / max(num_trials,1)
-    print("time sparse unpooling: ", tsu)
-  tf.reset_default_graph()
-  
+
   td = 0
   with tf.device("/gpu:0"):
     pooling = tf.nn.max_pool3d(d1, strides, strides, "SAME");
@@ -90,13 +79,13 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
     td = abs(t22 - t11) / max(num_trials,1)
     print("time dense gpu: ", td)
   tf.reset_default_graph()
-  
+
   print("time ratio: ", ts / td);
- 
+
   [bp_ind, sv3_bp_val, bp_sh] = sp.createRandomSparseTensor(1, [len(sv3.out_values)], 1, 9)
   d3_ = sp.sparse1d_to_dense(sv3.out_indices, sv3_bp_val, sv3.out_shape, sv3.out_block_channel_mapping[-1])
   out_backprop_val = constant_op.constant(d3_)
-  
+
   t_bp1 = 0
   with tf.Session(config=config) as sess:
     with tf.device("/gpu:0"):
@@ -110,7 +99,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
       t_bp1 = t_bp1 + t2 - t1
   t_bp1 = t_bp1 / float(num_trials)
   print("time bp1: ", t_bp1)
-  
+
   t_bp3 = 0
   with tf.Session(config=config) as sess:
     with tf.device("/gpu:0"):
@@ -123,11 +112,27 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
       t_bp3 = t_bp3 + t2 - t1
   t_bp3 = t_bp3 / float(num_trials)
   print("time bp3: ", t_bp3)
-
+  print("bp ratio: ", t_bp1 / t_bp3)
+  return 0
   bp_sig = sp.sparse1d_to_dense(pd.out_indices, res_bp3, pd.out_shape, pd.out_block_channel_mapping[-1])
   #print("dense bp ", res_bp1)
   #print("sparse bp: ", bp_sig)
-  
+
+  tsu = 0
+  with tf.device("/gpu:0"):
+    unpooling = sc_module.direct_sparse_unpooling_kd(sv3.out_indices, sv3.out_values, sv3.out_shape, sv3.out_block_channel_mapping, pd.out_indices, pd.out_shape, pd.out_block_channel_mapping, strides, dim);
+  with tf.Session(config=config) as sess:
+    t6 = time.time()
+    sv4 = sess.run(unpooling)
+    t5 = time.time()
+    for i in range(0, num_trials):
+      sess.run(unpooling)
+    t6 = time.time()
+    tsu =  abs(t6 - t5) / max(num_trials,1)
+    print("time sparse unpooling: ", tsu)
+  tf.reset_default_graph()
+
+
   '''print("sparse bp", bp_sig)
   print("sv3 obcm", sv3.out_block_channel_mapping)
   print("len", len(sv3.out_indices))
@@ -149,7 +154,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
 
   bp_unpool = sp.sparse1d_to_dense(sv3.out_indices, res_bp4, sv3.out_shape, sv3.out_block_channel_mapping[-1])
   #print("bp unpool", bp_unpool)
-  
+
   value3 = sp.sparse1d_to_dense(sv3.out_indices, sv3.out_values, sv3.out_shape, sv3.out_block_channel_mapping[-1])
   #print("result sparse ", value3)
   has_error = False
@@ -186,7 +191,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
         bp_i_correct_cnt = bp_i_correct_cnt + 1
       else:
         bp_i_error_cnt = bp_i_error_cnt + 1
-  
+
   p_flat = pd.out_values.flatten()
   up_flat = sv4.flatten()
   up_i_error_cnt = 0
@@ -231,7 +236,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
     print("total number of pooling errors: ", up_bp_err)
 
   if dim == 5:
-    up_bp_cor = 0 
+    up_bp_cor = 0
     up_bp_err = 0
     tmp = np.copy(bp_unpool)
     for batch in range(0, tensor_in_sizes[0]):
@@ -241,7 +246,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
             for z in range(0, int(ceil(float(tensor_in_sizes[3]) / float(strides[3])))):
               id_in = (batch, x, y, z, channel)
               inval = bp_unpool.item(id_in)
-              sum_out_val = 0 
+              sum_out_val = 0
               for dx in range(0, strides[1]):
                 xout = x * strides[1] + dx
                 if xout >= bp_sig.shape[1]:
@@ -258,7 +263,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
                     out_val = bp_sig.item(id_out)
                     sum_out_val = sum_out_val + out_val
               if sum_out_val == inval:
-                up_bp_cor = up_bp_cor + 1 
+                up_bp_cor = up_bp_cor + 1
               else:
                 up_bp_err = up_bp_err + 1
               tmp[id_in] = sum_out_val
@@ -285,13 +290,13 @@ pid = os.getpid()
 print(pid)
 #raw_input("Press Enter to continue...")
 
-max_density = 1
 num_trials = 1
 stride = 2
-res = 64
+res = 128
 channel_count = 8
-batch_size = 1
-in_density = 1/res
+batch_size = 8
+in_density = 10/res
+max_density = 10/res
 test_type = ""
 ret_value = verifyValues(
   tensor_in_sizes=[batch_size, res, res, res, channel_count], #[batch, depth, height, width, in_channels]

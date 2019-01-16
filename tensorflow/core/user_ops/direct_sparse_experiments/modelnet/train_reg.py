@@ -89,7 +89,7 @@ def get_learning_rate(batch):
                         DECAY_RATE,          # Decay rate.
                         staircase=True)
     learning_rate = tf.maximum(learning_rate, 0.01) # CLIP THE LEARNING RATE!
-    return learning_rate        
+    return learning_rate
 
 def get_bn_decay(batch):
     bn_momentum = tf.train.exponential_decay(
@@ -106,9 +106,11 @@ def train():
         with tf.device('/gpu:'+str(GPU_INDEX)):
             pointclouds_pl, labels_pl = MODEL.placeholder_inputs(BATCH_SIZE, NUM_CLASSES, TENSOR_IN_SIZES)
             is_training_pl = tf.placeholder(tf.bool, shape=())
+
+            #placeholders for pruning
             #print(is_training_pl)
-            
-            # Note the global_step=batch parameter to minimize. 
+
+            # Note the global_step=batch parameter to minimize.
             # That tells the optimizer to helpfully increment the 'batch' parameter for you every time it trains.
             batch = tf.Variable(0)
             bn_decay = get_bn_decay(batch)
@@ -138,15 +140,19 @@ def train():
             elif OPTIMIZER == 'ftrl':
                 optimizer = tf.train.FtrlOptimizer(learning_rate)
             train_op = optimizer.minimize(loss, global_step=batch)
-            
+
             # Add ops to save and restore all the variables.
             saver = tf.train.Saver()
-            
+
         # Create a session
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         config.allow_soft_placement = True
         sess = tf.Session(config=config)
+
+
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
 
         # Add summary writers
         #merged = tf.merge_all_summaries()
@@ -179,49 +185,59 @@ def train():
               kernels[parts[0]] = {}
 
             if 'filter_indices' in parts[1]:
-              kernels[parts[0]]['filter_indices'] = var 
+              kernels[parts[0]]['filter_indices'] = var
             if 'filter_shape' in parts[1]:
-              kernels[parts[0]]['filter_shape'] = var 
+              kernels[parts[0]]['filter_shape'] = var
             if 'filter_channel_mapping' in parts[1]:
-              kernels[parts[0]]['filter_channel_mapping'] = var 
+              kernels[parts[0]]['filter_channel_mapping'] = var
             if 'filter_values' in parts[1]:
-              kernels[parts[0]]['filter_values'] = var 
+              kernels[parts[0]]['filter_values'] = var
+
+        update_ops = {}
+        for layer, values in kernels.items():
+          p1 = tf.placeholder(dtype=tf.float32, name='values')
+          p2 = tf.placeholder(dtype=tf.int64, name='indices')
+          p3 = tf.placeholder(dtype=tf.int32, name='channel_mapping')
+          update_ops[layer] = {
+            p1 : tf.assign(values['filter_values'], p1),
+            p2 : tf.assign(values['filter_indices'], p2),
+            p3 : tf.assign(values['filter_channel_mapping'], p3)
+          }
 
         f = open(LOG_DIR + '/reg_experiment.log', 'wb')
-        f.write('t, delta filter weights, #filter weights, test loss, test accuracy, training loss, training accuracy\n')
+        f.write('t_eval, t_train, delta filter weights, #filter weights, test loss, test accuracy, training loss, training accuracy\n')
         f.flush()
-        
-        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
+
 
         for epoch in range(MAX_EPOCH):
             log_string('**** EPOCH %03d ****' % (epoch))
             sys.stdout.flush()
-             
-            time_count, av_loss, av_acc, sum_removed, new_weights = train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run_options, run_metadata, epoch)
-            ev_loss, ev_acc = eval_one_epoch(sess, ops, test_writer)
-            f.write('{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(time_count, sum_removed, new_weights, ev_loss, ev_acc, av_loss, av_acc)+'\n')
+
+            time_count, av_loss, av_acc, sum_removed, new_weights = train_one_epoch(sess, ops, reg_ops, train_writer, kernels, update_ops, to_remove, f, run_options, run_metadata, epoch)
+            ev_time, ev_loss, ev_acc = eval_one_epoch(sess, ops, test_writer)
+            f.write('{:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}'.format(ev_time, time_count, sum_removed, new_weights, ev_loss, ev_acc, av_loss, av_acc)+'\n')
             f.flush()
             # Save the variables to disk.
-            if epoch % 10 == 0:
-                save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"))
-                log_string("Model saved in file: %s" % save_path)
+            save_path = saver.save(sess, os.path.join(LOG_DIR, "model.ckpt"))
+            log_string("Model saved in file: %s" % save_path)
 
-
-
-def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run_options, run_metadata, epoch):
+def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, update_ops, to_remove, f, run_options, run_metadata, epoch):
+    #g1 = str(tf.get_default_graph().as_graph_def())
     """ ops: dict mapping from string to tf ops """
     is_training = True
-    
+
     # Shuffle train files
     train_file_idxs = np.arange(0, len(TRAIN_FILES))
     np.random.shuffle(train_file_idxs)
-    
+
     time_count = 0
     av_loss = 0
     av_acc = 0
     sum_removed = 0
     new_weights = 0
+
+    with tf.control_dependencies([ops['train_op']]):
+      dummy = tf.constant(0)
 
     for fn in range(len(TRAIN_FILES)):
         log_string('----' + str(fn) + '-----')
@@ -231,12 +247,10 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run
         current_label = np.squeeze(current_label)
         file_size = current_data.shape[0]
         num_batches = file_size // BATCH_SIZE
-        
+
         total_correct = 0
         total_seen = 0
         loss_sum = 0
-
-       
 
         for batch_idx in range(num_batches):
             start_idx = batch_idx * BATCH_SIZE
@@ -246,36 +260,25 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run
             this_label = current_label[start_idx:end_idx]
             for id in range(len(this_label)):
               argmax_labels[id, this_label[id]] = 1
-              #print(argmax_labels[id]) 
+              #print(argmax_labels[id])
             # Augment batched point clouds by rotation and jittering
             rotated_data = provider.rotate_point_cloud(current_data[start_idx:end_idx, :, :])
             jittered_data = provider.jitter_point_cloud(rotated_data)
 
             [sparse_ind, sparse_values] = provider.toVoxelGrid(jittered_data, 0, RESOLUTION)
             data = tf.SparseTensorValue(sparse_ind, sparse_values, TENSOR_IN_SIZES)
-            #convert to dense if needed  
+            #convert to dense if needed
             #data = st.sparse_to_dense(sparse_ind, sparse_values, TENSOR_IN_SIZES)
-            if time_count == 0:
-              time_start = time.time()
-              feed_dict = {ops['pointclouds_pl']: data,
-                           ops['labels_pl']: argmax_labels,
-                           ops['is_training_pl']: is_training,}
-              summary, step, _, loss_val, pred_val = sess.run([tf.summary.merge_all(), ops['step'],
-                  ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict, options=run_options, run_metadata=run_metadata)
-              time_count += time.time() - time_start
-              sess.run(reg_ops, feed_dict=feed_dict)
-              train_writer.add_run_metadata(run_metadata, 'step%d'%epoch)
-              train_writer.add_summary(summary, step)
-            else:
-              time_start = time.time()
-              feed_dict = {ops['pointclouds_pl']: data,
-                           ops['labels_pl']: argmax_labels,
-                           ops['is_training_pl']: is_training,}
-              summary, step, _, loss_val, pred_val = sess.run([tf.summary.merge_all(), ops['step'],
-                  ops['train_op'], ops['loss'], ops['pred']], feed_dict=feed_dict)
-              time_count += time.time() - time_start
-              sess.run(reg_ops, feed_dict=feed_dict)
-              train_writer.add_summary(summary, step)
+            time_start = time.time()
+            feed_dict = {ops['pointclouds_pl']: data,
+                         ops['labels_pl']: argmax_labels,
+                         ops['is_training_pl']: is_training,}
+            handle = sess.partial_run_setup([ops['merged'], dummy, ops['step'], ops['loss'], ops['pred']] + reg_ops, [ops['pointclouds_pl'], ops['labels_pl'], ops['is_training_pl']])
+            summary, step, _, loss_val, pred_val = sess.partial_run(handle, [ops['merged'], ops['step'],
+                dummy, ops['loss'], ops['pred']], feed_dict=feed_dict)
+            sess.partial_run(handle, reg_ops)
+            time_count += time.time() - time_start
+            train_writer.add_summary(summary, step)
 
             pred_val = np.argmax(pred_val, 1)
             correct = (pred_val == current_label[start_idx:end_idx]).sum()
@@ -283,61 +286,70 @@ def train_one_epoch(sess, ops, reg_ops, train_writer, kernels, to_remove, f, run
             total_seen += BATCH_SIZE
             loss_sum += loss_val
         av_loss += loss_sum / float(num_batches)
-        av_acc += total_correct / float(total_seen)
+        av_acc += total_correct / float(max(total_seen,1))
         log_string('mean loss: %f' % (loss_sum / float(num_batches)))
-        log_string('accuracy: %f' % (total_correct / float(total_seen)))
+        log_string('accuracy: %f' % (total_correct / float(max(total_seen,1))))
 
-        # Weights removal
-        removed_weights = 0
-        weights_total = 0
-        for layer, values in kernels.items():
-            num_filter_values = sess.run(values['filter_values'])
-            current_small = np.abs(num_filter_values) < PRUNING_THR
-            weights_total += (num_filter_values != -1).sum()
+    # Weights removal
+    removed_weights = 0
+    weights_total = 0
+    for layer, values in kernels.items():
+        num_filter_values = sess.run(values['filter_values'])
+        current_small = np.abs(num_filter_values) < PRUNING_THR
+        weights_total += (num_filter_values != -1).sum()
 
-            if layer in to_remove:
-                prev_small = to_remove[layer]
-                num_filter_indices = sess.run(values['filter_indices'])
-                num_filter_channel_mapping = sess.run(values['filter_channel_mapping'])
-                indices_to_remove = prev_small & current_small
-                removed_weights += indices_to_remove.sum()
+        if layer in to_remove:
+            prev_small = to_remove[layer]
+            num_filter_indices = sess.run(values['filter_indices'])
+            num_filter_channel_mapping = sess.run(values['filter_channel_mapping'])
+            indices_to_remove = prev_small & current_small
+            removed_weights += indices_to_remove.sum()
 
-                new_filter_values = num_filter_values[~indices_to_remove]
-                new_filter_indices = num_filter_indices[~indices_to_remove]
-                fill_values = -1 * np.ones(num_filter_values.shape[0] - new_filter_values.shape[0])
-                fill_indices = -1 * np.ones(num_filter_indices.shape[0] - new_filter_indices.shape[0])
+            new_filter_values = num_filter_values[~indices_to_remove]
+            new_filter_indices = num_filter_indices[~indices_to_remove]
+            fill_values = -1 * np.ones(num_filter_values.shape[0] - new_filter_values.shape[0])
+            fill_indices = -1 * np.ones(num_filter_indices.shape[0] - new_filter_indices.shape[0])
+            to_subtract = np.zeros_like(num_filter_channel_mapping)
+            for i in range(1, len(num_filter_channel_mapping)):
+                to_subtract[i] = indices_to_remove[:num_filter_channel_mapping[i]].sum()
 
-                to_subtract = np.zeros_like(num_filter_channel_mapping)
-                for i in range(1, len(num_filter_channel_mapping)):
-                    to_subtract[i] = indices_to_remove[:num_filter_channel_mapping[i]].sum()
+            feed_dict = {}
+            for k, v in update_ops[layer].items():
+              if 'values' in k.name:
+                feed_dict[k] = np.hstack([new_filter_values, fill_values])
+              if 'indices' in k.name:
+                feed_dict[k] = np.hstack([new_filter_indices, fill_indices])
+              if 'channel_mapping' in k.name:
+                feed_dict[k] = num_filter_channel_mapping - to_subtract
+            sess.run(update_ops[layer].values(), feed_dict=feed_dict)
 
-                sess.run([
-                    values['filter_channel_mapping'].assign(num_filter_channel_mapping - to_subtract),
-                    values['filter_values'].assign(np.hstack([new_filter_values, fill_values])),
-                    values['filter_indices'].assign(np.hstack([new_filter_indices, fill_indices]))
-                ])
+        to_remove[layer] = current_small
+    '''g2 = str(tf.get_default_graph().as_graph_def())
+    import difflib
+    expected=g1.splitlines(1)
+    actual=g2.splitlines(1)
+    diff=difflib.unified_diff(expected, actual)
+    print(''.join(diff))'''
 
-            to_remove[layer] = current_small
-
-        print('Pruning removed {} out of {} weights'.format(removed_weights, weights_total))
-        sum_removed += removed_weights
-        new_weights = weights_total
+    print('Pruning removed {} out of {} weights'.format(removed_weights, weights_total))
+    sum_removed += removed_weights
+    new_weights = weights_total
     av_loss = av_loss / len(TRAIN_FILES)
     av_acc = av_acc / len(TRAIN_FILES)
+    return time_count, av_loss, av_acc, sum_removed, new_weights
 
-    return time_count, av_loss, av_acc, sum_removed, new_weights 
 
 
-        
 def eval_one_epoch(sess, ops, test_writer):
     """ ops: dict mapping from string to tf ops """
     is_training = False
     total_correct = 0
     total_seen = 0
     loss_sum = 0
+    time_count = 0
     total_seen_class = [0 for _ in range(NUM_CLASSES)]
     total_correct_class = [0 for _ in range(NUM_CLASSES)]
-    
+
     for fn in range(len(TEST_FILES)):
         log_string('----' + str(fn) + '-----')
         current_data, current_label = provider.loadDataFile(TEST_FILES[fn])
@@ -345,7 +357,7 @@ def eval_one_epoch(sess, ops, test_writer):
         current_label = np.squeeze(current_label)
         file_size = current_data.shape[0]
         num_batches = file_size // BATCH_SIZE
-        
+
         for batch_idx in range(num_batches):
             start_idx = batch_idx * BATCH_SIZE
             end_idx = (batch_idx+1) * BATCH_SIZE
@@ -354,17 +366,19 @@ def eval_one_epoch(sess, ops, test_writer):
             this_label = current_label[start_idx:end_idx]
             for id in range(len(this_label)):
               argmax_labels[id, this_label[id]] = 1
-            
-            [sparse_ind, sparse_values] = provider.toVoxelGrid(current_data[start_idx:end_idx, :, :], 0, RESOLUTION) 
+
+            [sparse_ind, sparse_values] = provider.toVoxelGrid(current_data[start_idx:end_idx, :, :], 0, RESOLUTION)
             data = tf.SparseTensorValue(sparse_ind, sparse_values, TENSOR_IN_SIZES)
-            #convert to dense if needed  
+            #convert to dense if needed
             #data = st.sparse_to_dense(sparse_ind, sparse_values, TENSOR_IN_SIZES)
-            
+
+            time_start = time.time()
             feed_dict = {ops['pointclouds_pl']: data,
                          ops['labels_pl']: argmax_labels,
                          ops['is_training_pl']: is_training,}
             summary, step, loss_val, pred_val = sess.run([ops['merged'], ops['step'],
                 ops['loss'], ops['pred']], feed_dict=feed_dict)
+            time_count += time.time() - time_start
             pred_val = np.argmax(pred_val, 1)
             correct = np.sum(pred_val == current_label[start_idx:end_idx])
             total_correct += correct
@@ -374,13 +388,11 @@ def eval_one_epoch(sess, ops, test_writer):
                 l = current_label[i]
                 total_seen_class[l] += 1
                 total_correct_class[l] += (pred_val[i-start_idx] == l)
-            
+
     log_string('eval mean loss: %f' % (loss_sum / float(total_seen)))
     log_string('eval accuracy: %f'% (total_correct / float(total_seen)))
     log_string('eval avg class acc: %f' % (np.mean(np.array(total_correct_class)/np.array(total_seen_class,dtype=np.float))))
-    return loss_sum / float(total_seen), total_correct / float(total_seen)
-         
-
+    return time_count, loss_sum / float(total_seen), total_correct / float(total_seen)
 
 if __name__ == "__main__":
     train()

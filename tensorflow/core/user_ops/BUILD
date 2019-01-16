@@ -12,51 +12,17 @@ load("//tensorflow:tensorflow.bzl", "tf_custom_op_library")
 load("//tensorflow:tensorflow.bzl", "tf_py_wrap_cc")
 load("//tensorflow/core/user_ops:custom_bzl.bzl", "tf_custom_op_library_flags")
 
-tf_custom_op_library_flags(
-    name = "direct_sparse_conv_kd_.so",
-
-    srcs =  [
-              "sparse_tensor_sparse_kernel_dense_conv_kd.h",
-              "sparse_tensor_sparse_kernel_dense_conv_kd_grad.h",
-              "sparse_tensor_sparse_kernel_dense_conv_kd.cc",
-              "sparse_tensor_sparse_kernel_dense_conv_kd_grad.cc",
-              "sparse_tensor_dense_relu_op.cc",
-              "sparse_tensor_dense_relu_op_functor.h",
-              "sparse_tensor_dense_relu_op.h",
-              "indexing.h",
-              "hash_map.h",
-              "sparse_tensor_pooling.cc",
-              "sparse_tensor_pooling_grad.cc",
-              "sparse_tensor_pooling.h",
-              "direct_sparse_to_dense_op.cc",
-              "sparse_tensor_filter_zero_entries.cc",
-              "evaluate_confusion_matrix.cc",
-            ],
-
-    gpu_srcs = [
-    ],
-
-    deps = [
-              "@cub_archive//:cub",
-    ],
-
-    cflags = [
-        "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash", "-lcudpp", "-lcudpp_hash",
-    ],
-)
-
 tf_custom_op_library(
     name = "direct_sparse_conv_kd.so",
 
     srcs =  [
               "direct_sparse_conversions.cc",
               "direct_sparse_conv_kd.cc",
-              "direct_sparse_approx_conv_kd.cc",
               "direct_sparse_pooling_kd.cc",
               "direct_sparse_to_dense.cc",
-              "direct_sparse_concat.cc",
               "evaluate_confusion_matrix.cc",
               "direct_sparse_cwise_biased_reg.cc",
+              "direct_sparse_concat.cc",
             ],
 
     gpu_srcs = [
@@ -65,43 +31,18 @@ tf_custom_op_library(
               "direct_sparse_conversions_gpu.cu.cc",
               "direct_sparse_conv_kd_gpu.h",
               "direct_sparse_conv_kd_gpu.cu.cc",
-              "direct_sparse_approx_conv_kd_gpu.h",
-              "direct_sparse_approx_conv_kd_gpu.cu.cc",
               "direct_sparse_pooling_kd_gpu.h",
               "direct_sparse_pooling_kd_gpu.cu.cc",
               "direct_sparse_to_dense_gpu.h",
               "direct_sparse_to_dense_gpu.cu.cc",
-              "direct_sparse_concat_gpu.h",
-              "direct_sparse_concat_gpu.cu.cc",
               "direct_sparse_cwise_biased_reg_gpu.h",
               "direct_sparse_cwise_biased_reg_gpu.cu.cc",
+              "direct_sparse_concat_gpu.h",
+              "direct_sparse_concat_gpu.cu.cc",
     ],
 
     deps = [
               "@cub_archive//:cub",
     ],
 )
-
-py_library(
-    name = "sparse_nn_ops",
-    srcs = [
-              "sparse_ops.py",
-              "sparse_module",
-              "sparse_tools.py",
-           ],
-    data = [":sparse_tensor_dense_conv_3d.so"],
-    srcs_version = "PY2AND3",
-)
-
-tf_py_test(
-    name = "sparse_tensor_dense_conv_3d_test",
-    size = "small",
-    srcs = [
-              "tests/sparse_tensor_dense_conv_3d_test.py",
-              "tests/sparse_tools.py",
-              "tests/sparse_tensor_dense_relu_op_test.py",   
-           ],
-    additional_deps = ["//tensorflow:tensorflow_py"],
-)
-
 
