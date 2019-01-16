@@ -272,8 +272,8 @@ gmSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_block
   }
   itype out_id[data_dimension - 2];
   //2. perform convolution with kd indices
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
+  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count.x, X) {
+    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count.y, Y) {
       const int fid = y;
       const int did = x;
       const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];
@@ -548,8 +548,8 @@ gmSparseDirectConvBackProp(Cuda2DLaunchConfig config, const dtype* __restrict__ 
   }
   itype out_id[data_dimension - 2];
   //2. perform convolution with kd indices
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
+  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count.x, X) {
+    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count.y, Y) {
       const int fid = y;
       const int did = x;
       const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];

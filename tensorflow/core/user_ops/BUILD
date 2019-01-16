@@ -41,7 +41,7 @@ tf_custom_op_library_flags(
     ],
 
     cflags = [
-      "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash", "-lcudpp", "-lcudpp_hash",
+        "-lm", "-L/usr/local/lib", "-lgomp", "-lcityhash", "-lcudpp", "-lcudpp_hash",
     ],
 )
 

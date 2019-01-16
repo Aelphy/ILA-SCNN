@@ -72,8 +72,8 @@ hashSparseDirectConv(Cuda2DLaunchConfig config, const dtype* __restrict__ in_blo
   out_id_[data_dimension - 1] = channel;
   itype* out_id = &out_id_[1];
   //2. perform convolution with kd indices
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
+  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count.x, X) {
+    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count.y, Y) {
       const int fid = y;
       const int did = x;
       const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];
@@ -267,8 +267,12 @@ hashSparseDirectConvBackProp(Cuda2DLaunchConfig config, const dtype* __restrict_
   out_id_[data_dimension - 1] = channel;
   itype* out_id = &out_id_[1];
   //2. perform convolution with kd indices
-  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count, x) {
-    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count, y) {
+  CUDA_AXIS_KERNEL_LOOP(x, config.virtual_thread_count.x, X) {
+    CUDA_AXIS_KERNEL_LOOP(y, config.virtual_thread_count.y, Y) {
+  //for (int x : ::tensorflow::CudaGridRangeX<dim3>(config.virtual_thread_count)) {
+      //for (int y : ::tensorflow::CudaGridRangeY<dim3>(config.virtual_thread_count)) {
+  //for(int x : CudaGridRangeX(config.virtual_thread_count)) {
+      //for(int y : CudaGridRangeY(config.virtual_thread_count)) {
       const int fid = y;
       const int did = x;
       const itype* data_index_kd = &input_ids_kd[(did + block_start) * (data_dimension - 2)];
