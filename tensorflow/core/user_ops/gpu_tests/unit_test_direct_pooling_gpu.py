@@ -7,10 +7,6 @@ from __future__ import print_function
 import collections
 import math
 
-import sys
-
-sys.path.append('..')
-
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.ops import gradient_checker
@@ -27,6 +23,7 @@ import sparse_tools as sp
 from direct_sparse_module import sparse_nn_ops as sc_module
 from math import ceil as ceil
 import os
+import sys
 
 def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim = 5, max_density = 1, num_trials = 3, test_type = ""):
   if isinstance(stride, collections.Iterable):
@@ -89,7 +86,7 @@ def verifyValues(tensor_in_sizes, stride, rho_data = 0.1, padding = 'SAME', dim 
   t_bp1 = 0
   with tf.Session(config=config) as sess:
     with tf.device("/gpu:0"):
-      fbp = gen_nn_ops._max_pool3d_grad(d1, expected, out_backprop_val, strides, strides, "SAME")
+      fbp = gen_nn_ops.max_pool3d_grad(d1, expected, out_backprop_val, strides, strides, "SAME")
       #fbp = nn_ops.conv3d_backprop_filter_v2(d1, filter_in_sizes,  out_backprop_val, strides, padding)
     res_bp1 = sess.run(fbp)
     for i in range(num_trials):
